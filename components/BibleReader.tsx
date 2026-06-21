@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import * as Clipboard from 'expo-clipboard';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,11 +17,13 @@ import {
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
 import { CrossReferencesModal } from '@/components/CrossReferencesModal';
+import { VerseImageCreatorModal } from '@/components/VerseImageCreatorModal';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
+import { buildImageCreatorData, buildSelectionShareText, formatVerseRange } from '@/lib/verseUtils';
 import type { BibleVersion, Book, Verse, VerseHighlight, VerseNoteLink } from '@/lib/types';
 import { HIGHLIGHT_COLORS, getHighlightTheme, verseHighlightStyle } from '@/lib/highlightColors';
 
@@ -42,7 +46,9 @@ export function BibleReader({
   const [bibleId, setBibleId] = useState(DEFAULT_BIBLE_ID);
   const [bookId, setBookId] = useState<number | null>(null);
   const [chapter, setChapter] = useState(1);
-  const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
+  const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
+  const lastSelectedRef = useRef<number | null>(null);
+  const [imageCreatorOpen, setImageCreatorOpen] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [refsModalOpen, setRefsModalOpen] = useState(false);
@@ -59,6 +65,22 @@ export function BibleReader({
   const currentBible = bibles.find((b) => b.bibleId === bibleId);
   const highlightMap = new Map(highlights.map((h) => [h.verse, h.color]));
   const noteMap = new Map(notes.map((n) => [n.verse, n]));
+
+  const primaryVerse = selectedVerses.length === 1 ? selectedVerses[0] : null;
+  const selectionLabel =
+    selectedVerses.length > 0
+      ? `${selectedBook?.bookName ?? ''} ${chapter}:${formatVerseRange(selectedVerses)}`
+      : '';
+  const imageCreatorData = useMemo(() => {
+    if (!selectedBook || selectedVerses.length === 0) return null;
+    return buildImageCreatorData({
+      selectedVerses,
+      verses,
+      bookName: selectedBook.bookName,
+      chapter,
+      bibleAbbr: currentBible?.abbr ?? 'RVR1960',
+    });
+  }, [selectedVerses, verses, selectedBook, chapter, currentBible?.abbr]);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +123,8 @@ export function BibleReader({
     if (!books.some((b) => b.bookId === initialBookId)) return;
     setBookId(initialBookId);
     setChapter(initialChapter);
-    setSelectedVerse(null);
+    setSelectedVerses([]);
+    lastSelectedRef.current = null;
   }, [initialBookId, initialChapter, books]);
 
   const loadChapter = useCallback(async () => {
@@ -109,7 +132,8 @@ export function BibleReader({
     try {
       setLoadingChapter(true);
       setError(null);
-      setSelectedVerse(null);
+      setSelectedVerses([]);
+      lastSelectedRef.current = null;
       const [{ verses: chapterVerses }, hl, ln, favMap] = await Promise.all([
         repo.repoGetVerses(bibleId, bookId, chapter),
         isGuest ? Promise.resolve({ highlights: [] as VerseHighlight[] }) : repo.repoGetHighlights(bookId, chapter, bibleId),
@@ -157,11 +181,40 @@ export function BibleReader({
     }
   };
 
+  const toggleVerseSelection = useCallback((verseNum: number) => {
+    setSelectedVerses((prev) => {
+      lastSelectedRef.current = verseNum;
+      if (prev.includes(verseNum)) return prev.filter((x) => x !== verseNum);
+      return [...prev, verseNum].sort((a, b) => a - b);
+    });
+  }, []);
+
+  const selectRangeTo = useCallback((verseNum: number) => {
+    setSelectedVerses((prev) => {
+      const anchor =
+        lastSelectedRef.current !== null && prev.includes(lastSelectedRef.current)
+          ? lastSelectedRef.current
+          : prev[0] ?? verseNum;
+      const start = Math.min(anchor, verseNum);
+      const end = Math.max(anchor, verseNum);
+      const range: number[] = [];
+      for (let i = start; i <= end; i++) range.push(i);
+      lastSelectedRef.current = verseNum;
+      return Array.from(new Set([...prev, ...range])).sort((a, b) => a - b);
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedVerses([]);
+    lastSelectedRef.current = null;
+  }, []);
+
   const applyHighlight = async (color: string) => {
-    if (!bookId || selectedVerse === null || isGuest) return;
+    if (!bookId || selectedVerses.length === 0 || isGuest) return;
     setSaving(true);
     try {
-      await repo.repoSetHighlights(bookId, chapter, [selectedVerse], color, bibleId);
+      await repo.repoSetHighlights(bookId, chapter, selectedVerses, color, bibleId);
+      clearSelection();
       await loadChapter();
     } finally {
       setSaving(false);
@@ -169,28 +222,28 @@ export function BibleReader({
   };
 
   const removeHighlight = async () => {
-    if (!bookId || selectedVerse === null || isGuest) return;
+    if (!bookId || selectedVerses.length === 0 || isGuest) return;
     setSaving(true);
     try {
-      await repo.repoSetHighlights(bookId, chapter, [selectedVerse], null, bibleId);
+      await repo.repoSetHighlights(bookId, chapter, selectedVerses, null, bibleId);
+      clearSelection();
       await loadChapter();
     } finally {
       setSaving(false);
     }
   };
 
-  const toggleFavorite = async () => {
-    if (!bookId || selectedVerse === null || isGuest) return;
+  const addFavorites = async () => {
+    if (!bookId || selectedVerses.length === 0 || isGuest) return;
     setSaving(true);
     try {
-      const existingId = chapterFavorites.get(selectedVerse);
-      if (existingId) {
-        await repo.repoDeleteFavorite(existingId);
-        Alert.alert('Favoritos', 'Versículo quitado de favoritos');
-      } else {
-        await repo.repoAddFavorite(bibleId, bookId, chapter, selectedVerse);
-        Alert.alert('Favoritos', '¡Versículo agregado a favoritos!');
+      for (const v of selectedVerses) {
+        if (!chapterFavorites.has(v)) {
+          await repo.repoAddFavorite(bibleId, bookId, chapter, v);
+        }
       }
+      Alert.alert('Favoritos', '¡Versículos agregados a favoritos!');
+      clearSelection();
       await loadChapter();
     } catch {
       Alert.alert('Error', 'No se pudo actualizar favoritos');
@@ -199,18 +252,53 @@ export function BibleReader({
     }
   };
 
+  const handleCopySelection = async () => {
+    if (!bookId || !selectedBook) return;
+    const share = buildSelectionShareText({
+      selectedVerses,
+      verses,
+      bookName: selectedBook.bookName,
+      bookId,
+      chapter,
+      bibleId,
+      bibleAbbr: currentBible?.abbr ?? 'RVR1960',
+    });
+    if (!share) return;
+    await Clipboard.setStringAsync(share.text);
+    Alert.alert('Copiado', 'Versículos copiados al portapapeles');
+  };
+
+  const handleShareSelection = async () => {
+    if (!bookId || !selectedBook) return;
+    const share = buildSelectionShareText({
+      selectedVerses,
+      verses,
+      bookName: selectedBook.bookName,
+      bookId,
+      chapter,
+      bibleId,
+      bibleAbbr: currentBible?.abbr ?? 'RVR1960',
+    });
+    if (!share) return;
+    try {
+      await Share.share({ title: share.title, message: share.text, url: share.url });
+    } catch {
+      // usuario canceló
+    }
+  };
+
   const openNoteModal = () => {
-    if (selectedVerse === null) return;
-    const existing = noteMap.get(selectedVerse);
+    if (primaryVerse === null) return;
+    const existing = noteMap.get(primaryVerse);
     setNoteText(existing?.noteContent ?? '');
     setNoteModalOpen(true);
   };
 
   const saveNote = async () => {
-    if (!bookId || selectedVerse === null || isGuest) return;
+    if (!bookId || primaryVerse === null || isGuest) return;
     setSaving(true);
     try {
-      await repo.repoSaveVerseNote(bookId, chapter, selectedVerse, noteText.trim());
+      await repo.repoSaveVerseNote(bookId, chapter, primaryVerse, noteText.trim());
       setNoteModalOpen(false);
       await loadChapter();
     } finally {
@@ -219,8 +307,8 @@ export function BibleReader({
   };
 
   const deleteNote = async () => {
-    if (selectedVerse === null || isGuest) return;
-    const link = noteMap.get(selectedVerse);
+    if (primaryVerse === null || isGuest) return;
+    const link = noteMap.get(primaryVerse);
     if (!link?.id) return;
     setSaving(true);
     try {
@@ -284,11 +372,13 @@ export function BibleReader({
             {verses.map((v) => {
               const hl = highlightMap.get(v.verse);
               const hasNote = noteMap.has(v.verse);
-              const isSelected = selectedVerse === v.verse;
+              const isSelected = selectedVerses.includes(v.verse);
               return (
                 <Pressable
                   key={v.verse}
-                  onPress={() => setSelectedVerse(isSelected ? null : v.verse)}
+                  onPress={() => toggleVerseSelection(v.verse)}
+                  onLongPress={() => selectRangeTo(v.verse)}
+                  delayLongPress={400}
                   style={[
                     styles.verseRow,
                     hl && !isSelected ? verseHighlightStyle(hl, isDark) : null,
@@ -309,12 +399,30 @@ export function BibleReader({
         )}
       </ScrollView>
 
-      {selectedVerse !== null ? (
+      {selectedVerses.length > 0 ? (
         <View style={[styles.actionBar, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}>
-          <Text style={[styles.actionLabel, { color: colors.textMuted }]}>
-            {selectedBook?.bookName} {chapter}:{selectedVerse}
-          </Text>
+          <View style={styles.actionHeader}>
+            <Text style={[styles.actionLabel, { color: colors.textMuted }]} numberOfLines={1}>
+              {selectionLabel}
+            </Text>
+            <Pressable onPress={clearSelection} hitSlop={8}>
+              <Text style={{ color: colors.textMuted, fontSize: 18 }}>×</Text>
+            </Pressable>
+          </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
+            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={handleShareSelection}>
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Compartir</Text>
+            </Pressable>
+            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={handleCopySelection}>
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Copiar</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: imageCreatorData ? 1 : 0.4 }]}
+              onPress={() => imageCreatorData && setImageCreatorOpen(true)}
+              disabled={!imageCreatorData}
+            >
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Imagen</Text>
+            </Pressable>
             {!isGuest
               ? HIGHLIGHT_COLORS.map((c) => {
                   const theme = getHighlightTheme(c);
@@ -341,30 +449,20 @@ export function BibleReader({
               </Pressable>
             ) : null}
             {!isGuest ? (
-              <Pressable
-                style={[styles.toolBtn, { borderColor: selectedVerse !== null && chapterFavorites.has(selectedVerse) ? '#F59E0B' : colors.border }]}
-                onPress={toggleFavorite}
-                disabled={saving}
-              >
-                <Text
-                  style={{
-                    color: selectedVerse !== null && chapterFavorites.has(selectedVerse) ? '#F59E0B' : colors.textMuted,
-                    fontSize: 16,
-                    fontWeight: '700',
-                  }}
-                >
-                  {selectedVerse !== null && chapterFavorites.has(selectedVerse) ? '★' : '☆'}
-                </Text>
+              <Pressable style={[styles.toolBtn, { borderColor: '#F59E0B' }]} onPress={addFavorites} disabled={saving}>
+                <Text style={{ color: '#F59E0B', fontSize: 16, fontWeight: '700' }}>☆</Text>
               </Pressable>
             ) : null}
-            {!isGuest ? (
+            {!isGuest && primaryVerse !== null ? (
               <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={openNoteModal}>
                 <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Nota</Text>
               </Pressable>
             ) : null}
-            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={() => setRefsModalOpen(true)}>
-              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Referencias</Text>
-            </Pressable>
+            {primaryVerse !== null ? (
+              <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={() => setRefsModalOpen(true)}>
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Referencias</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         </View>
       ) : (
@@ -400,7 +498,8 @@ export function BibleReader({
         onSelect={(nextBookId, nextChapter) => {
           setBookId(nextBookId);
           setChapter(nextChapter);
-          setSelectedVerse(null);
+          setSelectedVerses([]);
+          lastSelectedRef.current = null;
         }}
         onClose={() => setSelectorOpen(false)}
       />
@@ -437,7 +536,7 @@ export function BibleReader({
         <View style={styles.modalOverlay}>
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
-              Nota — v. {selectedVerse}
+              Nota — v. {primaryVerse}
             </Text>
             <TextInput
               style={[styles.noteInput, { borderColor: colors.border, color: colors.text }]}
@@ -448,7 +547,7 @@ export function BibleReader({
               onChangeText={setNoteText}
             />
             <View style={styles.modalActions}>
-              {noteMap.get(selectedVerse ?? -1)?.id ? (
+              {noteMap.get(primaryVerse ?? -1)?.id ? (
                 <Pressable onPress={deleteNote} disabled={saving}>
                   <Text style={{ color: colors.danger, fontWeight: '600' }}>Eliminar</Text>
                 </Pressable>
@@ -473,17 +572,28 @@ export function BibleReader({
         bibleId={bibleId}
         bookId={bookId}
         chapter={chapter}
-        verse={selectedVerse}
-        reference={`${selectedBook?.bookName ?? ''} ${chapter}:${selectedVerse ?? ''}`}
+        verse={primaryVerse}
+        reference={`${selectedBook?.bookName ?? ''} ${chapter}:${primaryVerse ?? ''}`}
         onClose={() => setRefsModalOpen(false)}
         onOpenReference={(refBookId, refChapter) => {
           if (books.some((b) => b.bookId === refBookId)) {
             setBookId(refBookId);
             setChapter(refChapter);
-            setSelectedVerse(null);
+            setSelectedVerses([]);
+            lastSelectedRef.current = null;
           }
         }}
       />
+
+      {imageCreatorData ? (
+        <VerseImageCreatorModal
+          visible={imageCreatorOpen}
+          onClose={() => setImageCreatorOpen(false)}
+          text={imageCreatorData.text}
+          reference={imageCreatorData.reference}
+          abbr={imageCreatorData.abbr}
+        />
+      ) : null}
     </View>
   );
 }
@@ -523,7 +633,8 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 8,
   },
-  actionLabel: { fontSize: 12, fontWeight: '700' },
+  actionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  actionLabel: { flex: 1, fontSize: 12, fontWeight: '700' },
   colorRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   colorBtn: { width: 32, height: 32, borderRadius: 16 },
   toolBtn: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },

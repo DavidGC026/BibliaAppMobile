@@ -4,6 +4,8 @@ import { API_BASE_URL } from './config';
 export function resolveMediaUrl(url: string | null | undefined): string | null {
   if (!url?.trim()) return null;
   const trimmed = url.trim();
+  // Web external-books stores covers as base64 data URLs in DB.
+  if (trimmed.startsWith('data:')) return trimmed;
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
   if (trimmed.startsWith('/')) return `${API_BASE_URL}${trimmed}`;
   return `${API_BASE_URL}/${trimmed}`;

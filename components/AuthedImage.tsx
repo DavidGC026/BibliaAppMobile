@@ -21,8 +21,9 @@ export function AuthedImage({ uri, style, resizeMode = 'cover' }: AuthedImagePro
     return <View style={[style, styles.placeholder, { backgroundColor: colors.border }]} />;
   }
 
+  const isDataUri = resolved.startsWith('data:');
   const source =
-    needsAuthHeaders(resolved) && token
+    !isDataUri && needsAuthHeaders(resolved) && token
       ? { uri: resolved, headers: { Authorization: `Bearer ${token}` } }
       : { uri: resolved };
 
