@@ -65,12 +65,32 @@ export function noteTagStyle(tagId: string, isDark: boolean) {
   };
 }
 
-export function stripNotePreview(content: string, max = 100) {
-  const plain = content
-    .substring(0, max)
-    .replace(/!\[.*?\]\(.*?\)/g, '[imagen]')
-    .replace(/\[.*?\]\(.*?\)/g, '[archivo]')
-    .replace(/[#>*_\n]/g, ' ')
+function htmlToPlainText(html: string) {
+  return html
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<\/(p|div|li|h[1-6]|blockquote|tr)>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ')
     .trim();
-  return plain + (content.length > max ? '…' : '');
+}
+
+export function stripNotePreview(content: string, max = 100) {
+  const looksHtml = /<[a-z][^>]*>/i.test(content);
+  const plain = looksHtml
+    ? htmlToPlainText(content)
+    : content
+        .replace(/!\[.*?\]\(.*?\)/g, '[imagen]')
+        .replace(/\[.*?\]\(.*?\)/g, '[archivo]')
+        .replace(/[#>*_\n]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+  if (plain.length <= max) return plain;
+  return `${plain.substring(0, max).trim()}…`;
 }

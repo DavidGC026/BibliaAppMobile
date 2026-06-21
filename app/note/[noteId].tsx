@@ -1,5 +1,5 @@
-import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { Stack, router, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -42,8 +42,13 @@ const DEFAULT_COLORS = [
   '#EC4899',
 ];
 
+function noteHasText(html: string) {
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+}
+
 export default function NoteEditorScreen() {
   const colors = useThemeColors();
+  const navigation = useNavigation();
   const { isOnline } = useNetwork();
   const { noteId, notebookId } = useLocalSearchParams<{ noteId: string; notebookId?: string }>();
   const isNew = noteId === 'new';
@@ -72,10 +77,13 @@ export default function NoteEditorScreen() {
 
   const webViewRef = useRef<WebView>(null);
   const initialContentRef = useRef<string>('');
+  const initialTitleRef = useRef('');
   const initialHtmlRef = useRef<string | null>(null);
   const saveFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveHtmlPendingRef = useRef(false);
   const commitSaveRef = useRef(false);
+  const leaveAfterSaveRef = useRef<Parameters<typeof navigation.dispatch>[0] | null>(null);
+  const autoLeavingRef = useRef(false);
 
   // ── Helper: send action to WebView via injectJavaScript ──
   const sendToEditor = (action: Record<string, any>) => {
@@ -157,6 +165,7 @@ export default function NoteEditorScreen() {
   useEffect(() => {
     if (isNew) {
       initialContentRef.current = '';
+      initialTitleRef.current = '';
       return;
     }
     const id = Number(noteId);
@@ -168,6 +177,7 @@ export default function NoteEditorScreen() {
         setTitle(note.title);
         setContent(note.content);
         initialContentRef.current = note.content;
+        initialTitleRef.current = note.title;
       })
       .catch((err) => Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo cargar'))
       .finally(() => setLoading(false));
@@ -195,6 +205,104 @@ export default function NoteEditorScreen() {
     setVerseModalOpen(false);
   };
 
+  const hasUnsavedChanges = useCallback(() => {
+    const trimmedTitle = title.trim();
+    const trimmedInitialTitle = initialTitleRef.current.trim();
+    const hasContent = noteHasText(content);
+    if (isNew) {
+      return trimmedTitle.length > 0 || hasContent;
+    }
+    return trimmedTitle !== trimmedInitialTitle || content !== initialContentRef.current;
+  }, [content, isNew, title]);
+
+  const persistNote = useCallback(
+    async (
+      htmlContent: string,
+      options: { navigateBack?: boolean; silent?: boolean } = {},
+    ): Promise<boolean> => {
+      const { navigateBack = false, silent = false } = options;
+      if (commitSaveRef.current) return false;
+
+      const trimmedTitle = title.trim();
+      if (!silent && !trimmedTitle) {
+        Alert.alert('Título requerido', 'Escribe un título para la nota.');
+        return false;
+      }
+      if (silent && isNew && !trimmedTitle && !noteHasText(htmlContent)) {
+        return true;
+      }
+
+      commitSaveRef.current = true;
+      setSaving(true);
+      try {
+        const finalTitle = trimmedTitle || 'Sin título';
+        if (isNew) {
+          if (Number.isNaN(parsedNotebookId)) throw new Error('Cuaderno no válido');
+          await repo.repoCreateNotebookNote(parsedNotebookId, finalTitle, htmlContent);
+        } else {
+          await repo.repoUpdateNotebookNote(Number(noteId), finalTitle, htmlContent);
+        }
+        initialContentRef.current = htmlContent;
+        initialTitleRef.current = finalTitle;
+        if (!silent && !isOnline) {
+          Alert.alert(
+            'Guardado offline',
+            'La nota quedó guardada en el dispositivo. Se sincronizará cuando vuelvas a tener conexión.',
+          );
+        }
+        if (navigateBack) router.back();
+        return true;
+      } catch (err) {
+        if (silent) {
+          Alert.alert(
+            'No se pudo guardar',
+            err instanceof Error ? err.message : 'Revisa tu conexión e inténtalo de nuevo.',
+          );
+        } else {
+          Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar');
+        }
+        return false;
+      } finally {
+        commitSaveRef.current = false;
+        setSaving(false);
+      }
+    },
+    [isNew, isOnline, noteId, parsedNotebookId, title],
+  );
+
+  const requestEditorHtml = useCallback(
+    (onHtml: (html: string) => void) => {
+      if (preview) {
+        onHtml(content);
+        return;
+      }
+      saveHtmlPendingRef.current = true;
+      sendToEditor({ type: 'getHtml' });
+      if (saveFallbackTimerRef.current) clearTimeout(saveFallbackTimerRef.current);
+      saveFallbackTimerRef.current = setTimeout(() => {
+        if (!saveHtmlPendingRef.current) return;
+        saveHtmlPendingRef.current = false;
+        onHtml(content);
+      }, 450);
+    },
+    [content, preview],
+  );
+
+  const finishPendingLeave = useCallback(
+    async (html: string) => {
+      const leaveAction = leaveAfterSaveRef.current;
+      leaveAfterSaveRef.current = null;
+      autoLeavingRef.current = false;
+      if (!leaveAction) return;
+
+      const saved = await persistNote(html, { silent: true });
+      if (saved) {
+        navigation.dispatch(leaveAction);
+      }
+    },
+    [navigation, persistNote],
+  );
+
   const onWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -206,7 +314,11 @@ export default function NoteEditorScreen() {
           clearTimeout(saveFallbackTimerRef.current);
           saveFallbackTimerRef.current = null;
         }
-        saveNoteWithContent(data.html);
+        if (leaveAfterSaveRef.current) {
+          void finishPendingLeave(data.html);
+        } else {
+          void persistNote(data.html, { navigateBack: true });
+        }
       } else if (data.type === 'openFontModal') {
         setFontModalOpen(true);
       } else if (data.type === 'openVerseModal') {
@@ -217,51 +329,26 @@ export default function NoteEditorScreen() {
     }
   };
 
-  const saveNoteWithContent = async (htmlContent: string) => {
-    if (commitSaveRef.current) return;
-    const trimmedTitle = title.trim();
-    if (!trimmedTitle) {
-      Alert.alert('Título requerido', 'Escribe un título para la nota.');
-      return;
-    }
-    commitSaveRef.current = true;
-    setSaving(true);
-    try {
-      if (isNew) {
-        if (Number.isNaN(parsedNotebookId)) throw new Error('Cuaderno no válido');
-        await repo.repoCreateNotebookNote(parsedNotebookId, trimmedTitle, htmlContent);
-      } else {
-        await repo.repoUpdateNotebookNote(Number(noteId), trimmedTitle, htmlContent);
-      }
-      if (!isOnline) {
-        Alert.alert(
-          'Guardado offline',
-          'La nota quedó guardada en el dispositivo. Se sincronizará cuando vuelvas a tener conexión.',
-        );
-      }
-      router.back();
-    } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar');
-    } finally {
-      commitSaveRef.current = false;
-      setSaving(false);
-    }
+  const save = () => {
+    requestEditorHtml((html) => {
+      void persistNote(html, { navigateBack: true });
+    });
   };
 
-  const save = () => {
-    if (preview) {
-      saveNoteWithContent(content);
-      return;
-    }
-    saveHtmlPendingRef.current = true;
-    sendToEditor({ type: 'getHtml' });
-    if (saveFallbackTimerRef.current) clearTimeout(saveFallbackTimerRef.current);
-    saveFallbackTimerRef.current = setTimeout(() => {
-      if (!saveHtmlPendingRef.current) return;
-      saveHtmlPendingRef.current = false;
-      saveNoteWithContent(content);
-    }, 450);
-  };
+  // ponytail: auto-save on back/swipe only; no debounced save while typing
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (autoLeavingRef.current || !hasUnsavedChanges() || commitSaveRef.current) return;
+
+      e.preventDefault();
+      autoLeavingRef.current = true;
+      leaveAfterSaveRef.current = e.data.action;
+      requestEditorHtml((html) => {
+        void finishPendingLeave(html);
+      });
+    });
+    return unsubscribe;
+  }, [finishPendingLeave, hasUnsavedChanges, navigation, requestEditorHtml]);
 
   const togglePreview = () => {
     if (!preview) Keyboard.dismiss();

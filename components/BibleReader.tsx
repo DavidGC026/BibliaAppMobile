@@ -24,6 +24,8 @@ import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
 import { buildImageCreatorData, buildSelectionShareText, formatVerseRange } from '@/lib/verseUtils';
+import { cancelStreakReminderForToday } from '@/lib/localNotifications';
+import { markReadToday } from '@/lib/readingToday';
 import type { BibleVersion, Book, Verse, VerseHighlight, VerseNoteLink } from '@/lib/types';
 import { HIGHLIGHT_COLORS, getHighlightTheme, verseHighlightStyle } from '@/lib/highlightColors';
 
@@ -51,6 +53,7 @@ export function BibleReader({
   const [imageCreatorOpen, setImageCreatorOpen] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
+  const initialNoteTextRef = useRef('');
   const [refsModalOpen, setRefsModalOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
@@ -161,6 +164,9 @@ export function BibleReader({
     if (!bookId || verses.length === 0 || isGuest) return;
     const timer = setTimeout(() => {
       api.recordReadingActivity(bookId, 1, verses.length).catch(() => {});
+      if (!isGuest) {
+        markReadToday().then(() => cancelStreakReminderForToday()).catch(() => {});
+      }
     }, 5000);
     return () => clearTimeout(timer);
   }, [bookId, chapter, verses.length, isGuest]);
@@ -290,8 +296,33 @@ export function BibleReader({
   const openNoteModal = () => {
     if (primaryVerse === null) return;
     const existing = noteMap.get(primaryVerse);
-    setNoteText(existing?.noteContent ?? '');
+    const text = existing?.noteContent ?? '';
+    setNoteText(text);
+    initialNoteTextRef.current = text;
     setNoteModalOpen(true);
+  };
+
+  const closeNoteModal = async () => {
+    const trimmed = noteText.trim();
+    const initialTrimmed = initialNoteTextRef.current.trim();
+    if (
+      !isGuest &&
+      bookId &&
+      primaryVerse !== null &&
+      trimmed !== initialTrimmed
+    ) {
+      setSaving(true);
+      try {
+        await repo.repoSaveVerseNote(bookId, chapter, primaryVerse, trimmed);
+        await loadChapter();
+      } catch {
+        Alert.alert('Error', 'No se pudo guardar la nota automáticamente.');
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    setNoteModalOpen(false);
   };
 
   const saveNote = async () => {
@@ -532,7 +563,7 @@ export function BibleReader({
         </Pressable>
       </Modal>
 
-      <Modal visible={noteModalOpen} animationType="slide" transparent onRequestClose={() => setNoteModalOpen(false)}>
+      <Modal visible={noteModalOpen} animationType="slide" transparent onRequestClose={() => void closeNoteModal()}>
         <View style={styles.modalOverlay}>
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
@@ -555,8 +586,8 @@ export function BibleReader({
                 <View />
               )}
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <Pressable onPress={() => setNoteModalOpen(false)}>
-                  <Text style={{ color: colors.textMuted }}>Cancelar</Text>
+                <Pressable onPress={() => void closeNoteModal()} disabled={saving}>
+                  <Text style={{ color: colors.textMuted }}>Cerrar</Text>
                 </Pressable>
                 <Pressable onPress={saveNote} disabled={saving}>
                   <Text style={{ color: colors.primary, fontWeight: '700' }}>Guardar</Text>
