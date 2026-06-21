@@ -557,3 +557,16 @@ export async function addExternalBookLog(
     body: JSON.stringify(payload),
   });
 }
+
+export type UnsplashImage = {
+  id: string;
+  url: string;
+  thumb: string;
+  author: string;
+  authorUrl: string;
+};
+
+export async function fetchUnsplashImages(query?: string) {
+  const q = query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
+  return request<{ images: UnsplashImage[] }>(`/api/unsplash${q}`);
+}
