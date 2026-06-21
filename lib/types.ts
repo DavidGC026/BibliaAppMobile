@@ -248,11 +248,37 @@ export interface FeedAnnouncement {
   created_at: string;
 }
 
+export interface DevotionalContent {
+  reflection: string;
+  application: string;
+  planId?: number;
+  planDay?: number;
+}
+
 export interface Devotional {
   id: number;
   title: string;
-  emotion?: string;
-  verseRef?: string;
+  emotion?: string | null;
+  verseRef?: string | null;
+  content?: DevotionalContent | string;
+  createdAt: string;
+}
+
+export interface ExternalBook {
+  id: number;
+  title: string;
+  author: string;
+  coverImage?: string | null;
+  status?: string;
+  createdAt: string;
+}
+
+export interface BookLog {
+  id: number;
+  title?: string | null;
+  pagesRead?: string | null;
+  chapter?: string | null;
+  reflection?: string | null;
   createdAt: string;
 }
 

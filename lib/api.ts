@@ -53,7 +53,9 @@ async function request<T>(
 
   if (!response.ok) {
     const err = data as ApiError;
-    throw new Error(err.error ?? `Error ${response.status}`);
+    const error = new Error(err.error ?? `Error ${response.status}`) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
   }
 
   return data as T;
@@ -468,4 +470,90 @@ export async function getFeedAnnouncements() {
 
 export async function listDevotionals() {
   return request<{ devotionals: import('./types').Devotional[] }>('/api/devotionals');
+}
+
+export async function createDevotional(payload: {
+  title: string;
+  emotion?: string | null;
+  verseRef?: string | null;
+  content: import('./types').DevotionalContent;
+}) {
+  return request<{ id: number }>('/api/devotionals', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateDevotional(
+  id: number,
+  payload: {
+    title: string;
+    emotion?: string | null;
+    verseRef?: string | null;
+    content: import('./types').DevotionalContent;
+  },
+) {
+  return request<{ success: boolean }>(`/api/devotionals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteDevotional(id: number) {
+  return request<{ success: boolean }>(`/api/devotionals/${id}`, { method: 'DELETE' });
+}
+
+function mapExternalBook(row: Record<string, unknown>): import('./types').ExternalBook {
+  return {
+    id: row.id as number,
+    title: row.title as string,
+    author: row.author as string,
+    coverImage: (row.cover_image as string | null) ?? null,
+    status: (row.status as string) ?? 'leyendo',
+    createdAt: (row.created_at as string) ?? '',
+  };
+}
+
+function mapBookLog(row: Record<string, unknown>): import('./types').BookLog {
+  return {
+    id: row.id as number,
+    title: (row.title as string | null) ?? null,
+    pagesRead: (row.pages_read as string | null) ?? null,
+    chapter: (row.chapter as string | null) ?? null,
+    reflection: (row.reflection as string | null) ?? null,
+    createdAt: (row.created_at as string) ?? '',
+  };
+}
+
+export async function listExternalBooks() {
+  const res = await request<{ books: Record<string, unknown>[] }>('/api/external-books');
+  return { books: res.books.map(mapExternalBook) };
+}
+
+export async function createExternalBook(title: string, author: string, coverImage?: string | null) {
+  return request<{ success: boolean; id: number }>('/api/external-books', {
+    method: 'POST',
+    body: JSON.stringify({ title, author, coverImage: coverImage ?? null }),
+  });
+}
+
+export async function getExternalBook(id: number) {
+  const res = await request<{ book: Record<string, unknown>; logs: Record<string, unknown>[] }>(
+    `/api/external-books/${id}`,
+  );
+  return { book: mapExternalBook(res.book), logs: res.logs.map(mapBookLog) };
+}
+
+export async function deleteExternalBook(id: number) {
+  return request<{ success: boolean }>(`/api/external-books/${id}`, { method: 'DELETE' });
+}
+
+export async function addExternalBookLog(
+  bookId: number,
+  payload: { title?: string; pages_read?: string; chapter?: string; reflection: string },
+) {
+  return request<{ success: boolean }>(`/api/external-books/${bookId}/logs`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
 }

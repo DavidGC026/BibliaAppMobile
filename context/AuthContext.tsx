@@ -9,11 +9,26 @@ import React, {
 } from 'react';
 
 import * as api from '@/lib/api';
+import { isAuthError } from '@/lib/authError';
 import { setOpenMediaTokenGetter } from '@/lib/openMedia';
 import type { User } from '@/lib/types';
 import { clearPushTokenFromServer, syncPushTokenWithServer } from '@/hooks/usePushNotifications';
 
 const TOKEN_KEY = 'bibliaapp_session';
+const USER_KEY = 'bibliaapp_user';
+
+async function persistUser(user: User | null) {
+  if (user) {
+    await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
+  } else {
+    await SecureStore.deleteItemAsync(USER_KEY);
+  }
+}
+
+async function clearSession() {
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(USER_KEY);
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -36,10 +51,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { user: nextUser } = await api.getMe();
       setUser(nextUser);
-    } catch {
-      setUser(null);
-      setToken(null);
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await persistUser(nextUser);
+      if (!nextUser) {
+        setToken(null);
+        await clearSession();
+      }
+    } catch (err) {
+      // Solo cerrar sesión si el servidor dice que el token ya no vale.
+      // Offline o errores transitorios: conservar la sesión cacheada.
+      if (isAuthError(err)) {
+        setUser(null);
+        setToken(null);
+        await clearSession();
+      }
     }
   }, []);
 
@@ -53,24 +77,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     async function bootstrap() {
       try {
-        const stored = await SecureStore.getItemAsync(TOKEN_KEY);
-        if (cancelled) return;
+        const [stored, cachedUserRaw] = await Promise.all([
+          SecureStore.getItemAsync(TOKEN_KEY),
+          SecureStore.getItemAsync(USER_KEY),
+        ]);
+        if (cancelled || !stored) return;
 
-        if (stored) {
-          setToken(stored);
-          api.setApiTokenGetter(() => stored);
-          setOpenMediaTokenGetter(() => stored);
-          const { user: nextUser } = await api.getMe();
-          if (!cancelled) {
-            setUser(nextUser);
-            if (nextUser) syncPushTokenWithServer().catch(() => {});
+        // Restaurar sesión de forma optimista (funciona offline).
+        setToken(stored);
+        api.setApiTokenGetter(() => stored);
+        setOpenMediaTokenGetter(() => stored);
+        if (cachedUserRaw) {
+          try {
+            setUser(JSON.parse(cachedUserRaw) as User);
+          } catch {
+            // cache corrupto: se revalida abajo
           }
         }
-      } catch {
-        if (!cancelled) {
-          setUser(null);
-          setToken(null);
-          await SecureStore.deleteItemAsync(TOKEN_KEY);
+
+        // Revalidar contra el servidor; conservar sesión si solo falla la red.
+        try {
+          const { user: nextUser } = await api.getMe();
+          if (cancelled) return;
+          if (nextUser) {
+            setUser(nextUser);
+            await persistUser(nextUser);
+            syncPushTokenWithServer().catch(() => {});
+          } else {
+            setUser(null);
+            setToken(null);
+            await clearSession();
+          }
+        } catch (err) {
+          if (!cancelled && isAuthError(err)) {
+            setUser(null);
+            setToken(null);
+            await clearSession();
+          }
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -90,6 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setApiTokenGetter(() => result.token);
     setOpenMediaTokenGetter(() => result.token);
     setUser(result.user as User);
+    await persistUser(result.user as User);
     await refreshUser();
     syncPushTokenWithServer().catch(() => {});
   }, [refreshUser]);
@@ -105,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignorar errores de red al cerrar sesión
     }
-    await SecureStore.deleteItemAsync(TOKEN_KEY);
+    await clearSession();
     setToken(null);
     setUser(null);
   }, []);

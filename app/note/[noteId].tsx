@@ -3,14 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  KeyboardAvoidingView,
+  Keyboard,
+  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  UIManager,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -20,6 +21,7 @@ import * as SecureStore from 'expo-secure-store';
 import { FontSelectorModal } from '@/components/FontSelectorModal';
 import { InsertVerseModal } from '@/components/InsertVerseModal';
 import { NoteContent } from '@/components/NoteContent';
+import { useNetwork } from '@/context/NetworkContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import * as repo from '@/lib/repo';
 import { getEditorHtml } from '@/lib/editorHtml';
@@ -27,21 +29,22 @@ import { getDownloadedFonts } from '@/lib/fontManager';
 
 const FAVORITE_COLORS_KEY = 'NOTE_FAVORITE_COLORS';
 const DEFAULT_COLORS = [
-  '#3D3835', // Marrón oscuro / Text claro
-  '#E7E5E4', // Text oscuro
-  '#92700C', // Bronce claro / Primary claro
-  '#E8B84A', // Dorado oscuro / Primary oscuro
-  '#EF4444', // Rojo
-  '#F97316', // Naranja
-  '#F59E0B', // Amarillo
-  '#10B981', // Verde
-  '#0EA5E9', // Azul
-  '#8B5CF6', // Púrpura
-  '#EC4899', // Rosa
+  '#3D3835',
+  '#E7E5E4',
+  '#92700C',
+  '#E8B84A',
+  '#EF4444',
+  '#F97316',
+  '#F59E0B',
+  '#10B981',
+  '#0EA5E9',
+  '#8B5CF6',
+  '#EC4899',
 ];
 
 export default function NoteEditorScreen() {
   const colors = useThemeColors();
+  const { isOnline } = useNetwork();
   const { noteId, notebookId } = useLocalSearchParams<{ noteId: string; notebookId?: string }>();
   const isNew = noteId === 'new';
   const parsedNotebookId = notebookId ? Number(notebookId) : NaN;
@@ -56,19 +59,58 @@ export default function NoteEditorScreen() {
 
   // Formatting state
   const [activeFont, setActiveFont] = useState('Default');
-  const [activeSize, setActiveSize] = useState('16px');
-  const [activeColor, setActiveColor] = useState(colors.text);
   const [favoriteColors, setFavoriteColors] = useState<string[]>(DEFAULT_COLORS);
-  
+
   // Custom font base64 mappings for offline support
   const [base64Fonts, setBase64Fonts] = useState<Record<string, string>>({});
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
+  // Keyboard height so the editor toolbar always sits above the keyboard.
+  // Edge-to-edge (Expo SDK 56) no longer resizes the window, so we push the
+  // editor container up manually by the reported keyboard height.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   const webViewRef = useRef<WebView>(null);
   const initialContentRef = useRef<string>('');
   const initialHtmlRef = useRef<string | null>(null);
+  const saveFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveHtmlPendingRef = useRef(false);
+  const commitSaveRef = useRef(false);
 
-  // Load color palette favorites from SecureStore
+  // ── Helper: send action to WebView via injectJavaScript ──
+  const sendToEditor = (action: Record<string, any>) => {
+    const js = `window.handleAction(${JSON.stringify(JSON.stringify(action))});true;`;
+    webViewRef.current?.injectJavaScript(js);
+  };
+
+  // Tell the WebView to scroll the caret when the keyboard opens/closes.
+  useEffect(() => {
+    if (preview) return;
+    sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight });
+  }, [keyboardHeight, preview]);
+
+  // Track keyboard height to keep the toolbar above the keyboard.
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    }
+    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const onShow = Keyboard.addListener(showEvt, (e) => {
+      LayoutAnimation.easeInEaseOut();
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const onHide = Keyboard.addListener(hideEvt, () => {
+      LayoutAnimation.easeInEaseOut();
+      setKeyboardHeight(0);
+    });
+    return () => {
+      onShow.remove();
+      onHide.remove();
+    };
+  }, []);
+
+  // ── Load color palette favorites ──
   useEffect(() => {
     const loadFavs = async () => {
       try {
@@ -85,7 +127,7 @@ export default function NoteEditorScreen() {
     loadFavs();
   }, []);
 
-  // Fetch and cache base64 encoded font files for offline use inside WebView
+  // ── Fetch and cache base64 encoded font files for offline use ──
   useEffect(() => {
     const loadFontsBase64 = async () => {
       try {
@@ -111,7 +153,7 @@ export default function NoteEditorScreen() {
     loadFontsBase64();
   }, []);
 
-  // Load note details if editing
+  // ── Load note details if editing ──
   useEffect(() => {
     if (isNew) {
       initialContentRef.current = '';
@@ -131,47 +173,14 @@ export default function NoteEditorScreen() {
       .finally(() => setLoading(false));
   }, [isNew, noteId]);
 
-  // Command handlers to communicate with WebView
-  const runCommand = (command: string, value?: string) => {
-    webViewRef.current?.postMessage(
-      JSON.stringify({ type: 'exec', command, value })
-    );
-  };
-
+  // ── Font selection handler (called from FontSelectorModal) ──
   const handleSetFont = (fontName: string) => {
     setActiveFont(fontName);
-    webViewRef.current?.postMessage(
-      JSON.stringify({ type: 'setFont', value: fontName })
-    );
+    sendToEditor({ type: 'setFont', value: fontName });
   };
 
-  const handleSetSize = (size: string) => {
-    setActiveSize(size);
-    webViewRef.current?.postMessage(
-      JSON.stringify({ type: 'setSize', value: size })
-    );
-  };
-
-  const handleSetColor = (color: string) => {
-    setActiveColor(color);
-    webViewRef.current?.postMessage(
-      JSON.stringify({ type: 'setColor', value: color })
-    );
-  };
-
-  const handleInsertTable = () => {
-    webViewRef.current?.postMessage(JSON.stringify({ type: 'insertTable' }));
-  };
-
-  const handleIndent = (dir: 'indent' | 'outdent') => {
-    webViewRef.current?.postMessage(
-      JSON.stringify({ type: 'setIndent', value: dir })
-    );
-  };
-
+  // ── Verse insertion handler ──
   const handleInsertVerse = (verseMarkdown: string) => {
-    // Convert markdown quote formatting into HTML quote format for WYSIWYG
-    // e.g. format is > **Ref**\n> Text
     const lines = verseMarkdown.split('\n');
     let htmlContent = '';
     lines.forEach((line) => {
@@ -182,38 +191,8 @@ export default function NoteEditorScreen() {
         htmlContent += clean + '<br/>';
       }
     });
-
-    webViewRef.current?.postMessage(
-      JSON.stringify({ type: 'insertVerse', value: htmlContent })
-    );
+    sendToEditor({ type: 'insertVerse', value: htmlContent });
     setVerseModalOpen(false);
-  };
-
-  const addColorToFavorites = async (color: string) => {
-    if (favoriteColors.includes(color)) return;
-    const newFavs = [color, ...favoriteColors].slice(0, 16); // cap at 16 colors
-    setFavoriteColors(newFavs);
-    try {
-      await SecureStore.setItemAsync(FAVORITE_COLORS_KEY, JSON.stringify(newFavs));
-      Alert.alert('Color guardado', 'Color añadido a tu paleta de favoritos.');
-    } catch {
-      console.error('Failed to save color favorites');
-    }
-  };
-
-  const removeColorFromFavorites = async (color: string) => {
-    const newFavs = favoriteColors.filter((c) => c !== color);
-    setFavoriteColors(newFavs);
-    try {
-      await SecureStore.setItemAsync(FAVORITE_COLORS_KEY, JSON.stringify(newFavs));
-    } catch {
-      console.error('Failed to update colors');
-    }
-  };
-
-  // Safe HTML content retrieval
-  const requestHtmlSave = () => {
-    webViewRef.current?.postMessage(JSON.stringify({ type: 'getHtml' }));
   };
 
   const onWebViewMessage = (event: any) => {
@@ -222,7 +201,16 @@ export default function NoteEditorScreen() {
       if (data.type === 'onChange') {
         setContent(data.html);
       } else if (data.type === 'getHtmlResponse') {
+        saveHtmlPendingRef.current = false;
+        if (saveFallbackTimerRef.current) {
+          clearTimeout(saveFallbackTimerRef.current);
+          saveFallbackTimerRef.current = null;
+        }
         saveNoteWithContent(data.html);
+      } else if (data.type === 'openFontModal') {
+        setFontModalOpen(true);
+      } else if (data.type === 'openVerseModal') {
+        setVerseModalOpen(true);
       }
     } catch (e) {
       console.error('Error parsing WebView message:', e);
@@ -230,24 +218,32 @@ export default function NoteEditorScreen() {
   };
 
   const saveNoteWithContent = async (htmlContent: string) => {
+    if (commitSaveRef.current) return;
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       Alert.alert('Título requerido', 'Escribe un título para la nota.');
       return;
     }
+    commitSaveRef.current = true;
     setSaving(true);
     try {
       if (isNew) {
         if (Number.isNaN(parsedNotebookId)) throw new Error('Cuaderno no válido');
-        const created = await repo.repoCreateNotebookNote(parsedNotebookId, trimmedTitle, htmlContent);
-        router.replace(`/note/${created.id}`);
+        await repo.repoCreateNotebookNote(parsedNotebookId, trimmedTitle, htmlContent);
       } else {
         await repo.repoUpdateNotebookNote(Number(noteId), trimmedTitle, htmlContent);
-        router.back();
       }
+      if (!isOnline) {
+        Alert.alert(
+          'Guardado offline',
+          'La nota quedó guardada en el dispositivo. Se sincronizará cuando vuelvas a tener conexión.',
+        );
+      }
+      router.back();
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo guardar');
     } finally {
+      commitSaveRef.current = false;
       setSaving(false);
     }
   };
@@ -255,10 +251,21 @@ export default function NoteEditorScreen() {
   const save = () => {
     if (preview) {
       saveNoteWithContent(content);
-    } else {
-      // Query WebView to get current editor HTML and proceed to save
-      requestHtmlSave();
+      return;
     }
+    saveHtmlPendingRef.current = true;
+    sendToEditor({ type: 'getHtml' });
+    if (saveFallbackTimerRef.current) clearTimeout(saveFallbackTimerRef.current);
+    saveFallbackTimerRef.current = setTimeout(() => {
+      if (!saveHtmlPendingRef.current) return;
+      saveHtmlPendingRef.current = false;
+      saveNoteWithContent(content);
+    }, 450);
+  };
+
+  const togglePreview = () => {
+    if (!preview) Keyboard.dismiss();
+    setPreview((p) => !p);
   };
 
   const remove = () => {
@@ -280,6 +287,7 @@ export default function NoteEditorScreen() {
     ]);
   };
 
+  // ── Loading guard ──
   if (loading || !fontsLoaded) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -288,14 +296,15 @@ export default function NoteEditorScreen() {
     );
   }
 
-  // Set the initial HTML template string once
+  // ── Build the initial HTML template once ──
   if (!initialHtmlRef.current) {
     initialHtmlRef.current = getEditorHtml(
       colors,
       initialContentRef.current,
       activeFont,
       base64Fonts,
-      false
+      false,
+      favoriteColors,
     );
   }
 
@@ -321,162 +330,52 @@ export default function NoteEditorScreen() {
         }}
       />
 
-      <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
-      >
-        <View style={styles.container}>
-          {/* Title Input */}
-          <View style={styles.titleWrapper}>
-            <TextInput
-              style={[styles.titleInput, { color: colors.text, borderColor: colors.border }]}
-              placeholder="Título"
-              placeholderTextColor={colors.textMuted}
-              value={title}
-              onChangeText={setTitle}
-            />
-          </View>
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
+        {/* Title Input */}
+        <View style={styles.titleWrapper}>
+          <TextInput
+            style={[styles.titleInput, { color: colors.text, borderColor: colors.border }]}
+            placeholder="Título de la nota"
+            placeholderTextColor={colors.textMuted}
+            value={title}
+            onChangeText={setTitle}
+          />
+        </View>
 
-          {/* Preview Toggle */}
-          <View style={styles.previewToggleWrapper}>
-            <Pressable onPress={() => setPreview((p) => !p)} style={styles.previewToggle}>
-              <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                {preview ? '✏️ Modo Edición' : '👁️ Vista Previa'}
-              </Text>
-            </Pressable>
-          </View>
+        {/* Preview Toggle */}
+        <View style={styles.previewToggleWrapper}>
+          <Pressable onPress={togglePreview} style={styles.previewToggle}>
+            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
+              {preview ? '✏️ Modo Edición' : '👁️ Vista Previa'}
+            </Text>
+          </Pressable>
+        </View>
 
-          {/* Content Pane */}
+        {/* Content Area — WebView stays mounted so edits survive preview toggle */}
+        <View style={styles.contentArea}>
+          <WebView
+            ref={webViewRef}
+            originWhitelist={['*']}
+            source={{ html: initialHtmlRef.current! }}
+            onMessage={onWebViewMessage}
+            style={StyleSheet.absoluteFill}
+            pointerEvents={preview ? 'none' : 'auto'}
+            keyboardDisplayRequiresUserAction={false}
+            hideKeyboardAccessoryView={true}
+            scrollEnabled={false}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          />
+
           {preview ? (
             <ScrollView style={styles.previewContainer}>
               <View style={[styles.previewBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <NoteContent content={content || 'Sin contenido'} />
               </View>
             </ScrollView>
-          ) : (
-            <View style={[styles.editorContainer, { borderColor: colors.border }]}>
-              <WebView
-                ref={webViewRef}
-                originWhitelist={['*']}
-                source={{ html: initialHtmlRef.current }}
-                onMessage={onWebViewMessage}
-                style={{ backgroundColor: colors.background }}
-                keyboardDisplayRequiresUserAction={false}
-                hideKeyboardAccessoryView={true}
-              />
-            </View>
-          )}
+          ) : null}
         </View>
-
-        {/* Toolbar formatting options (Only in editing mode) */}
-        {!preview && (
-          <View style={[styles.toolbar, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
-            {/* Horizontal Formatting Commands */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.toolbarScroll}>
-              <Pressable style={styles.toolItem} onPress={() => setFontModalOpen(true)}>
-                <Text style={[styles.toolIconText, { color: colors.primary, fontWeight: '800' }]}>Tt</Text>
-                <Text style={[styles.toolLabel, { color: colors.textMuted }]}>{activeFont}</Text>
-              </Pressable>
-
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-              {/* Font Size Selector */}
-              {['14px', '16px', '20px', '26px'].map((size) => (
-                <Pressable
-                  key={size}
-                  style={[
-                    styles.toolItem,
-                    activeSize === size && { backgroundColor: colors.primarySoft, borderRadius: 6 },
-                  ]}
-                  onPress={() => handleSetSize(size)}
-                >
-                  <Text style={[styles.toolIconText, { color: colors.primary, fontSize: Number(size.replace('px','')) - 2 }]}>A</Text>
-                  <Text style={[styles.toolLabel, { color: colors.textMuted }]}>{size.replace('px','')}</Text>
-                </Pressable>
-              ))}
-
-              <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-              {/* Action commands */}
-              <Pressable style={styles.toolIconItem} onPress={() => runCommand('bold')}>
-                <Text style={[styles.toolSymbol, { color: colors.text, fontWeight: '900' }]}>B</Text>
-              </Pressable>
-              
-              <Pressable style={styles.toolIconItem} onPress={() => runCommand('italic')}>
-                <Text style={[styles.toolSymbol, { color: colors.text, fontStyle: 'italic' }]}>I</Text>
-              </Pressable>
-
-              <Pressable style={styles.toolIconItem} onPress={() => runCommand('underline')}>
-                <Text style={[styles.toolSymbol, { color: colors.text, textDecorationLine: 'underline' }]}>U</Text>
-              </Pressable>
-
-              <Pressable style={styles.toolIconItem} onPress={() => runCommand('insertUnorderedList')}>
-                <Text style={[styles.toolSymbol, { color: colors.text }]}>•-</Text>
-              </Pressable>
-
-              <Pressable style={styles.toolIconItem} onPress={() => runCommand('insertOrderedList')}>
-                <Text style={[styles.toolSymbol, { color: colors.text }]}>1.</Text>
-              </Pressable>
-
-              <Pressable style={styles.toolIconItem} onPress={() => handleIndent('indent')}>
-                <Text style={[styles.toolSymbol, { color: colors.text }]}>→</Text>
-              </Pressable>
-
-              <Pressable style={styles.toolIconItem} onPress={() => handleIndent('outdent')}>
-                <Text style={[styles.toolSymbol, { color: colors.text }]}>←</Text>
-              </Pressable>
-
-              <Pressable style={styles.toolIconItem} onPress={handleInsertTable}>
-                <Text style={[styles.toolSymbol, { color: colors.text }]}>田</Text>
-              </Pressable>
-            </ScrollView>
-
-            {/* Colors Palette & Favorites */}
-            <View style={[styles.colorSection, { borderTopColor: colors.border }]}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorsScroll}>
-                <Pressable
-                  style={[styles.addFavBtn, { borderColor: colors.primary }]}
-                  onPress={() => addColorToFavorites(activeColor)}
-                >
-                  <Text style={{ color: colors.primary, fontWeight: 'bold', fontSize: 16 }}>+</Text>
-                </Pressable>
-
-                {favoriteColors.map((color) => {
-                  const isActive = activeColor.toLowerCase() === color.toLowerCase();
-                  return (
-                    <Pressable
-                      key={color}
-                      onPress={() => handleSetColor(color)}
-                      onLongPress={() => {
-                        Alert.alert('Quitar favorito', '¿Quieres quitar este color de tus favoritos?', [
-                          { text: 'Cancelar', style: 'cancel' },
-                          { text: 'Quitar', style: 'destructive', onPress: () => removeColorFromFavorites(color) }
-                        ]);
-                      }}
-                      style={[
-                        styles.colorCircle,
-                        { backgroundColor: color },
-                        isActive && { borderWidth: 2, borderColor: colors.primary, transform: [{ scale: 1.1 }] },
-                      ]}
-                    />
-                  );
-                })}
-              </ScrollView>
-            </View>
-
-            {/* Bottom auxiliary bar for verse insertion */}
-            <View style={styles.fixedBar}>
-              <Pressable
-                style={[styles.verseBtn, { borderColor: colors.primary, backgroundColor: colors.primarySoft }]}
-                onPress={() => setVerseModalOpen(true)}
-              >
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>📖 Insertar versículo</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-      </KeyboardAvoidingView>
+      </View>
 
       <FontSelectorModal
         visible={fontModalOpen}
@@ -496,17 +395,20 @@ export default function NoteEditorScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  container: { flex: 1, padding: 16, paddingBottom: 0 },
-  titleWrapper: { marginBottom: 8 },
+  titleWrapper: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
   titleInput: {
     fontSize: 22,
     fontWeight: '800',
     borderBottomWidth: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
   },
   previewToggleWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     alignItems: 'flex-start',
-    marginBottom: 8,
   },
   previewToggle: {
     paddingVertical: 4,
@@ -514,13 +416,14 @@ const styles = StyleSheet.create({
   },
   editorContainer: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 10,
+  },
+  contentArea: {
+    flex: 1,
+    position: 'relative',
   },
   previewContainer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
+    paddingHorizontal: 16,
   },
   previewBox: {
     borderWidth: 1,
@@ -528,78 +431,5 @@ const styles = StyleSheet.create({
     padding: 14,
     minHeight: 280,
     marginBottom: 20,
-  },
-  toolbar: {
-    borderTopWidth: 1,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  toolbarScroll: {
-    paddingHorizontal: 12,
-    gap: 8,
-    alignItems: 'center',
-    height: 48,
-  },
-  toolItem: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  toolIconItem: {
-    width: 36,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toolIconText: {
-    fontWeight: '600',
-  },
-  toolLabel: {
-    fontSize: 10,
-  },
-  toolSymbol: {
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  divider: {
-    width: 1,
-    height: 24,
-    marginHorizontal: 4,
-  },
-  colorSection: {
-    borderTopWidth: 1,
-    paddingVertical: 8,
-  },
-  colorsScroll: {
-    paddingHorizontal: 16,
-    gap: 12,
-    alignItems: 'center',
-  },
-  colorCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  addFavBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 4,
-  },
-  fixedBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-  },
-  verseBtn: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    alignItems: 'center',
   },
 });
