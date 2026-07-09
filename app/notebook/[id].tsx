@@ -17,6 +17,7 @@ import { OfflineBanner } from '@/components/OfflineBanner';
 import { BookCover } from '@/components/BookCover';
 import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as repo from '@/lib/repo';
 import { noteTagStyle, parseNoteTags, stripNotePreview } from '@/lib/notebookCovers';
 import type { Notebook, NotebookNote } from '@/lib/types';
@@ -35,6 +36,7 @@ function formatDate(iso: string) {
 
 export default function NotebookDetailScreen() {
   const { colors, radius, isDark } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const notebookId = Number(id);
 
@@ -139,7 +141,7 @@ export default function NotebookDetailScreen() {
           <OfflineBanner />
           <FlatList
           style={{ flex: 1, backgroundColor: colors.background }}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
           data={filtered}
           keyExtractor={(item) => String(item.id)}
           refreshControl={

@@ -14,6 +14,7 @@ import {
 import { FeedContent } from '@/components/FeedContent';
 import { GroupHeader } from '@/components/GroupHeader';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { GroupEvent, GroupPost, GroupPrayer, GroupSummary } from '@/lib/types';
 
@@ -34,6 +35,7 @@ function formatDate(iso: string) {
 
 export default function GroupDetailScreen() {
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const groupId = Number(id);
 
@@ -150,7 +152,7 @@ export default function GroupDetailScreen() {
               <FlatList
                 data={prayers}
                 keyExtractor={(item) => String(item.id)}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
                 refreshControl={
                   <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                 }
@@ -188,7 +190,7 @@ export default function GroupDetailScreen() {
               <FlatList
                 data={events}
                 keyExtractor={(item) => String(item.id)}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
                 refreshControl={
                   <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                 }
@@ -219,7 +221,7 @@ export default function GroupDetailScreen() {
               <FlatList
                 data={posts}
                 keyExtractor={(item) => String(item.id)}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
                 refreshControl={
                   <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
                 }

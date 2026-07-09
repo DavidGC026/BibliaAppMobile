@@ -66,6 +66,7 @@ export interface VerseOfDay {
   verse_start: number;
   verse_end: number;
   idBible: number;
+  backgroundImage?: string | null;
 }
 
 export interface FeedPost {

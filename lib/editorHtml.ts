@@ -1,4 +1,9 @@
 import { AppColors } from '@/constants/Colors';
+import {
+  getNoteTableCss,
+  getNoteTablePickerHtml,
+  getNoteTableScript,
+} from '@/lib/noteEditorTable';
 
 /**
  * Generates the full WYSIWYG editor HTML that runs inside a WebView.
@@ -85,6 +90,9 @@ export function getEditorHtml(
       z-index: 1;
     }
 
+    #editor h1 { font-size: 1.55em; font-weight: 800; margin: 0.6em 0 0.3em; }
+    #editor h2 { font-size: 1.28em; font-weight: 700; margin: 0.6em 0 0.3em; }
+
     #editor:empty:before {
       content: "Escribe aquí tu nota…";
       color: ${colors.textMuted};
@@ -104,8 +112,10 @@ export function getEditorHtml(
       overflow: hidden;
     }
     table, th, td { border: 1px solid ${colors.border}; }
-    th, td { padding: 8px 12px; text-align: left; font-size: 14px; }
+    th, td { padding: 8px 12px; text-align: left; font-size: 14px; vertical-align: top; }
     th { background: ${colors.accent}; font-weight: 700; }
+
+    ${getNoteTableCss(colors, isReadOnly)}
 
     blockquote {
       border-left: 3px solid ${colors.primary};
@@ -114,6 +124,63 @@ export function getEditorHtml(
       margin: 12px 0;
       border-radius: 0 10px 10px 0;
       font-style: italic;
+    }
+
+    /* Entrada del diccionario Strong — distinta de versículos (blockquote) */
+    .biblia-dict-entry {
+      border: 1px solid rgba(124, 58, 237, 0.35);
+      border-left: 4px solid #7C3AED;
+      background: rgba(124, 58, 237, 0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin: 14px 0;
+      font-style: normal;
+    }
+    .biblia-dict-label {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7C3AED;
+      margin-bottom: 8px;
+    }
+    .biblia-dict-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .biblia-dict-code {
+      font-weight: 800;
+      font-size: 15px;
+      color: #6D28D9;
+      background: rgba(124, 58, 237, 0.14);
+      border-radius: 6px;
+      padding: 2px 8px;
+    }
+    .biblia-dict-lemma {
+      font-weight: 700;
+      font-size: 16px;
+      color: ${colors.text};
+    }
+    .biblia-dict-trans {
+      font-size: 13px;
+      color: ${colors.textMuted};
+      font-style: italic;
+    }
+    .biblia-dict-body { display: flex; flex-direction: column; gap: 8px; }
+    .biblia-dict-section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #7C3AED;
+      margin-top: 2px;
+    }
+    .biblia-dict-section-text {
+      font-size: 14px;
+      line-height: 1.55;
+      color: ${colors.text};
+      white-space: pre-wrap;
     }
 
     a { color: ${colors.primary}; }
@@ -242,6 +309,11 @@ export function getEditorHtml(
       transition: opacity 0.15s;
     }
     .aux-btn:active { opacity: 0.7; }
+    .aux-btn-dict {
+      border-color: rgba(124, 58, 237, 0.35);
+      background: rgba(124, 58, 237, 0.1);
+      color: #6D28D9;
+    }
   </style>
 </head>
 <body>
@@ -276,6 +348,11 @@ export function getEditorHtml(
 
         <div class="sep"></div>
 
+        <button class="tb" data-action="heading" data-val="h1" style="font-weight:800;">H1</button>
+        <button class="tb" data-action="heading" data-val="h2" style="font-weight:700;">H2</button>
+
+        <div class="sep"></div>
+
         <button class="tb" data-action="bold" style="font-weight:900;">B</button>
         <button class="tb" data-action="italic" style="font-style:italic;">I</button>
         <button class="tb" data-action="underline" style="text-decoration:underline;">U</button>
@@ -294,6 +371,13 @@ export function getEditorHtml(
         <div class="sep"></div>
 
         <button class="tb" data-action="insertTable">⊞</button>
+
+        <div class="sep"></div>
+
+        <button class="tb tb-sz" data-action="selectAll">
+          <span class="letter" style="font-size:14px;">▣</span>
+          <span class="lbl">Todo</span>
+        </button>
       </div>
 
       <!-- Row 2: Colors -->
@@ -302,9 +386,12 @@ export function getEditorHtml(
       <!-- Row 3: Aux actions -->
       <div class="aux-row">
         <button class="aux-btn" data-action="insertVerse">📖 Insertar versículo</button>
+        <button class="aux-btn aux-btn-dict" data-action="insertDictionary">📚 Insertar del diccionario</button>
       </div>
     </div>
   </div>
+
+  ${getNoteTablePickerHtml(isReadOnly)}
 
   <script>
     (function() {
@@ -317,6 +404,7 @@ export function getEditorHtml(
       var activeSize = '16px';
       var savedRange = null;
       var scrollTimer = null;
+      var keyboardInset = 0;
 
       function saveSelection() {
         var sel = window.getSelection();
@@ -511,7 +599,29 @@ export function getEditorHtml(
         }
 
         if (action === 'insertTable') {
-          insertHtmlAtSelection('<table><thead><tr><th>Columna 1</th><th>Columna 2</th></tr></thead><tbody><tr><td>&nbsp;</td><td>&nbsp;</td></tr><tr><td>&nbsp;</td><td>&nbsp;</td></tr></tbody></table><p><br></p>');
+          openTablePicker();
+          return;
+        }
+
+        if (action === 'selectAll') {
+          editor.focus();
+          var allRange = document.createRange();
+          allRange.selectNodeContents(editor);
+          var allSel = window.getSelection();
+          allSel.removeAllRanges();
+          allSel.addRange(allRange);
+          savedRange = allRange.cloneRange();
+          updateActiveStates();
+          return;
+        }
+
+        if (action === 'heading') {
+          editor.focus();
+          restoreSelection();
+          var currentBlock = '';
+          try { currentBlock = String(document.queryCommandValue('formatBlock')).toLowerCase(); } catch (e) {}
+          document.execCommand('formatBlock', false, currentBlock === val ? 'p' : val);
+          updateActiveStates();
           notifyChange();
           scrollCaretIntoView();
           return;
@@ -616,22 +726,29 @@ export function getEditorHtml(
             var sel = window.getSelection();
             if (!sel || sel.rangeCount === 0) return;
             if (!editor.contains(sel.anchorNode)) return;
+            // Con selección activa no tocamos nada: removeAllRanges/addRange
+            // descarta los manejadores nativos de selección en Android
+            // (rompía "Seleccionar todo" y la selección por pulsación larga).
+            if (!sel.isCollapsed) return;
 
-            var range = sel.getRangeAt(0).cloneRange();
-            var marker = document.createElement('span');
-            marker.textContent = '\\u200B';
-            range.collapse(true);
-            range.insertNode(marker);
-
-            var caretRect = marker.getBoundingClientRect();
+            var originalRange = sel.getRangeAt(0).cloneRange();
             var editorRect = editor.getBoundingClientRect();
             var toolbar = document.getElementById('toolbar');
             var toolbarH = toolbar ? toolbar.offsetHeight : 0;
-
-            var caretTop = caretRect.top - editorRect.top + editor.scrollTop;
-            var caretBottom = caretTop + Math.max(caretRect.height, 20);
             var visibleTop = editor.scrollTop + 16;
             var visibleBottom = editor.scrollTop + editor.clientHeight - toolbarH - 24;
+            var marker = document.createElement('span');
+            marker.textContent = '\\u200B';
+            var probe = originalRange.cloneRange();
+            probe.collapse(true);
+            probe.insertNode(marker);
+            var caretRect = marker.getBoundingClientRect();
+            var caretTop = caretRect.top - editorRect.top + editor.scrollTop;
+            var caretBottom = caretTop + Math.max(caretRect.height, 20);
+            var restoreRange = document.createRange();
+            restoreRange.setStartBefore(marker);
+            restoreRange.collapse(true);
+            marker.parentNode.removeChild(marker);
 
             if (caretBottom > visibleBottom) {
               editor.scrollTop = caretBottom - editor.clientHeight + toolbarH + 24;
@@ -639,13 +756,9 @@ export function getEditorHtml(
               editor.scrollTop = Math.max(0, caretTop - 16);
             }
 
-            var restore = document.createRange();
-            restore.setStartBefore(marker);
-            restore.collapse(true);
-            marker.parentNode.removeChild(marker);
             sel.removeAllRanges();
-            sel.addRange(restore);
-            savedRange = restore.cloneRange();
+            sel.addRange(restoreRange);
+            savedRange = restoreRange.cloneRange();
           });
         }, 50);
       }
@@ -732,6 +845,13 @@ export function getEditorHtml(
             btn.classList.remove('active');
           }
         });
+
+        // Heading buttons
+        var blockTag = '';
+        try { blockTag = String(document.queryCommandValue('formatBlock')).toLowerCase(); } catch (e) {}
+        document.querySelectorAll('.tb[data-action="heading"]').forEach(function(btn) {
+          btn.classList.toggle('active', btn.getAttribute('data-val') === blockTag);
+        });
       }
 
       /* ── Apply color to selection ──────────────────── */
@@ -764,6 +884,12 @@ export function getEditorHtml(
           });
         });
 
+        document.querySelectorAll('.aux-btn[data-action="insertDictionary"]').forEach(function(btn) {
+          bindToolbarButton(btn, function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openDictionaryModal' }));
+          });
+        });
+
         document.querySelectorAll('.toolbar-row, .colors-row').forEach(enableHorizontalScroll);
 
         // Track content changes
@@ -773,6 +899,25 @@ export function getEditorHtml(
         });
         editor.addEventListener('focus', scrollCaretIntoView);
         editor.addEventListener('click', scrollCaretIntoView);
+
+        // Android: al cerrar el teclado con "atrás" el editor conserva el foco,
+        // así que un tap normal ya no vuelve a mostrar el teclado. Forzamos
+        // blur+focus dentro del gesto del usuario para que el IME reaparezca.
+        editor.addEventListener('click', function(e) {
+          if (keyboardInset > 0) return;
+          if (document.activeElement !== editor) return;
+          var t = e.target;
+          if (t && t.closest && t.closest('.biblia-content-block') && !t.closest('td, th')) return;
+          var sel = window.getSelection();
+          if (sel && sel.rangeCount > 0 && !sel.isCollapsed) return;
+          var range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+          editor.blur();
+          editor.focus();
+          if (range) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        });
 
         // Track selection changes for active states + save range for toolbar
         document.addEventListener('selectionchange', function() {
@@ -787,20 +932,63 @@ export function getEditorHtml(
 
         // Initial active states
         setTimeout(updateActiveStates, 100);
+        initTablePicker();
+        initTableBlocks();
+      }
+
+      ${getNoteTableScript(isReadOnly)}
+
+      if (isReadOnly) {
+        wrapTablesForReadOnly();
       }
 
       /* ── Notify React Native ────────────────────────── */
+      // Con debounce: cruzar el puente RN↔WebView con todo el HTML en cada
+      // tecla se nota en notas largas. El guardado real usa getHtml, que lee
+      // innerHTML directamente, así que nunca ve contenido desfasado.
+      var notifyTimer = null;
       function notifyChange() {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'onChange',
-          html: editor.innerHTML
-        }));
+        if (notifyTimer) clearTimeout(notifyTimer);
+        notifyTimer = setTimeout(function() {
+          notifyTimer = null;
+          window.ReactNativeWebView.postMessage(JSON.stringify({
+            type: 'onChange',
+            html: editor.innerHTML
+          }));
+        }, 250);
       }
 
       /* ── Global handler for React Native injectJavaScript ── */
       window.handleAction = function(jsonStr) {
         try {
           var action = JSON.parse(jsonStr);
+
+          if (action.type === 'getHtml') {
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'getHtmlResponse',
+              html: editor.innerHTML
+            }));
+            return;
+          }
+          if (action.type === 'updateContent') {
+            editor.innerHTML = action.value;
+            return;
+          }
+          if (action.type === 'updateColors') {
+            colorPalette = action.value;
+            renderColors();
+            return;
+          }
+          if (action.type === 'setKeyboardInset') {
+            keyboardInset = action.value || 0;
+            if (keyboardInset > 0) scrollCaretIntoView();
+            return;
+          }
+          if (action.type === 'blurEditor') {
+            editor.blur();
+            return;
+          }
+
           editor.focus();
 
           if (action.type === 'setFont') {
@@ -811,23 +999,9 @@ export function getEditorHtml(
               editor.style.fontFamily = action.value === 'Default' ? 'system-ui, sans-serif' : "'" + action.value + "', sans-serif";
             }
           } else if (action.type === 'insertVerse') {
-            var q = '<blockquote>' + action.value + '</blockquote><p><br></p>';
-            document.execCommand('insertHTML', false, q);
-          } else if (action.type === 'getHtml') {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'getHtmlResponse',
-              html: editor.innerHTML
-            }));
-            return; // Don't trigger onChange
-          } else if (action.type === 'updateContent') {
-            editor.innerHTML = action.value;
-          } else if (action.type === 'updateColors') {
-            colorPalette = action.value;
-            renderColors();
-            return;
-          } else if (action.type === 'setKeyboardInset') {
-            scrollCaretIntoView();
-            return;
+            insertHtmlAtSelection(buildVerseBlockHtml(action.value));
+          } else if (action.type === 'insertDictionary') {
+            insertHtmlAtSelection(buildDictBlockHtml(action.value));
           }
 
           notifyChange();

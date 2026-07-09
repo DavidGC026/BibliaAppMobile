@@ -2,7 +2,7 @@
   "expo": {
     "name": "BibliaAPP",
     "slug": "bibliaapp",
-    "version": "1.1.1.1",
+    "version": "3.3",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bibliaapp",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.bibliaapp.mobile",
-      "versionCode": 12,
+      "versionCode": 37,
       "adaptiveIcon": {
         "backgroundColor": "#9A6700",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -46,7 +46,35 @@
         }
       ],
       "expo-sharing",
-      "expo-sqlite"
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Permite a BibliaAPP acceder a tus fotos.",
+          "savePhotosPermission": "Permite a BibliaAPP guardar imágenes en tu galería."
+        }
+      ],
+      "expo-sqlite",
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "VerseOfDay",
+              "label": "Versículo del día",
+              "minWidth": "250dp",
+              "minHeight": "110dp",
+              "maxResizeWidth": "530dp",
+              "maxResizeHeight": "220dp",
+              "resizeMode": "horizontal|vertical",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "description": "Muestra el versículo bíblico del día con una imagen inspiradora en tu pantalla de inicio",
+              "updatePeriodMillis": 1800000,
+              "widgetFeatures": "reconfigurable|configuration_optional"
+            }
+          ]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

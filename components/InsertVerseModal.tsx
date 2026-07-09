@@ -9,8 +9,10 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import { formatVerseInsertion } from '@/lib/verseInsert';
@@ -24,6 +26,7 @@ interface InsertVerseModalProps {
 
 export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModalProps) {
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [verses, setVerses] = useState<Verse[]>([]);
@@ -99,7 +102,7 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={close}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
         <View style={[styles.header, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Insertar versículos</Text>
           <Pressable onPress={close}>
@@ -156,7 +159,7 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
           <FlatList
             data={verses}
             keyExtractor={(item) => String(item.id)}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
             renderItem={({ item }) => {
               const checked = selected.some((s) => s.verse === item.verse);
               return (
@@ -178,7 +181,7 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
           />
         )}
 
-        <View style={[styles.footer, { borderColor: colors.border, backgroundColor: colors.card }]}>
+        <View style={[styles.footer, { borderColor: colors.border, backgroundColor: colors.card, paddingBottom: contentPadding }]}>
           <Pressable style={styles.cancelBtn} onPress={close}>
             <Text style={{ color: colors.textMuted, fontWeight: '600' }}>Cancelar</Text>
           </Pressable>
@@ -192,7 +195,7 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
             </Text>
           </Pressable>
         </View>
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

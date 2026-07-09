@@ -67,11 +67,23 @@ export async function listLocalNotes(notebookId: number): Promise<NotebookNote[]
     [notebookId, notebookId],
   );
   if (!nb) return [];
-  const rows = await getAll<NoteRow>(
-    'SELECT * FROM notes WHERE deleted = 0 AND notebook_id = ? ORDER BY updated_at DESC',
+  const rows = await getAll<NoteRow & { notebook_display_id: number }>(
+    `SELECT n.*, COALESCE(b.server_id, b.id) AS notebook_display_id
+     FROM notes n
+     JOIN notebooks b ON n.notebook_id = b.id
+     WHERE n.deleted = 0 AND n.notebook_id = ?
+     ORDER BY n.updated_at DESC`,
     [nb.id],
   );
-  return rows.map(mapNote);
+  return rows.map((r) => ({
+    id: r.server_id ?? r.id,
+    notebookId: r.notebook_display_id,
+    title: r.title,
+    content: r.content,
+    tags: r.tags,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  }));
 }
 
 export async function getLocalNote(id: number): Promise<NotebookNote | null> {
@@ -154,11 +166,13 @@ export async function deleteLocalNote(id: number) {
 }
 
 export async function upsertNotebookFromServer(n: Notebook) {
-  const existing = await getFirst<{ id: number; updated_at: string }>(
-    'SELECT id, updated_at FROM notebooks WHERE server_id = ? OR id = ?',
+  const existing = await getFirst<{ id: number; updated_at: string; dirty: number }>(
+    'SELECT id, updated_at, dirty FROM notebooks WHERE server_id = ? OR id = ?',
     [n.id, n.id],
   );
+  if (existing?.dirty) return;
   if (existing && existing.updated_at > n.createdAt) return;
+  const rowId = existing?.id ?? n.id;
   await run(
     `INSERT INTO notebooks (id, server_id, name, cover_image, created_at, updated_at, dirty, deleted)
      VALUES (?, ?, ?, ?, ?, ?, 0, 0)
@@ -169,21 +183,23 @@ export async function upsertNotebookFromServer(n: Notebook) {
        updated_at = excluded.updated_at,
        dirty = 0,
        deleted = 0`,
-    [n.id, n.id, n.name, n.coverImage ?? null, n.createdAt, n.createdAt],
+    [rowId, n.id, n.name, n.coverImage ?? null, n.createdAt, n.createdAt],
   );
 }
 
 export async function upsertNoteFromServer(n: NotebookNote) {
-  const existing = await getFirst<{ id: number; updated_at: string }>(
-    'SELECT id, updated_at FROM notes WHERE server_id = ? OR id = ?',
+  const existing = await getFirst<{ id: number; updated_at: string; dirty: number }>(
+    'SELECT id, updated_at, dirty FROM notes WHERE server_id = ? OR id = ?',
     [n.id, n.id],
   );
+  if (existing?.dirty) return;
   if (existing && existing.updated_at > n.updatedAt) return;
   const nb = await getFirst<{ id: number }>(
     'SELECT id FROM notebooks WHERE server_id = ? OR id = ?',
     [n.notebookId, n.notebookId],
   );
   const notebookLocalId = nb?.id ?? n.notebookId;
+  const rowId = existing?.id ?? n.id;
   await run(
     `INSERT INTO notes (id, server_id, notebook_id, title, content, tags, created_at, updated_at, dirty, deleted)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
@@ -197,7 +213,7 @@ export async function upsertNoteFromServer(n: NotebookNote) {
        dirty = 0,
        deleted = 0`,
     [
-      n.id,
+      rowId,
       n.id,
       notebookLocalId,
       n.title,
@@ -242,10 +258,74 @@ export async function purgeDeletedNote(localId: number) {
   await run('DELETE FROM notes WHERE id = ?', [localId]);
 }
 
+export async function evictNotebook(id: number) {
+  const row = await getFirst<{ id: number }>(
+    'SELECT id FROM notebooks WHERE id = ? OR server_id = ?',
+    [id, id],
+  );
+  if (!row) return;
+  await run('DELETE FROM notes WHERE notebook_id = ?', [row.id]);
+  await run('DELETE FROM notebooks WHERE id = ?', [row.id]);
+}
+
+export async function evictNote(id: number) {
+  const row = await getFirst<{ id: number }>(
+    'SELECT id FROM notes WHERE id = ? OR server_id = ?',
+    [id, id],
+  );
+  if (!row) return;
+  await run('DELETE FROM notes WHERE id = ?', [row.id]);
+}
+
 export async function resolveNotebookLocalId(id: number): Promise<number | null> {
   const row = await getFirst<{ id: number }>(
     'SELECT id FROM notebooks WHERE id = ? OR server_id = ?',
     [id, id],
   );
   return row?.id ?? null;
+}
+
+/**
+ * Repara datos corruptos de versiones anteriores:
+ * - Fusiona filas de libreta duplicadas que comparten server_id.
+ * - Re-vincula notas huérfanas (en una libreta sin server_id) a la libreta
+ *   del servidor con el mismo nombre, y las marca dirty para que suban.
+ * ponytail: barrido O(n) sobre libretas locales; corre una vez por sync.
+ */
+export async function repairNotebookData(): Promise<void> {
+  const all = await getAll<NotebookRow>('SELECT * FROM notebooks');
+
+  // 1) Fusionar duplicados con el mismo server_id.
+  const byServer = new Map<number, NotebookRow[]>();
+  for (const nb of all) {
+    if (nb.server_id == null) continue;
+    const arr = byServer.get(nb.server_id) ?? [];
+    arr.push(nb);
+    byServer.set(nb.server_id, arr);
+  }
+  for (const [serverId, rows] of byServer) {
+    if (rows.length < 2) continue;
+    const canonical = rows.find((r) => r.id === serverId) ?? rows[0];
+    for (const r of rows) {
+      if (r.id === canonical.id) continue;
+      await run('UPDATE notes SET notebook_id = ? WHERE notebook_id = ?', [canonical.id, r.id]);
+      await run('DELETE FROM notebooks WHERE id = ?', [r.id]);
+    }
+  }
+
+  // 2) Huérfanas sin server_id (y ya sincronizadas, no nuevas): fusionar con la
+  //    libreta del servidor del mismo nombre y empujar sus notas.
+  const fresh = await getAll<NotebookRow>('SELECT * FROM notebooks');
+  const serverByName = new Map<string, NotebookRow>();
+  for (const nb of fresh) {
+    if (nb.server_id != null) serverByName.set(nb.name, nb);
+  }
+  for (const nb of fresh) {
+    if (nb.server_id != null || nb.dirty) continue;
+    const target = serverByName.get(nb.name);
+    if (target && target.id !== nb.id) {
+      await run('UPDATE notes SET notebook_id = ?, dirty = 1 WHERE notebook_id = ?', [target.id, nb.id]);
+      await run('DELETE FROM notebooks WHERE id = ?', [nb.id]);
+    }
+  }
 }

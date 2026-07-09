@@ -18,6 +18,7 @@ import { AuthedImage } from '@/components/AuthedImage';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { BookLog, ExternalBook } from '@/lib/types';
 
@@ -31,6 +32,7 @@ function formatDate(iso: string) {
 
 export default function StudyBookScreen() {
   const { colors } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
   const parsedId = isNew ? NaN : Number(id);
@@ -148,7 +150,10 @@ export default function StudyBookScreen() {
     return (
       <>
         <Stack.Screen options={{ title: 'Nuevo libro' }} />
-        <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={styles.content}>
+        <ScrollView
+          style={{ flex: 1, backgroundColor: colors.background }}
+          contentContainerStyle={[styles.content, { paddingBottom: contentPadding }]}
+        >
           <Pressable style={[styles.coverPick, { borderColor: colors.border, backgroundColor: colors.cardMuted }]} onPress={pickCover}>
             {coverImage ? (
               <Image source={{ uri: coverImage }} style={styles.coverImg} />
@@ -194,7 +199,10 @@ export default function StudyBookScreen() {
         }}
       />
 
-      <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadding }]}
+      >
         <Card style={styles.bookHeader}>
           <View style={[styles.coverSmall, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
             {book.coverImage ? (
@@ -291,7 +299,7 @@ export default function StudyBookScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 32, gap: 14 },
+  content: { padding: 16, gap: 14 },
   coverPick: {
     width: 120,
     height: 180,

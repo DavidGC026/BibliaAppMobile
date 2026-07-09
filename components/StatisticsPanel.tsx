@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { Card } from '@/components/ui/Card';
+import { GuestPrompt } from '@/components/GuestPrompt';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import { BOOK_CATEGORY_LEGEND, getBookCategoryColor } from '@/lib/bookStatColors';
 import type { BookStat } from '@/lib/types';
@@ -14,17 +17,28 @@ interface StatisticsPanelProps {
 
 export function StatisticsPanel({ compact, onViewAll }: StatisticsPanelProps) {
   const { colors } = useAppTheme();
+  const { isGuest } = useAuth();
   const [stats, setStats] = useState<BookStat[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    if (isGuest) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api
       .getStatistics()
       .then(({ statistics }) => setStats(statistics))
-      .catch(() => {})
+      .catch(() => setStats([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isGuest]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   const chartData = useMemo(() => {
     const all = Array.from({ length: 66 }, (_, i) => ({
@@ -38,6 +52,15 @@ export function StatisticsPanel({ compact, onViewAll }: StatisticsPanelProps) {
     });
     return compact ? all.filter((b) => b.chapters > 0).slice(0, 12) : all;
   }, [stats, compact]);
+
+  if (isGuest) {
+    return (
+      <GuestPrompt
+        title="Estadísticas"
+        message="Inicia sesión para ver cuántos capítulos has leído por libro."
+      />
+    );
+  }
 
   const maxVal = Math.max(1, ...chartData.map((b) => b.chapters));
   const totalChapters = stats.reduce((sum, s) => sum + Number(s.total_chapters), 0);

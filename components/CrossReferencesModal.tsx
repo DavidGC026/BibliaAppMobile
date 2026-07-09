@@ -8,9 +8,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
-import * as api from '@/lib/api';
+import { useContentPadding } from '@/hooks/useContentPadding';
+import { repoGetCrossReferences } from '@/lib/repo';
 import type { CrossReference } from '@/lib/types';
 
 interface CrossReferencesModalProps {
@@ -35,6 +37,7 @@ export function CrossReferencesModal({
   onOpenReference,
 }: CrossReferencesModalProps) {
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const [refs, setRefs] = useState<CrossReference[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,8 +46,7 @@ export function CrossReferencesModal({
     if (!visible || !bookId || verse === null) return;
     setLoading(true);
     setError(null);
-    api
-      .getCrossReferences(bibleId, bookId, chapter, verse)
+    repoGetCrossReferences(bibleId, bookId, chapter, verse)
       .then(({ references }) => setRefs(references))
       .catch((err) => setError(err instanceof Error ? err.message : 'Error'))
       .finally(() => setLoading(false));
@@ -52,7 +54,7 @@ export function CrossReferencesModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <View>
             <Text style={[styles.title, { color: colors.text }]}>Referencias cruzadas</Text>
@@ -69,7 +71,7 @@ export function CrossReferencesModal({
           <FlatList
             data={refs}
             keyExtractor={(item, i) => `${item.book_id}-${item.chapter}-${item.verse}-${i}`}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
             ListEmptyComponent={
               <Text style={[styles.empty, { color: colors.textMuted }]}>
                 {error ?? 'No hay referencias cruzadas para este versículo.'}
@@ -93,7 +95,7 @@ export function CrossReferencesModal({
             )}
           />
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

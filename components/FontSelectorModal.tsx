@@ -10,8 +10,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import {
   deleteFont,
   downloadFont,
@@ -35,6 +37,8 @@ export function FontSelectorModal({
   currentFont,
 }: FontSelectorModalProps) {
   const colors = useThemeColors();
+  const insets = useSafeAreaInsets();
+  const contentPadding = useContentPadding(24);
 
   const [downloadedList, setDownloadedList] = useState<FontItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -216,8 +220,8 @@ export function FontSelectorModal({
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={[styles.modalBox, { backgroundColor: colors.background, borderColor: colors.border }]}>
+      <View style={[styles.overlay, { paddingBottom: Math.max(12, insets.bottom) }]}>
+        <View style={[styles.modalBox, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: contentPadding }]}>
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <Text style={[styles.title, { color: colors.text }]}>Tipografías</Text>
             <Pressable onPress={onClose} style={styles.closeBtn}>
@@ -259,7 +263,7 @@ export function FontSelectorModal({
             data={allFontsToShow}
             keyExtractor={(item) => item.id}
             renderItem={renderFontItem}
-            contentContainerStyle={styles.list}
+            contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
           />
         </View>
       </View>
@@ -278,7 +282,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     borderWidth: 1,
     height: '80%',
-    paddingBottom: 24,
   },
   header: {
     flexDirection: 'row',

@@ -13,11 +13,13 @@ import {
 
 import { Button } from '@/components/ui/Button';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import { DEVOTIONAL_EMOTIONS, parseDevotionalContent } from '@/lib/devotional';
 
 export default function DevotionalEditorScreen() {
   const { colors, typography } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
   const parsedId = isNew ? NaN : Number(id);
@@ -119,7 +121,10 @@ export default function DevotionalEditorScreen() {
         }}
       />
 
-      <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={styles.content}>
+      <ScrollView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadding }]}
+      >
         <TextInput
           style={[styles.titleInput, { color: colors.text, borderColor: colors.border }]}
           placeholder="Título"
@@ -189,7 +194,7 @@ export default function DevotionalEditorScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 32, gap: 12 },
+  content: { padding: 16, gap: 12 },
   titleInput: { fontSize: 22, fontWeight: '800', borderBottomWidth: 1, paddingVertical: 10 },
   label: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   emotions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

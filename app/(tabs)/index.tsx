@@ -19,15 +19,21 @@ import { Button } from '@/components/ui/Button';
 import { VerseOfDayCard } from '@/components/VerseOfDayCard';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
+import { pickFeaturedDevotional, parseDevotionalContent } from '@/lib/devotional';
 import type { ChurchEvent, Devotional, FeedAnnouncement } from '@/lib/types';
 
-function goBible(mode: 'reader' | 'search' = 'reader') {
-  router.push({ pathname: '/(tabs)/bible', params: { mode } });
+function goBible(mode: 'reader' | 'search' | 'dictionary' = 'reader', strong?: string) {
+  router.push({
+    pathname: '/(tabs)/bible',
+    params: strong ? { mode, strong } : { mode },
+  });
 }
 
 export default function HomeScreen() {
   const { colors, typography, spacing } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { user, isGuest, isLoading: authLoading } = useAuth();
   const [churchName, setChurchName] = useState('BibliaAPP');
   const [notebookCount, setNotebookCount] = useState(0);
@@ -37,6 +43,7 @@ export default function HomeScreen() {
   const [events, setEvents] = useState<ChurchEvent[]>([]);
   const [announcements, setAnnouncements] = useState<FeedAnnouncement[]>([]);
   const [recentDevotionals, setRecentDevotionals] = useState<Devotional[]>([]);
+  const [featuredDevotional, setFeaturedDevotional] = useState<Devotional | null>(null);
 
   useEffect(() => {
     if (authLoading || isGuest) return;
@@ -47,7 +54,11 @@ export default function HomeScreen() {
     api.listFavorites().then(({ favorites }) => setFavoriteCount(favorites.length)).catch(() => {});
     api.listDevotionals().then(({ devotionals }) => {
       setDevotionalCount(devotionals.length);
-      setRecentDevotionals(devotionals.slice(0, 3));
+      setFeaturedDevotional(pickFeaturedDevotional(devotionals));
+      const sorted = [...devotionals].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+      setRecentDevotionals(sorted.slice(0, 3));
     }).catch(() => {});
   }, [authLoading, isGuest]);
 
@@ -69,11 +80,12 @@ export default function HomeScreen() {
 
   const firstName = user?.name?.split(' ')[0] ?? 'hermano';
   const spiritualProgress = devotionalCount > 0 ? 'Constante' : 'Iniciando';
+  const featuredPreview = featuredDevotional ? parseDevotionalContent(featuredDevotional) : null;
 
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={[styles.content, { gap: spacing['2xl'] }]}
+      contentContainerStyle={[styles.content, { gap: spacing['2xl'], paddingBottom: contentPadding }]}
     >
       <View style={styles.hero}>
         <Text style={[typography.h1, { color: colors.text }]}>
@@ -104,6 +116,33 @@ export default function HomeScreen() {
       ) : null}
 
       <VerseOfDayCard />
+
+      {!isGuest && featuredDevotional ? (
+        <Card
+          onPress={() => router.push(`/devotional/read/${featuredDevotional.id}`)}
+          style={[styles.featuredDevotional, { borderColor: colors.primaryBorder, backgroundColor: colors.primarySoft }]}
+        >
+          <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+            Tu devocional
+          </Text>
+          <Text style={[styles.devTitle, { color: colors.text }]} numberOfLines={1}>
+            {featuredDevotional.title}
+          </Text>
+          {featuredDevotional.verseRef ? (
+            <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>
+              {featuredDevotional.verseRef}
+            </Text>
+          ) : null}
+          {featuredPreview?.reflection ? (
+            <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 21 }} numberOfLines={3}>
+              {featuredPreview.reflection}
+            </Text>
+          ) : null}
+          <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13, marginTop: 4 }}>
+            Leer devocional →
+          </Text>
+        </Card>
+      ) : null}
 
       {announcements.length > 0 ? (
         <View style={styles.section}>
@@ -171,6 +210,7 @@ export default function HomeScreen() {
               icon={{ ios: 'heart.fill', android: 'favorite', web: 'favorite' }}
               value={String(devotionalCount)}
               label="Devocionales"
+              onPress={() => router.push('/(tabs)/notes')}
             />
             <StatCard
               icon={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
@@ -205,16 +245,24 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Devocionales recientes</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Devocionales recientes</Text>
+              <Pressable onPress={() => router.push('/(tabs)/notes')}>
+                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Ver diario →</Text>
+              </Pressable>
+            </View>
             {recentDevotionals.length === 0 ? (
               <Card style={styles.emptyCard} dashed>
                 <Text style={{ color: colors.textMuted, textAlign: 'center', fontSize: 14 }}>
                   Aún no has escrito devocionales en tu diario espiritual.
                 </Text>
+                <Pressable onPress={() => router.push('/devotional/new')} style={{ marginTop: 8 }}>
+                  <Text style={{ color: colors.primary, fontWeight: '700', textAlign: 'center' }}>Escribir el primero</Text>
+                </Pressable>
               </Card>
             ) : (
               recentDevotionals.map((dev) => (
-                <Card key={dev.id} style={styles.devCard}>
+                <Card key={dev.id} onPress={() => router.push(`/devotional/read/${dev.id}`)} style={styles.devCard}>
                   <View style={[styles.devBadge, { backgroundColor: colors.primarySoft }]}>
                     <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>
                       {dev.emotion || 'Sin emoción'}
@@ -268,6 +316,12 @@ export default function HomeScreen() {
             onPress={() => (isGuest ? router.push('/login') : router.push('/activity'))}
           />
           <QuickActionCard
+            icon={{ ios: 'character.book.closed.fill', android: 'menu_book', web: 'menu_book' }}
+            title="Diccionario Strong"
+            description="Códigos griegos y hebreos del texto bíblico"
+            onPress={() => goBible('dictionary')}
+          />
+          <QuickActionCard
             icon={{ ios: 'person.2.fill', android: 'groups', web: 'groups' }}
             title="Comunidad"
             description={isGuest ? 'Requiere iniciar sesión' : 'Publicaciones de tu iglesia'}
@@ -282,7 +336,7 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { padding: 16 },
   hero: { gap: 6 },
   subtitle: { fontSize: 14, lineHeight: 20 },
   guestBanner: { gap: 14 },
@@ -307,5 +361,6 @@ const styles = StyleSheet.create({
   devCard: { gap: 6 },
   devBadge: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   devTitle: { fontSize: 15, fontWeight: '700' },
+  featuredDevotional: { gap: 8, borderWidth: 1 },
   actions: { gap: 10 },
 });

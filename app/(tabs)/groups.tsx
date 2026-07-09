@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/Card';
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { GroupSummary } from '@/lib/types';
 
@@ -54,6 +55,7 @@ function GroupCard({ group }: { group: GroupSummary }) {
 
 export default function GroupsScreen() {
   const { colors, radius } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { isGuest, isLoading: authLoading } = useAuth();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,7 +121,7 @@ export default function GroupsScreen() {
   return (
     <FlatList
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
       data={groups}
       keyExtractor={(item) => String(item.id)}
       refreshControl={

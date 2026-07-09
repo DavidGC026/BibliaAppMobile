@@ -10,9 +10,11 @@ import React, {
 
 import * as api from '@/lib/api';
 import { isAuthError } from '@/lib/authError';
+import { signInWithGoogle } from '@/lib/googleAuth';
 import { setOpenMediaTokenGetter } from '@/lib/openMedia';
 import type { User } from '@/lib/types';
 import { clearPushTokenFromServer, syncPushTokenWithServer } from '@/hooks/usePushNotifications';
+import { syncAll } from '@/lib/sync';
 
 const TOKEN_KEY = 'bibliaapp_session';
 const USER_KEY = 'bibliaapp_user';
@@ -36,6 +38,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isGuest: boolean;
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -103,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(nextUser);
             await persistUser(nextUser);
             syncPushTokenWithServer().catch(() => {});
+            syncAll().catch(() => {});
           } else {
             setUser(null);
             setToken(null);
@@ -126,17 +130,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const applySession = useCallback(async (sessionToken: string, initialUser?: User) => {
+    await SecureStore.setItemAsync(TOKEN_KEY, sessionToken);
+    setToken(sessionToken);
+    api.setApiTokenGetter(() => sessionToken);
+    setOpenMediaTokenGetter(() => sessionToken);
+
+    if (initialUser) {
+      setUser(initialUser);
+      await persistUser(initialUser);
+    } else {
+      const { user: nextUser } = await api.getMe();
+      if (!nextUser) {
+        throw new Error('No se pudo cargar tu perfil.');
+      }
+      setUser(nextUser);
+      await persistUser(nextUser);
+    }
+
+    syncPushTokenWithServer().catch(() => {});
+    syncAll().catch(() => {});
+  }, []);
+
   const login = useCallback(async (email: string, password: string) => {
     const result = await api.login(email.trim().toLowerCase(), password);
-    await SecureStore.setItemAsync(TOKEN_KEY, result.token);
-    setToken(result.token);
-    api.setApiTokenGetter(() => result.token);
-    setOpenMediaTokenGetter(() => result.token);
-    setUser(result.user as User);
-    await persistUser(result.user as User);
-    await refreshUser();
-    syncPushTokenWithServer().catch(() => {});
-  }, [refreshUser]);
+    await applySession(result.token, result.user as User);
+  }, [applySession]);
+
+  const loginWithGoogle = useCallback(async () => {
+    const sessionToken = await signInWithGoogle();
+    await applySession(sessionToken);
+  }, [applySession]);
 
   const logout = useCallback(async () => {
     try {
@@ -161,10 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       isGuest: !isLoading && !user,
       login,
+      loginWithGoogle,
       logout,
       refreshUser,
     }),
-    [user, token, isLoading, login, logout, refreshUser],
+    [user, token, isLoading, login, loginWithGoogle, logout, refreshUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -13,13 +13,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
 import { CrossReferencesModal } from '@/components/CrossReferencesModal';
-import { VerseImageCreatorModal } from '@/components/VerseImageCreatorModal';
+import { VerseImageCreator } from '@/components/VerseImageCreator';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
@@ -39,6 +41,9 @@ export function BibleReader({
   initialBibleId?: number;
 } = {}) {
   const { colors, radius, shadow, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardHeight();
+  const contentPadding = 110 + insets.bottom + keyboardHeight;
   const { isGuest } = useAuth();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
@@ -365,8 +370,10 @@ export function BibleReader({
       <OfflineBanner />
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: contentPadding }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {isGuest ? (
           <Pressable
@@ -431,7 +438,7 @@ export function BibleReader({
       </ScrollView>
 
       {selectedVerses.length > 0 ? (
-        <View style={[styles.actionBar, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}>
+        <View style={[styles.actionBar, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl, bottom: 16 + insets.bottom + keyboardHeight }]}>
           <View style={styles.actionHeader}>
             <Text style={[styles.actionLabel, { color: colors.textMuted }]} numberOfLines={1}>
               {selectionLabel}
@@ -497,7 +504,7 @@ export function BibleReader({
           </ScrollView>
         </View>
       ) : (
-        <View style={[styles.bottomNav, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.full }]}>
+        <View style={[styles.bottomNav, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.full, bottom: 16 + insets.bottom + keyboardHeight }]}>
           <Pressable
             style={[styles.navArrow, { opacity: chapter <= 1 ? 0.3 : 1 }]}
             onPress={() => setChapter((c) => Math.max(1, c - 1))}
@@ -536,7 +543,7 @@ export function BibleReader({
       />
 
       <Modal visible={versionOpen} animationType="slide" transparent onRequestClose={() => setVersionOpen(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setVersionOpen(false)}>
+        <Pressable style={[styles.modalOverlay, { paddingBottom: insets.bottom }]} onPress={() => setVersionOpen(false)}>
           <Pressable style={[styles.sheet, { backgroundColor: colors.card }]} onPress={() => {}}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>Versión</Text>
             <ScrollView style={{ maxHeight: 360 }}>
@@ -564,7 +571,7 @@ export function BibleReader({
       </Modal>
 
       <Modal visible={noteModalOpen} animationType="slide" transparent onRequestClose={() => void closeNoteModal()}>
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { paddingBottom: insets.bottom + keyboardHeight }]}>
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               Nota — v. {primaryVerse}
@@ -617,7 +624,7 @@ export function BibleReader({
       />
 
       {imageCreatorData ? (
-        <VerseImageCreatorModal
+        <VerseImageCreator
           visible={imageCreatorOpen}
           onClose={() => setImageCreatorOpen(false)}
           text={imageCreatorData.text}
@@ -640,7 +647,7 @@ const styles = StyleSheet.create({
   },
   versionText: { fontSize: 13, fontWeight: '700' },
   caret: { fontSize: 11 },
-  content: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 110 },
+  content: { paddingHorizontal: 20, paddingTop: 12 },
   guestBanner: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   error: { textAlign: 'center', fontSize: 14, marginBottom: 8 },
   headingRow: {

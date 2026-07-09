@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import { DEVOTIONAL_EMOTIONS, parseDevotionalContent } from '@/lib/devotional';
 import type { Devotional } from '@/lib/types';
@@ -28,6 +29,7 @@ function formatDate(iso: string) {
 
 export function DevotionalsPanel() {
   const { colors, typography } = useAppTheme();
+  const contentPadding = useContentPadding();
   const [items, setItems] = useState<Devotional[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,7 +63,7 @@ export function DevotionalsPanel() {
   return (
     <FlatList
       style={{ flex: 1 }}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
       data={items}
       keyExtractor={(item) => String(item.id)}
       refreshControl={
@@ -104,7 +106,7 @@ export function DevotionalsPanel() {
         const emotion = DEVOTIONAL_EMOTIONS.find((e) => e.name === item.emotion);
         return (
           <Card style={styles.card}>
-            <Pressable onPress={() => router.push(`/devotional/${item.id}`)}>
+            <Pressable onPress={() => router.push(`/devotional/read/${item.id}`)}>
               <View style={styles.cardTop}>
                 <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
                   {item.title}
@@ -140,7 +142,7 @@ export function DevotionalsPanel() {
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 16, paddingBottom: 32, flexGrow: 1, gap: 12 },
+  list: { padding: 16, flexGrow: 1, gap: 12 },
   header: { gap: 8, marginBottom: 8 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   empty: { alignItems: 'center', gap: 12, marginTop: 48, paddingHorizontal: 16 },

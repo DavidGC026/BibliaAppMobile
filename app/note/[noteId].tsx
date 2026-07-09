@@ -4,28 +4,31 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  UIManager,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
 
 import { FontSelectorModal } from '@/components/FontSelectorModal';
+import { InsertDictionaryModal } from '@/components/InsertDictionaryModal';
 import { InsertVerseModal } from '@/components/InsertVerseModal';
 import { NoteContent } from '@/components/NoteContent';
 import { useNetwork } from '@/context/NetworkContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import * as repo from '@/lib/repo';
+import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
 import { getDownloadedFonts } from '@/lib/fontManager';
+import type { StrongEntry } from '@/lib/types';
 
 const FAVORITE_COLORS_KEY = 'NOTE_FAVORITE_COLORS';
 const DEFAULT_COLORS = [
@@ -58,8 +61,10 @@ export default function NoteEditorScreen() {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [saveFlash, setSaveFlash] = useState(false);
   const [preview, setPreview] = useState(false);
   const [verseModalOpen, setVerseModalOpen] = useState(false);
+  const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
   const [fontModalOpen, setFontModalOpen] = useState(false);
 
   // Formatting state
@@ -70,20 +75,25 @@ export default function NoteEditorScreen() {
   const [base64Fonts, setBase64Fonts] = useState<Record<string, string>>({});
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  // Keyboard height so the editor toolbar always sits above the keyboard.
-  // Edge-to-edge (Expo SDK 56) no longer resizes the window, so we push the
-  // editor container up manually by the reported keyboard height.
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // Edge-to-edge (Expo SDK 56): empujar el editor sobre el teclado manualmente.
+  const keyboardHeight = useKeyboardHeight();
+
+  const insets = useSafeAreaInsets();
 
   const webViewRef = useRef<WebView>(null);
   const initialContentRef = useRef<string>('');
   const initialTitleRef = useRef('');
   const initialHtmlRef = useRef<string | null>(null);
   const saveFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevKeyboardHeightRef = useRef(0);
   const saveHtmlPendingRef = useRef(false);
   const commitSaveRef = useRef(false);
   const leaveAfterSaveRef = useRef<Parameters<typeof navigation.dispatch>[0] | null>(null);
   const autoLeavingRef = useRef(false);
+  // Id real de una nota nueva tras el primer autoguardado: los siguientes
+  // guardados deben actualizarla, no crear otra.
+  const createdIdRef = useRef<number | null>(null);
+  const saveFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Helper: send action to WebView via injectJavaScript ──
   const sendToEditor = (action: Record<string, any>) => {
@@ -91,32 +101,19 @@ export default function NoteEditorScreen() {
     webViewRef.current?.injectJavaScript(js);
   };
 
-  // Tell the WebView to scroll the caret when the keyboard opens/closes.
+  // Scroll caret when keyboard opens; blur editor on Android when it closes (back button).
   useEffect(() => {
     if (preview) return;
     sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight });
-  }, [keyboardHeight, preview]);
-
-  // Track keyboard height to keep the toolbar above the keyboard.
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      UIManager.setLayoutAnimationEnabledExperimental?.(true);
+    if (
+      Platform.OS === 'android' &&
+      prevKeyboardHeightRef.current > 0 &&
+      keyboardHeight === 0
+    ) {
+      sendToEditor({ type: 'blurEditor' });
     }
-    const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const onShow = Keyboard.addListener(showEvt, (e) => {
-      LayoutAnimation.easeInEaseOut();
-      setKeyboardHeight(e.endCoordinates.height);
-    });
-    const onHide = Keyboard.addListener(hideEvt, () => {
-      LayoutAnimation.easeInEaseOut();
-      setKeyboardHeight(0);
-    });
-    return () => {
-      onShow.remove();
-      onHide.remove();
-    };
-  }, []);
+    prevKeyboardHeightRef.current = keyboardHeight;
+  }, [keyboardHeight, preview]);
 
   // ── Load color palette favorites ──
   useEffect(() => {
@@ -205,11 +202,16 @@ export default function NoteEditorScreen() {
     setVerseModalOpen(false);
   };
 
+  const handleInsertDictionary = (entry: StrongEntry) => {
+    sendToEditor({ type: 'insertDictionary', value: formatDictionaryInsertion(entry) });
+    setDictionaryModalOpen(false);
+  };
+
   const hasUnsavedChanges = useCallback(() => {
     const trimmedTitle = title.trim();
     const trimmedInitialTitle = initialTitleRef.current.trim();
     const hasContent = noteHasText(content);
-    if (isNew) {
+    if (isNew && createdIdRef.current == null) {
       return trimmedTitle.length > 0 || hasContent;
     }
     return trimmedTitle !== trimmedInitialTitle || content !== initialContentRef.current;
@@ -218,9 +220,9 @@ export default function NoteEditorScreen() {
   const persistNote = useCallback(
     async (
       htmlContent: string,
-      options: { navigateBack?: boolean; silent?: boolean } = {},
+      options: { navigateBack?: boolean; silent?: boolean; showErrors?: boolean } = {},
     ): Promise<boolean> => {
-      const { navigateBack = false, silent = false } = options;
+      const { navigateBack = false, silent = false, showErrors = true } = options;
       if (commitSaveRef.current) return false;
 
       const trimmedTitle = title.trim();
@@ -228,7 +230,7 @@ export default function NoteEditorScreen() {
         Alert.alert('Título requerido', 'Escribe un título para la nota.');
         return false;
       }
-      if (silent && isNew && !trimmedTitle && !noteHasText(htmlContent)) {
+      if (silent && isNew && createdIdRef.current == null && !trimmedTitle && !noteHasText(htmlContent)) {
         return true;
       }
 
@@ -236,14 +238,21 @@ export default function NoteEditorScreen() {
       setSaving(true);
       try {
         const finalTitle = trimmedTitle || 'Sin título';
-        if (isNew) {
+        if (isNew && createdIdRef.current == null) {
           if (Number.isNaN(parsedNotebookId)) throw new Error('Cuaderno no válido');
-          await repo.repoCreateNotebookNote(parsedNotebookId, finalTitle, htmlContent);
+          const created = await repo.repoCreateNotebookNote(parsedNotebookId, finalTitle, htmlContent);
+          createdIdRef.current = created.id;
         } else {
-          await repo.repoUpdateNotebookNote(Number(noteId), finalTitle, htmlContent);
+          const id = isNew ? createdIdRef.current! : Number(noteId);
+          await repo.repoUpdateNotebookNote(id, finalTitle, htmlContent);
         }
         initialContentRef.current = htmlContent;
-        initialTitleRef.current = finalTitle;
+        // Se guarda el título tal cual lo escribió el usuario (no 'Sin título')
+        // para que la comparación de cambios pendientes sea estable.
+        initialTitleRef.current = trimmedTitle;
+        setSaveFlash(true);
+        if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current);
+        saveFlashTimerRef.current = setTimeout(() => setSaveFlash(false), 2000);
         if (!silent && !isOnline) {
           Alert.alert(
             'Guardado offline',
@@ -253,7 +262,9 @@ export default function NoteEditorScreen() {
         if (navigateBack) router.back();
         return true;
       } catch (err) {
-        if (silent) {
+        if (!showErrors) {
+          // Autoguardado: fallar en silencio, se reintenta en el próximo ciclo.
+        } else if (silent) {
           Alert.alert(
             'No se pudo guardar',
             err instanceof Error ? err.message : 'Revisa tu conexión e inténtalo de nuevo.',
@@ -323,6 +334,8 @@ export default function NoteEditorScreen() {
         setFontModalOpen(true);
       } else if (data.type === 'openVerseModal') {
         setVerseModalOpen(true);
+      } else if (data.type === 'openDictionaryModal') {
+        setDictionaryModalOpen(true);
       }
     } catch (e) {
       console.error('Error parsing WebView message:', e);
@@ -349,6 +362,23 @@ export default function NoteEditorScreen() {
     });
     return unsubscribe;
   }, [finishPendingLeave, hasUnsavedChanges, navigation, requestEditorHtml]);
+
+  // Autoguardado: tras 4s sin teclear se persiste en silencio, así la nota
+  // sobrevive aunque Android mate la app o se cierre sin pasar por "atrás".
+  useEffect(() => {
+    if (loading || !hasUnsavedChanges()) return;
+    const timer = setTimeout(() => {
+      if (commitSaveRef.current || autoLeavingRef.current) return;
+      void persistNote(content, { silent: true, showErrors: false });
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [content, title, loading, hasUnsavedChanges, persistNote]);
+
+  useEffect(() => {
+    return () => {
+      if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current);
+    };
+  }, []);
 
   const togglePreview = () => {
     if (!preview) Keyboard.dismiss();
@@ -417,7 +447,7 @@ export default function NoteEditorScreen() {
         }}
       />
 
-      <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight }}>
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom }}>
         {/* Title Input */}
         <View style={styles.titleWrapper}>
           <TextInput
@@ -426,6 +456,13 @@ export default function NoteEditorScreen() {
             placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={setTitle}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => {
+              webViewRef.current?.injectJavaScript(
+                "(function(){var e=document.getElementById('editor');if(e)e.focus();})();true;",
+              );
+            }}
           />
         </View>
 
@@ -436,6 +473,11 @@ export default function NoteEditorScreen() {
               {preview ? '✏️ Modo Edición' : '👁️ Vista Previa'}
             </Text>
           </Pressable>
+          {saving ? (
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Guardando…</Text>
+          ) : saveFlash ? (
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>✓ Guardado</Text>
+          ) : null}
         </View>
 
         {/* Content Area — WebView stays mounted so edits survive preview toggle */}
@@ -476,6 +518,12 @@ export default function NoteEditorScreen() {
         onClose={() => setVerseModalOpen(false)}
         onInsert={handleInsertVerse}
       />
+
+      <InsertDictionaryModal
+        visible={dictionaryModalOpen}
+        onClose={() => setDictionaryModalOpen(false)}
+        onInsert={handleInsertDictionary}
+      />
     </>
   );
 }
@@ -495,7 +543,9 @@ const styles = StyleSheet.create({
   previewToggleWrapper: {
     paddingHorizontal: 16,
     paddingVertical: 6,
-    alignItems: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   previewToggle: {
     paddingVertical: 4,
@@ -509,7 +559,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   previewContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     paddingHorizontal: 16,
   },
   previewBox: {

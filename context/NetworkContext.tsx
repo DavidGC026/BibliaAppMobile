@@ -19,6 +19,7 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       setOnlineState(next);
       setIsOnline(next);
       if (next) {
+        // Sube cambios offline y hace pull del servidor → SQLite
         syncAll().catch(() => {});
       }
     });
@@ -26,6 +27,7 @@ export function NetworkProvider({ children }: { children: React.ReactNode }) {
       const next = !!(state.isConnected && state.isInternetReachable !== false);
       setOnlineState(next);
       setIsOnline(next);
+      if (next) syncAll().catch(() => {});
     });
     return unsub;
   }, []);

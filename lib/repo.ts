@@ -18,13 +18,16 @@ import {
   createLocalNote,
   deleteLocalNotebook,
   deleteLocalNote,
+  evictNotebook,
+  evictNote,
   getLocalNote,
-  getLocalNotebook,
   listLocalNotebooks,
   listLocalNotes,
   resolveNotebookLocalId,
   updateLocalNotebook,
   updateLocalNote,
+  upsertNoteFromServer,
+  upsertNotebookFromServer,
 } from '@/lib/offline/notesStore';
 import {
   addLocalFavorite,
@@ -38,18 +41,56 @@ import {
   upsertHighlightsFromServer,
   upsertVerseNotesFromServer,
 } from '@/lib/offline/readerStore';
+import {
+  areCrossRefsDownloaded,
+  deleteCrossReferences,
+  deleteDictionary,
+  downloadCrossReferences,
+  downloadDictionary,
+  getChapterArcs,
+  getCrossRefsDownloadInfo,
+  getDictionaryDownloadInfo,
+  getLocalCrossReferences,
+  getLocalDictionaryEntry,
+  isDictionaryDownloaded,
+  searchLocalDictionary,
+  type StudyDownloadInfo,
+  type StudyDownloadProgress,
+} from '@/lib/offline/studyStore';
 import { syncAll } from '@/lib/sync';
-import type { BibleVersion, Book, Notebook, NotebookNote, Verse } from '@/lib/types';
+import { nowIso } from '@/lib/db';
+import type { BibleVersion, Book, CrossReference, Notebook, NotebookNote, StrongEntry, Verse } from '@/lib/types';
 
 export { downloadBible, deleteDownloadedBible, getDownloadedSize, listLocalBibles, isBibleDownloaded };
-export type { DownloadProgress };
+export {
+  areCrossRefsDownloaded,
+  deleteCrossReferences,
+  deleteDictionary,
+  downloadCrossReferences,
+  downloadDictionary,
+  getChapterArcs,
+  getCrossRefsDownloadInfo,
+  getDictionaryDownloadInfo,
+  isDictionaryDownloaded,
+};
+export type { DownloadProgress, StudyDownloadInfo, StudyDownloadProgress };
+
+/** Online + sesión → trabajar contra el servidor; offline → SQLite. */
+function useRemote(): boolean {
+  return getIsOnline() && !!api.getApiToken();
+}
+
+async function cacheNotebooksFromServer(notebooks: Notebook[]) {
+  for (const nb of notebooks) await upsertNotebookFromServer(nb);
+}
+
+async function cacheNotesFromServer(notes: NotebookNote[]) {
+  for (const n of notes) await upsertNoteFromServer(n);
+}
 
 export async function initOffline() {
   const { getDb } = await import('@/lib/db');
   await getDb();
-  if (getIsOnline()) {
-    syncAll().catch(() => {});
-  }
 }
 
 export async function repoListBibles(): Promise<{ bibles: BibleVersion[] }> {
@@ -96,53 +137,120 @@ export async function repoGetVerses(bibleId: number, bookId: number, chapter: nu
   return { verses };
 }
 
-export async function repoListNotebooks(): Promise<{ notebooks: Notebook[] }> {
+export async function repoGetCrossReferences(
+  bibleId: number,
+  bookId: number,
+  chapter: number,
+  verse: number,
+): Promise<{ references: CrossReference[] }> {
   if (getIsOnline()) {
     try {
-      const res = await api.listNotebooks();
-      for (const nb of res.notebooks) {
-        const { upsertNotebookFromServer } = await import('@/lib/offline/notesStore');
-        await upsertNotebookFromServer(nb);
-      }
-      return res;
+      return await api.getCrossReferences(bibleId, bookId, chapter, verse);
     } catch {
-      // fall through
+      // Caída puntual del servidor: probar la copia local
+    }
+  }
+  if (await areCrossRefsDownloaded()) {
+    return { references: await getLocalCrossReferences(bibleId, bookId, chapter, verse) };
+  }
+  throw new Error('Referencias no disponibles offline. Descárgalas en Perfil → Descargas.');
+}
+
+export async function repoSearchDictionary(opts: {
+  dict?: string;
+  q?: string;
+  lang?: 'all' | 'greek' | 'hebrew';
+  page?: number;
+  browse?: boolean;
+}): Promise<{ entries: StrongEntry[]; total: number; page: number; pageSize: number; totalPages: number }> {
+  if (getIsOnline()) {
+    try {
+      return await api.searchDictionary(opts);
+    } catch {
+      // Caída puntual del servidor: probar la copia local
+    }
+  }
+  if (await isDictionaryDownloaded(opts.dict ?? 'strong')) {
+    return searchLocalDictionary(opts);
+  }
+  throw new Error('Diccionario no disponible offline. Descárgalo en Perfil → Descargas.');
+}
+
+export async function repoGetDictionaryEntry(
+  code: string,
+  dict = 'strong',
+): Promise<{ entry: StrongEntry | null }> {
+  if (getIsOnline()) {
+    try {
+      return await api.getDictionaryEntry(code, dict);
+    } catch {
+      // Caída puntual del servidor: probar la copia local
+    }
+  }
+  if (await isDictionaryDownloaded(dict)) {
+    return { entry: await getLocalDictionaryEntry(code, dict) };
+  }
+  throw new Error('Diccionario no disponible offline. Descárgalo en Perfil → Descargas.');
+}
+
+async function refreshNotebooksFromServer() {
+  const res = await api.listNotebooks();
+  await cacheNotebooksFromServer(res.notebooks);
+  for (const nb of res.notebooks) {
+    const { notes } = await api.listNotebookNotes(nb.id);
+    await cacheNotesFromServer(notes);
+  }
+}
+
+/** Online: sync/push + pull → SQLite unificado. Offline: solo SQLite. */
+async function loadNotebooksView(): Promise<{ notebooks: Notebook[] }> {
+  if (useRemote()) {
+    try {
+      await syncAll();
+    } catch {
+      try {
+        await refreshNotebooksFromServer();
+      } catch {
+        // ponytail: muestra lo que haya en SQLite
+      }
     }
   }
   return { notebooks: await listLocalNotebooks() };
 }
 
-export async function repoListNotebookNotes(notebookId: number): Promise<{ notes: NotebookNote[] }> {
-  const localId = await resolveNotebookLocalId(notebookId);
-  if (getIsOnline()) {
+async function loadNotebookNotesView(notebookId: number): Promise<{ notes: NotebookNote[] }> {
+  if (useRemote()) {
     try {
-      const sid = (await getLocalNotebook(notebookId))?.id ?? notebookId;
-      const res = await api.listNotebookNotes(sid > 0 ? sid : notebookId);
-      for (const n of res.notes) {
-        const { upsertNoteFromServer } = await import('@/lib/offline/notesStore');
-        await upsertNoteFromServer(n);
-      }
-      if (localId) return { notes: await listLocalNotes(notebookId) };
-      return res;
+      await syncAll();
     } catch {
-      // fall through
+      try {
+        const res = await api.listNotebookNotes(notebookId);
+        await cacheNotesFromServer(res.notes);
+      } catch {
+        // ponytail: muestra lo que haya en SQLite
+      }
     }
   }
-  if (!localId) return { notes: [] };
+  if (!(await resolveNotebookLocalId(notebookId))) return { notes: [] };
   return { notes: await listLocalNotes(notebookId) };
 }
 
+export async function repoListNotebooks(): Promise<{ notebooks: Notebook[] }> {
+  return loadNotebooksView();
+}
+
+export async function repoListNotebookNotes(notebookId: number): Promise<{ notes: NotebookNote[] }> {
+  return loadNotebookNotesView(notebookId);
+}
+
 export async function repoGetNotebookNote(noteId: number): Promise<{ note: NotebookNote }> {
-  if (getIsOnline() && noteId > 0) {
+  if (useRemote() && noteId > 0) {
     try {
       const res = await api.getNotebookNote(noteId);
-      const { upsertNoteFromServer } = await import('@/lib/offline/notesStore');
       await upsertNoteFromServer(res.note);
-      const local = await getLocalNote(noteId);
-      if (local) return { note: local };
       return res;
     } catch {
-      // fall through
+      // cae a SQLite (p. ej. nota solo local aún)
     }
   }
   const note = await getLocalNote(noteId);
@@ -151,38 +259,100 @@ export async function repoGetNotebookNote(noteId: number): Promise<{ note: Noteb
 }
 
 export async function repoCreateNotebook(name: string, coverImage?: string | null) {
+  if (useRemote()) {
+    try {
+      const res = await api.createNotebook(name, coverImage);
+      const ts = nowIso();
+      await upsertNotebookFromServer({ id: res.id, name: res.name, coverImage: res.coverImage, createdAt: ts });
+      return { id: res.id, name: res.name, coverImage: res.coverImage ?? null };
+    } catch {
+      // cae a cola offline
+    }
+  }
   const local = await createLocalNotebook(name, coverImage);
-  if (getIsOnline()) syncAll().catch(() => {});
   return { id: local.id, name: local.name, coverImage: local.coverImage };
 }
 
 export async function repoUpdateNotebook(id: number, name: string, coverImage?: string | null) {
+  if (useRemote() && id > 0) {
+    try {
+      await api.updateNotebook(id, name, coverImage);
+      const ts = nowIso();
+      await upsertNotebookFromServer({ id, name, coverImage, createdAt: ts });
+      return { ok: true };
+    } catch {
+      // cae a cola offline
+    }
+  }
   await updateLocalNotebook(id, name, coverImage);
-  if (getIsOnline()) syncAll().catch(() => {});
   return { ok: true };
 }
 
 export async function repoDeleteNotebook(id: number) {
+  if (useRemote() && id > 0) {
+    try {
+      await api.deleteNotebook(id);
+      await evictNotebook(id);
+      return { ok: true };
+    } catch {
+      // cae a cola offline
+    }
+  }
   await deleteLocalNotebook(id);
-  if (getIsOnline()) syncAll().catch(() => {});
   return { ok: true };
 }
 
 export async function repoCreateNotebookNote(notebookId: number, title: string, content: string) {
-  const note = await createLocalNote(notebookId, title, content);
-  if (getIsOnline()) syncAll().catch(() => {});
+  const finalTitle = title.trim() || 'Sin título';
+  if (useRemote() && notebookId > 0) {
+    try {
+      const res = await api.createNotebookNote(notebookId, finalTitle, content);
+      const ts = nowIso();
+      await upsertNoteFromServer({
+        id: res.id,
+        notebookId,
+        title: res.title,
+        content: res.content,
+        tags: '[]',
+        createdAt: ts,
+        updatedAt: ts,
+      });
+      return { id: res.id, title: res.title, content: res.content };
+    } catch {
+      // cae a cola offline
+    }
+  }
+  const note = await createLocalNote(notebookId, finalTitle, content);
   return { id: note.id, title: note.title, content: note.content };
 }
 
 export async function repoUpdateNotebookNote(noteId: number, title: string, content: string, tags?: string[]) {
-  await updateLocalNote(noteId, title, content, tags ? JSON.stringify(tags) : undefined);
-  if (getIsOnline()) syncAll().catch(() => {});
+  const finalTitle = title.trim() || 'Sin título';
+  if (useRemote() && noteId > 0) {
+    try {
+      await api.updateNotebookNote(noteId, finalTitle, content, tags);
+      const fresh = await api.getNotebookNote(noteId);
+      await upsertNoteFromServer(fresh.note);
+      return { ok: true };
+    } catch {
+      // cae a cola offline
+    }
+  }
+  await updateLocalNote(noteId, finalTitle, content, tags ? JSON.stringify(tags) : undefined);
   return { ok: true };
 }
 
 export async function repoDeleteNotebookNote(noteId: number) {
+  if (useRemote() && noteId > 0) {
+    try {
+      await api.deleteNotebookNote(noteId);
+      await evictNote(noteId);
+      return { ok: true };
+    } catch {
+      // cae a cola offline
+    }
+  }
   await deleteLocalNote(noteId);
-  if (getIsOnline()) syncAll().catch(() => {});
   return { ok: true };
 }
 

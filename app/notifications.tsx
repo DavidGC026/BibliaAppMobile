@@ -13,6 +13,7 @@ import {
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { useAuth } from '@/context/AuthContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { AppNotification } from '@/lib/types';
 
@@ -42,6 +43,7 @@ function notificationLabel(n: AppNotification): string {
 
 export default function NotificationsScreen() {
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const { isGuest, isLoading: authLoading } = useAuth();
   const [items, setItems] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -96,7 +98,7 @@ export default function NotificationsScreen() {
         <FlatList
           data={items}
           keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

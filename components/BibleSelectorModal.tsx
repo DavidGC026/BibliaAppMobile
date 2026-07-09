@@ -8,8 +8,10 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import type { Book } from '@/lib/types';
 
 interface BibleSelectorModalProps {
@@ -28,6 +30,7 @@ export function BibleSelectorModal({
   onClose,
 }: BibleSelectorModalProps) {
   const { colors, radius } = useAppTheme();
+  const contentPadding = useContentPadding();
   const [query, setQuery] = useState('');
   const [expandedId, setExpandedId] = useState<number | null>(currentBookId);
 
@@ -46,7 +49,7 @@ export function BibleSelectorModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <Pressable onPress={onClose} hitSlop={12} style={styles.headerBtn}>
             <Text style={[styles.headerIcon, { color: colors.text }]}>‹</Text>
@@ -72,7 +75,7 @@ export function BibleSelectorModal({
         <FlatList
           data={filtered}
           keyExtractor={(b) => String(b.bookId)}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
           keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             const isExpanded = expandedId === item.bookId;
@@ -122,7 +125,7 @@ export function BibleSelectorModal({
             );
           }}
         />
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

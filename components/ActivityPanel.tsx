@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { Card } from '@/components/ui/Card';
+import { GuestPrompt } from '@/components/GuestPrompt';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useAuth } from '@/context/AuthContext';
 import * as api from '@/lib/api';
 import type { ProgressBook } from '@/lib/types';
 
@@ -13,6 +16,13 @@ function heatmapColor(count: number, isDark: boolean) {
   return isDark ? '#F59E0B' : '#D97706';
 }
 
+function localDateStr(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 interface ActivityPanelProps {
   compact?: boolean;
   onViewAll?: () => void;
@@ -20,12 +30,19 @@ interface ActivityPanelProps {
 
 export function ActivityPanel({ compact, onViewAll }: ActivityPanelProps) {
   const { colors, isDark } = useAppTheme();
+  const { isGuest } = useAuth();
   const [progress, setProgress] = useState<ProgressBook[]>([]);
   const [heatmap, setHeatmap] = useState<{ date: string; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    if (isGuest) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setError(null);
     api
       .getActivity()
       .then(({ heatmap: hm, recentProgress }) => {
@@ -36,30 +53,53 @@ export function ActivityPanel({ compact, onViewAll }: ActivityPanelProps) {
         for (let i = total - 1; i >= 0; i--) {
           const d = new Date(today);
           d.setDate(today.getDate() - i);
-          const dateStr = d.toISOString().split('T')[0];
-          const found = hm.find((h) => h.date.split('T')[0] === dateStr);
+          const dateStr = localDateStr(d);
+          const found = hm.find((h) => String(h.date).split('T')[0] === dateStr);
           days.push({ date: dateStr, count: found ? Number(found.total_chapters) : 0 });
         }
         setHeatmap(days);
       })
-      .catch(() => {})
+      .catch((err) => {
+        setProgress([]);
+        setHeatmap([]);
+        setError(err instanceof Error ? err.message : 'No se pudo cargar la actividad');
+      })
       .finally(() => setLoading(false));
-  }, [compact]);
+  }, [compact, isGuest]);
 
-  const shown = useMemo(() => (compact ? progress.slice(0, 3) : progress), [compact, progress]);
-  const maxChapters = Math.max(50, ...shown.map((p) => p.total_chapters), 1);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
+
+  if (isGuest) {
+    return (
+      <GuestPrompt
+        title="Actividad de lectura"
+        message="Inicia sesión para ver tu progreso y calendario de lectura."
+      />
+    );
+  }
 
   if (loading) {
     return <ActivityIndicator color={colors.primary} style={{ marginVertical: 16 }} />;
   }
 
+  const shown = compact ? progress.slice(0, 3) : progress;
+  const maxChapters = Math.max(50, ...shown.map((p) => p.total_chapters), 1);
+
   return (
     <View style={styles.wrap}>
+      {error ? (
+        <Text style={{ color: colors.danger, fontSize: 13, marginBottom: 4 }}>{error}</Text>
+      ) : null}
+
       <Card style={styles.card}>
         <Text style={[styles.heading, { color: colors.textMuted }]}>PROGRESO POR LIBRO</Text>
         {shown.length === 0 ? (
           <Text style={{ color: colors.textMuted, fontSize: 14 }}>
-            Aún no hay actividad. Lee un capítulo para empezar.
+            Aún no hay actividad. Quédate al menos 5 segundos en un capítulo para registrarlo.
           </Text>
         ) : (
           shown.map((p) => (

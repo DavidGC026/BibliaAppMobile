@@ -12,32 +12,32 @@ export interface FontItem {
   url: string;
 }
 
+// Las URLs de fonts.gstatic.com caducan cuando Google rota la versión de la
+// fuente; downloadFont resuelve siempre la URL vigente y estas quedan solo
+// como respaldo si la API de Google Fonts no responde.
 export const POPULAR_FONTS: FontItem[] = [
-  { id: 'Lora', name: 'Lora', category: 'Serif', url: 'https://fonts.gstatic.com/s/lora/v32/0QI6MX1D_LOuGQbDFg.ttf' },
-  { id: 'PlayfairDisplay', name: 'Playfair Display', category: 'Serif', url: 'https://fonts.gstatic.com/s/playfairdisplay/v37/nuFI7DqDY3sN_kJ4b5UTT5r-N2WD-0IZPIFf.ttf' },
-  { id: 'Merriweather', name: 'Merriweather', category: 'Serif', url: 'https://fonts.gstatic.com/s/merriweather/v30/u-4n0qyOJr1yX8eGtGbS77Qced5W7w.ttf' },
-  { id: 'Inter', name: 'Inter', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZhrib2D.ttf' },
-  { id: 'Montserrat', name: 'Montserrat', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/montserrat/v29/JTUSjIg1_i6t8kCHKm41xM11.ttf' },
-  { id: 'Roboto', name: 'Roboto', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Mu4mxK.ttf' },
-  { id: 'Outfit', name: 'Outfit', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/outfit/v11/Fons33G7M4Jw_2s.ttf' },
-  { id: 'Poppins', name: 'Poppins', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/poppins/v22/pxiByp8kv8JHgFVrLDz7Z11l.ttf' },
-  { id: 'Oswald', name: 'Oswald', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/oswald/v49/TK3iWgpwG0OpACHE1Of2F2A.ttf' },
-  { id: 'FiraCode', name: 'Fira Code', category: 'Monospace', url: 'https://fonts.gstatic.com/s/firacode/v21/u8RE1_aR5cqpGPfQD7hdRfVv.ttf' },
-  { id: 'JetBrainsMono', name: 'JetBrains Mono', category: 'Monospace', url: 'https://fonts.gstatic.com/s/jetbrainsmono/v18/tU3oV065tD3c19C_LzQ.ttf' }
+  { id: 'Lora', name: 'Lora', category: 'Serif', url: 'https://fonts.gstatic.com/s/lora/v37/0QI6MX1D_JOuGQbT0gvTJPa787weuxJBkqg.ttf' },
+  { id: 'PlayfairDisplay', name: 'Playfair Display', category: 'Serif', url: 'https://fonts.gstatic.com/s/playfairdisplay/v40/nuFvD-vYSZviVYUb_rj3ij__anPXJzDwcbmjWBN2PKdFvXDXbtY.ttf' },
+  { id: 'Merriweather', name: 'Merriweather', category: 'Serif', url: 'https://fonts.gstatic.com/s/merriweather/v33/u-4D0qyriQwlOrhSvowK_l5UcA6zuSYEqOzpPe3HOZJ5eX1WtLaQwmYiScCmDxhtNOKl8yDr3icaFF3w.ttf' },
+  { id: 'Inter', name: 'Inter', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hjQ.ttf' },
+  { id: 'Montserrat', name: 'Montserrat', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/montserrat/v31/JTUHjIg1_i6t8kCHKm4532VJOt5-QNFgpCtr6Hw5aX8.ttf' },
+  { id: 'Roboto', name: 'Roboto', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/roboto/v51/KFOMCnqEu92Fr1ME7kSn66aGLdTylUAMQXC89YmC2DPNWubEbVmUiA8.ttf' },
+  { id: 'Outfit', name: 'Outfit', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/outfit/v15/QGYyz_MVcBeNP4NjuGObqx1XmO1I4TC1O4a0Fg.ttf' },
+  { id: 'Poppins', name: 'Poppins', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrJJfedw.ttf' },
+  { id: 'Oswald', name: 'Oswald', category: 'Sans-serif', url: 'https://fonts.gstatic.com/s/oswald/v57/TK3_WkUHHAIjg75cFRf3bXL8LICs1_FvsUZiYA.ttf' },
+  { id: 'FiraCode', name: 'Fira Code', category: 'Monospace', url: 'https://fonts.gstatic.com/s/firacode/v27/uU9eCBsR6Z2vfE9aq3bL0fxyUs4tcw4W_D1sJVD7Mw.ttf' },
+  { id: 'JetBrainsMono', name: 'JetBrains Mono', category: 'Monospace', url: 'https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOlOQ.ttf' }
 ];
 
 export async function fetchGoogleFontUrl(fontName: string): Promise<string> {
   const formattedName = fontName.trim().replace(/\s+/g, '+');
   try {
-    const response = await fetch(`https://fonts.googleapis.com/css?family=${formattedName}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'
-      }
-    });
+    // Sin User-Agent de navegador moderno la API sirve TTF (el formato que
+    // acepta expo-font); con UA de Chrome devuelve woff/woff2.
+    const response = await fetch(`https://fonts.googleapis.com/css?family=${formattedName}`);
     if (!response.ok) throw new Error('No se pudo buscar la fuente en Google Fonts');
     const css = await response.text();
-    const match = css.match(/src:\s*local\(.*?\),\s*url\((https:\/\/fonts\.gstatic\.com\/.*?\.ttf)\)/i) || 
-                  css.match(/src:\s*url\((https:\/\/fonts\.gstatic\.com\/.*?\.ttf)\)/i);
+    const match = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+?\.(?:ttf|otf))\)/i);
     if (match && match[1]) {
       return match[1];
     }
@@ -73,8 +73,18 @@ export async function downloadFont(font: FontItem): Promise<boolean> {
 
     const localUri = `${FONTS_DIR}${font.id}.ttf`;
 
-    // 2. Download TTF file
-    const downloadResult = await FileSystem.downloadAsync(font.url, localUri);
+    // 2. Download TTF file — resolviendo primero la URL vigente, porque las
+    // URLs de gstatic guardadas caducan cuando Google rota la versión
+    let url = font.url;
+    try {
+      url = await fetchGoogleFontUrl(font.name);
+    } catch {
+      // Sin acceso a la API o fuente no listada: probar la URL guardada
+    }
+    let downloadResult = await FileSystem.downloadAsync(url, localUri);
+    if (downloadResult.status !== 200 && url !== font.url) {
+      downloadResult = await FileSystem.downloadAsync(font.url, localUri);
+    }
     if (downloadResult.status !== 200) {
       throw new Error(`Descarga fallida con código de estado ${downloadResult.status}`);
     }

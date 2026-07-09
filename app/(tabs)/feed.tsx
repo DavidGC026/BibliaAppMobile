@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { FeedPost } from '@/lib/types';
 
@@ -23,6 +24,7 @@ type FeedType = 'following' | 'explore';
 
 export default function FeedScreen() {
   const { colors, radius } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { isGuest, isLoading: authLoading } = useAuth();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [feedType, setFeedType] = useState<FeedType>('following');
@@ -87,7 +89,7 @@ export default function FeedScreen() {
   return (
     <FlatList
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
       data={posts}
       keyExtractor={(item) => String(item.id)}
       refreshControl={

@@ -1,4 +1,5 @@
 import { Picker } from '@react-native-picker/picker';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,7 +12,8 @@ import {
 } from 'react-native';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
-import * as api from '@/lib/api';
+import { useContentPadding } from '@/hooks/useContentPadding';
+import { repoGetCrossReferences, repoGetVerses, repoListBibles, repoListBooks } from '@/lib/repo';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import type { BibleVersion, Book, CrossReference } from '@/lib/types';
 
@@ -20,7 +22,9 @@ interface ReferencesExplorerProps {
 }
 
 export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps) {
+  const router = useRouter();
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [bibleId, setBibleId] = useState(DEFAULT_BIBLE_ID);
@@ -33,11 +37,11 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.listBibles().then(({ bibles: list }) => setBibles(list)).catch(() => {});
+    repoListBibles().then(({ bibles: list }) => setBibles(list)).catch(() => {});
   }, []);
 
   useEffect(() => {
-    api.listBooks(bibleId).then(({ books: list }) => {
+    repoListBooks(bibleId).then(({ books: list }) => {
       setBooks(list);
       if (!list.some((b) => b.bookId === bookId)) setBookId(list[0]?.bookId ?? 1);
     }).catch(() => {});
@@ -51,8 +55,8 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
     setError(null);
     try {
       const [{ references }, { verses }] = await Promise.all([
-        api.getCrossReferences(bibleId, bookId, ch, vs),
-        api.getVerses(bibleId, bookId, ch),
+        repoGetCrossReferences(bibleId, bookId, ch, vs),
+        repoGetVerses(bibleId, bookId, ch),
       ]);
       setRefs(references);
       setSourceText(verses.find((v) => v.verse === vs)?.text ?? null);
@@ -72,6 +76,20 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
 
   return (
     <View style={{ flex: 1 }}>
+      <Pressable
+        onPress={() => router.push('/rainbow')}
+        style={({ pressed }) => [
+          styles.rainbowLink,
+          { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+        ]}
+      >
+        <Text style={{ fontSize: 22 }}>🌈</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Mapa de referencias</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>Toda la Biblia en un vistazo</Text>
+        </View>
+        <Text style={{ color: colors.textMuted, fontSize: 20 }}>›</Text>
+      </Pressable>
       <View style={[styles.filters, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.pickerWrap, { borderColor: colors.border }]}>
           <Picker selectedValue={bibleId} onValueChange={(v) => setBibleId(Number(v))} style={{ color: colors.text }}>
@@ -125,7 +143,9 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
       <FlatList
         data={refs}
         keyExtractor={(item, i) => `${item.book_id}-${item.chapter}-${item.verse}-${i}`}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListHeaderComponent={
           <Text style={[styles.header, { color: colors.text }]}>
             Referencias ({refs.length})
@@ -160,6 +180,17 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
 }
 
 const styles = StyleSheet.create({
+  rainbowLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    margin: 12,
+    marginBottom: 0,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
   filters: { margin: 12, marginBottom: 0, padding: 12, borderWidth: 1, borderRadius: 14, gap: 8 },
   pickerWrap: { borderWidth: 1, borderRadius: 10, overflow: 'hidden' },
   numRow: { flexDirection: 'row', gap: 10 },

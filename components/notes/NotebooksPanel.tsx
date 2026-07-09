@@ -16,11 +16,13 @@ import { BookCover } from '@/components/BookCover';
 import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { Button } from '@/components/ui/Button';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as repo from '@/lib/repo';
 import type { Notebook } from '@/lib/types';
 
 export function NotebooksPanel() {
   const { colors, typography } = useAppTheme();
+  const contentPadding = useContentPadding();
   const [notebooks, setNotebooks] = useState<Notebook[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -92,7 +94,7 @@ export function NotebooksPanel() {
     <>
       <FlatList
         style={{ flex: 1 }}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
         data={notebooks}
         numColumns={2}
         keyExtractor={(item) => String(item.id)}
@@ -166,7 +168,7 @@ export function NotebooksPanel() {
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 16, paddingBottom: 32, flexGrow: 1 },
+  list: { padding: 16, flexGrow: 1 },
   header: { gap: 8, marginBottom: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   row: { gap: 12, marginBottom: 20, justifyContent: 'space-between' },

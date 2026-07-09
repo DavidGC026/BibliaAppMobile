@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import type { BibleVersion, Verse } from '@/lib/types';
 
 export function BibleSearch({ onOpenVerse }: { onOpenVerse?: (bookId: number, chapter: number) => void }) {
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
   const [bibleId, setBibleId] = useState(DEFAULT_BIBLE_ID);
   const [query, setQuery] = useState('');
@@ -103,7 +105,9 @@ export function BibleSearch({ onOpenVerse }: { onOpenVerse?: (bookId: number, ch
       <FlatList
         data={results}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={
           loading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />

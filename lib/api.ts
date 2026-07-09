@@ -30,6 +30,10 @@ export function setApiTokenGetter(getter: TokenGetter) {
   getToken = getter;
 }
 
+export function getApiToken(): string | null {
+  return getToken();
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -368,6 +372,30 @@ export async function searchDictionary(opts: {
   }>(`/api/dictionary?${params.toString()}`);
 }
 
+export async function getDictionaryEntry(code: string, dict = 'strong') {
+  const params = new URLSearchParams({ dict, code: code.toUpperCase() });
+  return request<{ entry: import('./types').StrongEntry | null }>(`/api/dictionary?${params.toString()}`);
+}
+
+// — Export para descarga offline (filas compactas paginadas) —
+export async function exportDictionary(dict = 'strong', page = 1) {
+  return request<{
+    rows: [string, string | null, string | null, string | null][];
+    total: number;
+    page: number;
+    totalPages: number;
+  }>(`/api/dictionary?export&dict=${encodeURIComponent(dict)}&page=${page}`);
+}
+
+export async function exportCrossReferences(page = 1) {
+  return request<{
+    rows: [number, number, number][];
+    total: number;
+    page: number;
+    totalPages: number;
+  }>(`/api/references?export&page=${page}`);
+}
+
 // — Grupos: unirse por código —
 export async function joinGroupByCode(inviteCode: string) {
   return request<{ success: boolean; groupId: number; alreadyMember?: boolean }>(
@@ -415,9 +443,30 @@ export async function setEventRsvp(eventId: number, status: 'going' | 'maybe' | 
   });
 }
 
+export async function createChurchEvent(event: {
+  title: string;
+  description: string;
+  startTime: string;
+  endTime?: string | null;
+  location: string;
+  category: string;
+}) {
+  return request<{ success: boolean; id: number }>('/api/events', {
+    method: 'POST',
+    body: JSON.stringify(event),
+  });
+}
+
+export async function deleteChurchEvent(id: number) {
+  return request<{ success: boolean }>(`/api/events?id=${id}`, {
+    method: 'DELETE',
+  });
+}
+
+
 // — Imágenes (Unsplash vía backend) —
 export async function getUnsplashPhotos() {
-  return request<{ images: import('./types').UnsplashImage[] }>('/api/unsplash');
+  return fetchUnsplashImages();
 }
 
 export function getImageProxyUrl(imageUrl: string) {
@@ -566,7 +615,23 @@ export type UnsplashImage = {
   authorUrl: string;
 };
 
-export async function fetchUnsplashImages(query?: string) {
-  const q = query?.trim() ? `?query=${encodeURIComponent(query.trim())}` : '';
-  return request<{ images: UnsplashImage[] }>(`/api/unsplash${q}`);
+export type UnsplashSearchResult = {
+  images: UnsplashImage[];
+  page: number;
+  totalPages: number | null;
+  hasMore: boolean;
+};
+
+export async function fetchUnsplashImages(
+  query?: string,
+  opts?: {
+    page?: number;
+    orientation?: 'portrait' | 'landscape' | 'squarish';
+  },
+) {
+  const params = new URLSearchParams();
+  if (query?.trim()) params.set('query', query.trim());
+  params.set('orientation', opts?.orientation ?? 'portrait');
+  if (opts?.page && opts.page > 1) params.set('page', String(opts.page));
+  return request<UnsplashSearchResult>(`/api/unsplash?${params}`);
 }

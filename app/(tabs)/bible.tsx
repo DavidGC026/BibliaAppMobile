@@ -32,7 +32,7 @@ function parseReaderTarget(bookId?: string, chapter?: string) {
 export default function BibleScreen() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ bookId?: string; chapter?: string; bibleId?: string; mode?: string }>();
+  const params = useLocalSearchParams<{ bookId?: string; chapter?: string; bibleId?: string; mode?: string; strong?: string }>();
   const [mode, setMode] = useState<BibleMode>(() => {
     const m = params.mode;
     if (m === 'search' || m === 'references' || m === 'dictionary' || m === 'plans') return m;
@@ -81,7 +81,7 @@ export default function BibleScreen() {
       ) : mode === 'references' ? (
         <ReferencesExplorer onOpenReference={openInReader} />
       ) : mode === 'dictionary' ? (
-        <StrongDictionary />
+        <StrongDictionary initialCode={params.strong} />
       ) : (
         <ReadingPlansPanel />
       )}

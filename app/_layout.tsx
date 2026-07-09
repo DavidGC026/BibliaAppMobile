@@ -1,3 +1,4 @@
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -11,6 +12,7 @@ import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
 import Colors from '@/constants/Colors';
 import { loadAllDownloadedFonts } from '@/lib/fontManager';
 import { initOffline } from '@/lib/repo';
+import { useAppReminders } from '@/hooks/useAppReminders';
 
 export {
   ErrorBoundary,
@@ -47,19 +49,22 @@ export default function RootLayout() {
   }
 
   return (
-    <AppThemeProvider>
-      <NetworkProvider>
-        <AuthProvider>
-          <RootLayoutNav />
-        </AuthProvider>
-      </NetworkProvider>
-    </AppThemeProvider>
+    <SafeAreaProvider>
+      <AppThemeProvider>
+        <NetworkProvider>
+          <AuthProvider>
+            <RootLayoutNav />
+          </AuthProvider>
+        </NetworkProvider>
+      </AppThemeProvider>
+    </SafeAreaProvider>
   );
 }
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme() ?? 'light';
   const palette = Colors[colorScheme];
+  useAppReminders();
 
   const theme = colorScheme === 'dark'
     ? {
@@ -125,6 +130,7 @@ function RootLayoutNav() {
           }}
         />
         <Stack.Screen name="devotional/[id]" options={{ title: 'Diario espiritual' }} />
+        <Stack.Screen name="devotional/read/[id]" options={{ title: 'Devocional' }} />
         <Stack.Screen name="study-book/[id]" options={{ title: 'Libro de estudio' }} />
         <Stack.Screen
           name="events"
@@ -144,6 +150,7 @@ function RootLayoutNav() {
         <Stack.Screen name="highlights" options={{ title: 'Subrayados' }} />
         <Stack.Screen name="favorites" options={{ title: 'Favoritos' }} />
         <Stack.Screen name="downloads" options={{ title: 'Descargas' }} />
+        <Stack.Screen name="rainbow" options={{ title: 'Mapa de referencias' }} />
       </Stack>
     </ThemeProvider>
   );

@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/Card';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useContentPadding } from '@/hooks/useContentPadding';
+import { androidWidgetAvailable } from '@/hooks/useAppReminders';
 
 function MenuRow({
   icon,
@@ -32,6 +34,7 @@ function MenuRow({
 
 export default function ProfileScreen() {
   const { colors, typography } = useAppTheme();
+  const contentPadding = useContentPadding();
   const { user, isGuest, isLoading, logout } = useAuth();
 
   if (isLoading) {
@@ -46,7 +49,7 @@ export default function ProfileScreen() {
     return (
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { paddingBottom: contentPadding }]}
       >
         <Text style={[typography.h1, { color: colors.text }]}>Perfil</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
@@ -61,7 +64,7 @@ export default function ProfileScreen() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { paddingBottom: contentPadding }]}
     >
       <Text style={[typography.h1, { color: colors.text }]}>Perfil</Text>
 
@@ -114,6 +117,15 @@ export default function ProfileScreen() {
 
       <ThemeSwitch />
 
+      {androidWidgetAvailable() ? (
+        <Card style={styles.widgetHint}>
+          <Text style={[styles.widgetTitle, { color: colors.text }]}>Widget en Android</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 20 }}>
+            Mantén pulsado el escritorio → Widgets → BibliaAPP → Versículo del día. Se actualiza al abrir la app.
+          </Text>
+        </Card>
+      ) : null}
+
       <Button label="Cerrar sesión" variant="outline" onPress={() => logout()} fullWidth />
     </ScrollView>
   );
@@ -121,7 +133,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  container: { padding: 16, gap: 16, paddingBottom: 32 },
+  container: { padding: 16, gap: 16 },
   subtitle: { fontSize: 16, lineHeight: 24 },
   profileCard: { alignItems: 'center', gap: 6, paddingVertical: 24 },
   avatar: {
@@ -156,4 +168,6 @@ const styles = StyleSheet.create({
   menuIcon: { width: 36, height: 36, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   menuLabel: { flex: 1, fontSize: 16, fontWeight: '600' },
   menuDivider: { height: StyleSheet.hairlineWidth, marginLeft: 64 },
+  widgetHint: { gap: 6 },
+  widgetTitle: { fontSize: 15, fontWeight: '700' },
 });

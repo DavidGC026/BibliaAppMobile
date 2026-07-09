@@ -11,6 +11,7 @@ import {
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { useAuth } from '@/context/AuthContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { ReadingPlan, UserReadingPlan } from '@/lib/types';
 
@@ -25,6 +26,7 @@ function parseProgress(raw: string): number[] {
 
 export function ReadingPlansPanel() {
   const colors = useThemeColors();
+  const contentPadding = useContentPadding();
   const { isGuest, isLoading: authLoading } = useAuth();
   const [plans, setPlans] = useState<ReadingPlan[]>([]);
   const [userPlans, setUserPlans] = useState<UserReadingPlan[]>([]);
@@ -95,7 +97,7 @@ export function ReadingPlansPanel() {
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: contentPadding }]}
     >
       {userPlans.length > 0 ? (
         <>
@@ -194,7 +196,7 @@ export function ReadingPlansPanel() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  content: { padding: 16, paddingBottom: 32, gap: 8 },
+  content: { padding: 16, gap: 8 },
   section: {
     fontSize: 12,
     fontWeight: '700',

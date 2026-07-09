@@ -95,6 +95,22 @@ CREATE TABLE IF NOT EXISTS verse_notes (
   deleted INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS dictionary_entries (
+  dict TEXT NOT NULL,
+  code TEXT NOT NULL,
+  lemma TEXT,
+  transliteration TEXT,
+  definition TEXT,
+  PRIMARY KEY (dict, code)
+);
+
+CREATE TABLE IF NOT EXISTS cross_references (
+  vid_origen INTEGER NOT NULL,
+  vid_destino INTEGER NOT NULL,
+  votos INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_crossrefs_origen ON cross_references(vid_origen);
 CREATE INDEX IF NOT EXISTS idx_verses_lookup ON verses(bible_id, book_id, chapter);
 CREATE INDEX IF NOT EXISTS idx_notes_notebook ON notes(notebook_id);
 CREATE INDEX IF NOT EXISTS idx_highlights_chapter ON highlights(bible_id, book_id, chapter);

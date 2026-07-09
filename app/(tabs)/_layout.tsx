@@ -2,6 +2,7 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 import { Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/Colors';
 import { shadow } from '@/constants/theme';
@@ -26,6 +27,9 @@ function TabIcon({
 export default function TabLayout() {
   const colorScheme = useColorScheme() ?? 'light';
   const colors = Colors[colorScheme];
+  const insets = useSafeAreaInsets();
+  const tabBarPaddingTop = 6;
+  const tabBarContentHeight = Platform.OS === 'ios' ? 49 : 52;
 
   return (
     <Tabs
@@ -41,8 +45,9 @@ export default function TabLayout() {
           backgroundColor: colors.card,
           borderTopColor: colors.border,
           borderTopWidth: 1,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          paddingTop: 6,
+          paddingTop: tabBarPaddingTop,
+          paddingBottom: insets.bottom,
+          height: tabBarContentHeight + tabBarPaddingTop + insets.bottom,
           ...shadow.sm,
         },
         headerStyle: {
