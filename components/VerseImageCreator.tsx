@@ -31,6 +31,7 @@ import {
   mergeUnsplashPhotos,
   previewDimensions,
 } from '@/lib/verseImageFormats';
+import { getVerseImageTemplate, saveVerseImageTemplate } from '@/lib/verseImageTemplate';
 
 const GRADIENTS = [
   { id: 'gold', colors: ['#92400e', '#451a03', '#1c1917'] as const },
@@ -249,6 +250,7 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
   const [photoReady, setPhotoReady] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [textSize, setTextSize] = useState(20);
+  const [templateSaved, setTemplateSaved] = useState(false);
   const gradient = GRADIENTS[gradientIdx];
   const imageStyle = IMAGE_STYLES.find((style) => style.id === styleId) ?? IMAGE_STYLES[0];
   const format = formatById(imageFormat);
@@ -315,6 +317,10 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
   }, [visible, text]);
 
   useEffect(() => {
+    setTemplateSaved(false);
+  }, [imageFormat, styleId, gradientIdx]);
+
+  useEffect(() => {
     if (!visible) return;
     setSearchQuery('');
     setActiveSearch(undefined);
@@ -329,8 +335,30 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
     setBgPosX(50);
     setBgPosY(50);
     setBgZoom(100);
-    loadPhotos(undefined, 1, false);
+    setTemplateSaved(false);
+    getVerseImageTemplate().then((template) => {
+      let formatId: ImageFormatId | undefined;
+      if (template) {
+        const gradientIdxFromTemplate = GRADIENTS.findIndex((g) => g.id === template.gradientId);
+        if (gradientIdxFromTemplate >= 0) setGradientIdx(gradientIdxFromTemplate);
+        if (IMAGE_STYLES.some((s) => s.id === template.styleId)) setStyleId(template.styleId as ImageStyleId);
+        if (IMAGE_FORMATS.some((f) => f.id === template.formatId)) {
+          formatId = template.formatId as ImageFormatId;
+          setImageFormat(formatId);
+        }
+      }
+      loadPhotos(undefined, 1, false, formatId);
+    });
   }, [visible, loadPhotos]);
+
+  const saveTemplate = async () => {
+    try {
+      await saveVerseImageTemplate({ formatId: imageFormat, styleId, gradientId: gradient.id });
+      setTemplateSaved(true);
+    } catch {
+      // sin espacio o storage no disponible: no bloquear al usuario
+    }
+  };
 
   const selectFormat = (id: ImageFormatId) => {
     setImageFormat(id);
@@ -454,7 +482,14 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
               })}
             </ScrollView>
 
-            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Diseño</Text>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Diseño</Text>
+              <Pressable onPress={() => void saveTemplate()} hitSlop={8} disabled={templateSaved}>
+                <Text style={{ color: templateSaved ? colors.textMuted : colors.primary, fontSize: 11, fontWeight: '700' }}>
+                  {templateSaved ? '✓ Estilo guardado' : 'Guardar como mi estilo'}
+                </Text>
+              </Pressable>
+            </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.styleRow}>
               {IMAGE_STYLES.map((style) => {
                 const active = styleId === style.id;
@@ -715,6 +750,7 @@ const styles = StyleSheet.create({
   adjustRow: { flexDirection: 'row', gap: 8 },
   adjustBtn: { flex: 1, borderWidth: 1, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
   sectionLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   gradientRow: { flexDirection: 'row', gap: 10, paddingVertical: 2 },
   gradientSwatch: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden' },
   searchRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
