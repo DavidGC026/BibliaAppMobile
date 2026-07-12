@@ -4,6 +4,7 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ReminderSettings } from '@/components/ReminderSettings';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -122,6 +123,7 @@ export default function ProfileScreen() {
       </View>
 
       <ThemeSwitch />
+      <ReminderSettings />
 
       {androidWidgetAvailable() ? (
         <Card style={styles.widgetHint}>

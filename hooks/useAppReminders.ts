@@ -4,7 +4,11 @@ import { AppState, Platform } from 'react-native';
 import { router } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import * as api from '@/lib/api';
 import { syncLocalReminders } from '@/lib/localNotifications';
+import { getOfflineDownloadSnapshot } from '@/lib/offlineDownloadManager';
+import { getReminderPreferences } from '@/lib/reminderPreferences';
+import { todayLocalStr } from '@/lib/readingToday';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 
 function handleNotificationNavigation(data: Record<string, unknown> | undefined) {
@@ -22,6 +26,14 @@ function handleNotificationNavigation(data: Record<string, unknown> | undefined)
   }
   if (data.type === 'streak-reminder') {
     router.push('/(tabs)/bible');
+    return;
+  }
+  if (data.type === 'devotional-reminder') {
+    router.push('/devotional/new');
+    return;
+  }
+  if (data.type === 'downloads-reminder') {
+    router.push('/downloads');
   }
 }
 
@@ -40,10 +52,29 @@ export function useAppReminders() {
   useEffect(() => {
     if (isLoading) return;
 
-    const run = () => {
+    const run = async () => {
+      const prefs = await getReminderPreferences();
+
+      let hasDevotionalToday = true;
+      if (!isGuest && prefs.devotionalReminder) {
+        try {
+          const { devotionals } = await api.listDevotionals();
+          const today = todayLocalStr();
+          hasDevotionalToday = devotionals.some((d) => (d.createdAt || '').slice(0, 10) === today);
+        } catch {
+          hasDevotionalToday = true;
+        }
+      }
+
+      const hasIncompleteDownloads = getOfflineDownloadSnapshot().some((task) => task.status === 'error');
+
       syncLocalReminders({
         streakCount: user?.streakCount ?? 0,
-        streakEnabled: !isGuest && (user?.streakCount ?? 0) > 0,
+        streakEnabled: !isGuest && prefs.streakReminder && (user?.streakCount ?? 0) > 0,
+        devotionalReminderEnabled: !isGuest && prefs.devotionalReminder,
+        hasDevotionalToday,
+        downloadsReminderEnabled: prefs.downloadsReminder,
+        hasIncompleteDownloads,
       }).catch(() => {});
     };
 
