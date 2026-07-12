@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 
 import { ActivityPanel } from '@/components/ActivityPanel';
+import { OnboardingCard } from '@/components/OnboardingCard';
 import { StatisticsPanel } from '@/components/StatisticsPanel';
 import { QuickActionCard } from '@/components/ui/QuickActionCard';
 import { StatCard } from '@/components/ui/StatCard';
@@ -238,6 +239,8 @@ export default function HomeScreen() {
           <Button label="Iniciar sesión" onPress={() => router.push('/login')} fullWidth />
         </Card>
       ) : null}
+
+      <OnboardingCard />
 
       <VerseOfDayCard />
 
