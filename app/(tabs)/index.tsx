@@ -25,7 +25,7 @@ import * as repo from '@/lib/repo';
 import { pickFeaturedDevotional, parseDevotionalContent } from '@/lib/devotional';
 import { getLastPassage, type LastPassage } from '@/lib/readerState';
 import type { RecentNotebookNote } from '@/lib/repo';
-import type { ChurchEvent, Devotional, FeedAnnouncement } from '@/lib/types';
+import type { ChurchEvent, Devotional, Favorite, FeedAnnouncement, HighlightItem } from '@/lib/types';
 
 function goBible(mode: 'reader' | 'search' | 'dictionary' = 'reader', strong?: string) {
   router.push({
@@ -49,6 +49,8 @@ export default function HomeScreen() {
   const [featuredDevotional, setFeaturedDevotional] = useState<Devotional | null>(null);
   const [lastPassage, setLastPassage] = useState<LastPassage | null>(null);
   const [recentNotes, setRecentNotes] = useState<RecentNotebookNote[]>([]);
+  const [recentFavorites, setRecentFavorites] = useState<Favorite[]>([]);
+  const [recentHighlights, setRecentHighlights] = useState<HighlightItem[]>([]);
 
   useEffect(() => {
     if (authLoading || isGuest) return;
@@ -82,13 +84,24 @@ export default function HomeScreen() {
         if (active) setLastPassage(passage);
       });
       if (!isGuest) {
-        repo.repoListRecentNotebookNotes(3).then(({ notes }) => {
-          if (active) setRecentNotes(notes);
-        }).catch(() => {
-          if (active) setRecentNotes([]);
+        Promise.all([
+          repo.repoListRecentNotebookNotes(3).catch(() => ({ notes: [] })),
+          repo.repoListFavorites().catch(() => ({ favorites: [] })),
+          repo.repoListRecentHighlights(3).catch(() => ({ highlights: [] })),
+        ]).then(([notesRes, favoritesRes, highlightsRes]) => {
+          if (!active) return;
+          setRecentNotes(notesRes.notes);
+          setRecentFavorites(
+            [...favoritesRes.favorites]
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .slice(0, 3),
+          );
+          setRecentHighlights(highlightsRes.highlights);
         });
       } else {
         setRecentNotes([]);
+        setRecentFavorites([]);
+        setRecentHighlights([]);
       }
       return () => {
         active = false;
@@ -107,6 +120,9 @@ export default function HomeScreen() {
   const firstName = user?.name?.split(' ')[0] ?? 'hermano';
   const spiritualProgress = devotionalCount > 0 ? 'Constante' : 'Iniciando';
   const featuredPreview = featuredDevotional ? parseDevotionalContent(featuredDevotional) : null;
+  const shownRecentDevotionals = featuredDevotional
+    ? recentDevotionals.filter((dev) => dev.id !== featuredDevotional.id).slice(0, 3)
+    : recentDevotionals;
 
   const createQuickNote = async () => {
     if (isGuest) {
@@ -137,6 +153,30 @@ export default function HomeScreen() {
 
   const openRecentNote = (note: RecentNotebookNote) => {
     router.push(`/note/${note.id}`);
+  };
+
+  const openFavorite = (favorite: Favorite) => {
+    router.push({
+      pathname: '/(tabs)/bible',
+      params: {
+        mode: 'reader',
+        bookId: String(favorite.book_id),
+        chapter: String(favorite.chapter),
+        bibleId: String(favorite.bible_id),
+      },
+    });
+  };
+
+  const openHighlight = (highlight: HighlightItem) => {
+    router.push({
+      pathname: '/(tabs)/bible',
+      params: {
+        mode: 'reader',
+        bookId: String(highlight.book_id),
+        chapter: String(highlight.chapter),
+        bibleId: String(highlight.bible_id),
+      },
+    });
   };
 
   return (
@@ -225,6 +265,66 @@ export default function HomeScreen() {
               </Card>
             ))}
           </View>
+        </View>
+      ) : null}
+
+      {!isGuest && recentFavorites.length > 0 ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Versículos guardados</Text>
+            <Pressable onPress={() => router.push('/favorites')}>
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Ver todos →</Text>
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedVersesRow}>
+            {recentFavorites.map((favorite) => (
+              <Card
+                key={favorite.id}
+                onPress={() => openFavorite(favorite)}
+                style={[styles.savedVerseCard, { borderColor: colors.primaryBorder }]}
+              >
+                <View style={styles.savedVerseHeader}>
+                  <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }} numberOfLines={1}>
+                    {favorite.book_name} {favorite.chapter}:{favorite.verse}
+                  </Text>
+                  <SymbolView name={{ ios: 'star.fill', android: 'star', web: 'star' }} tintColor="#F59E0B" size={15} />
+                </View>
+                <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }} numberOfLines={4}>
+                  {favorite.verse_text || 'Abrir pasaje guardado'}
+                </Text>
+              </Card>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      {!isGuest && recentHighlights.length > 0 ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Subrayados recientes</Text>
+            <Pressable onPress={() => router.push('/highlights')}>
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Ver todos →</Text>
+            </Pressable>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.savedVersesRow}>
+            {recentHighlights.map((highlight) => (
+              <Card
+                key={highlight.id}
+                onPress={() => openHighlight(highlight)}
+                style={[styles.savedVerseCard, { borderColor: highlightSwatch(highlight.color) }]}
+              >
+                <View style={styles.savedVerseHeader}>
+                  <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }} numberOfLines={1}>
+                    {highlight.book_name} {highlight.chapter}:{highlight.verse}
+                  </Text>
+                  <View style={[styles.highlightDot, { backgroundColor: highlightSwatch(highlight.color) }]} />
+                </View>
+                <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }} numberOfLines={4}>
+                  {highlight.text || 'Abrir versiculo subrayado'}
+                </Text>
+              </Card>
+            ))}
+          </ScrollView>
         </View>
       ) : null}
 
@@ -362,17 +462,21 @@ export default function HomeScreen() {
                 <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Ver diario →</Text>
               </Pressable>
             </View>
-            {recentDevotionals.length === 0 ? (
+            {shownRecentDevotionals.length === 0 ? (
               <Card style={styles.emptyCard} dashed>
                 <Text style={{ color: colors.textMuted, textAlign: 'center', fontSize: 14 }}>
-                  Aún no has escrito devocionales en tu diario espiritual.
+                  {featuredDevotional
+                    ? 'El devocional destacado es tu entrada mas reciente.'
+                    : 'Aún no has escrito devocionales en tu diario espiritual.'}
                 </Text>
-                <Pressable onPress={() => router.push('/devotional/new')} style={{ marginTop: 8 }}>
-                  <Text style={{ color: colors.primary, fontWeight: '700', textAlign: 'center' }}>Escribir el primero</Text>
-                </Pressable>
+                {!featuredDevotional ? (
+                  <Pressable onPress={() => router.push('/devotional/new')} style={{ marginTop: 8 }}>
+                    <Text style={{ color: colors.primary, fontWeight: '700', textAlign: 'center' }}>Escribir el primero</Text>
+                  </Pressable>
+                ) : null}
               </Card>
             ) : (
-              recentDevotionals.map((dev) => (
+              shownRecentDevotionals.map((dev) => (
                 <Card key={dev.id} onPress={() => router.push(`/devotional/read/${dev.id}`)} style={styles.devCard}>
                   <View style={[styles.devBadge, { backgroundColor: colors.primarySoft }]}>
                     <Text style={{ color: colors.primary, fontSize: 10, fontWeight: '700' }}>
@@ -465,6 +569,17 @@ function formatNoteDate(value: string) {
   return date.toLocaleDateString('es', { day: 'numeric', month: 'short' });
 }
 
+function highlightSwatch(color: string) {
+  const colors: Record<string, string> = {
+    yellow: '#F59E0B',
+    green: '#10B981',
+    blue: '#0EA5E9',
+    orange: '#F97316',
+    pink: '#EC4899',
+  };
+  return colors[color] ?? color;
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16 },
@@ -498,5 +613,9 @@ const styles = StyleSheet.create({
   recentNotesList: { gap: 10 },
   recentNoteCard: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   recentNoteIcon: { width: 38, height: 38, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  savedVersesRow: { gap: 12, paddingRight: 4 },
+  savedVerseCard: { width: 236, gap: 8, borderWidth: 1 },
+  savedVerseHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  highlightDot: { width: 14, height: 14, borderRadius: 7 },
   actions: { gap: 10 },
 });

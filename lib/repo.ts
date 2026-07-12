@@ -60,7 +60,7 @@ import {
 } from '@/lib/offline/studyStore';
 import { syncAll } from '@/lib/sync';
 import { nowIso } from '@/lib/db';
-import type { BibleVersion, Book, CrossReference, Notebook, NotebookNote, StrongEntry, Verse } from '@/lib/types';
+import type { BibleVersion, Book, CrossReference, HighlightItem, Notebook, NotebookNote, StrongEntry, Verse } from '@/lib/types';
 
 export { downloadBible, deleteDownloadedBible, getDownloadedSize, listLocalBibles, isBibleDownloaded };
 export {
@@ -474,6 +474,62 @@ export async function repoListFavorites() {
       verse: r.verse,
       verse_text: r.verse_text ?? '',
       created_at: r.created_at ?? '',
+    })),
+  };
+}
+
+export async function repoListRecentHighlights(limit = 3): Promise<{ highlights: HighlightItem[] }> {
+  if (getIsOnline()) {
+    try {
+      const res = await api.getAllHighlights();
+      return {
+        highlights: [...res.highlights]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, limit),
+      };
+    } catch {
+      // fall through
+    }
+  }
+
+  const { getAll } = await import('@/lib/db');
+  const rows = await getAll<{
+    id: number;
+    server_id: number | null;
+    bible_id: number;
+    book_id: number;
+    chapter: number;
+    verse: number;
+    color: string;
+    created_at: string | null;
+    book_name: string | null;
+    text: string | null;
+  }>(
+    `SELECT h.id, h.server_id, h.bible_id, h.book_id, h.chapter, h.verse, h.color, h.created_at,
+            b.book_name, v.text
+     FROM highlights h
+     LEFT JOIN books b ON b.bible_id = h.bible_id AND b.book_id = h.book_id
+     LEFT JOIN verses v ON v.bible_id = h.bible_id
+       AND v.book_id = h.book_id
+       AND v.chapter = h.chapter
+       AND v.verse = h.verse
+     WHERE h.deleted = 0
+     ORDER BY h.created_at DESC
+     LIMIT ?`,
+    [limit],
+  );
+
+  return {
+    highlights: rows.map((r) => ({
+      id: r.server_id ?? r.id,
+      book_id: r.book_id,
+      chapter: r.chapter,
+      verse: r.verse,
+      color: r.color,
+      created_at: r.created_at ?? '',
+      book_name: r.book_name ?? '',
+      text: r.text ?? '',
+      bible_id: r.bible_id,
     })),
   };
 }
