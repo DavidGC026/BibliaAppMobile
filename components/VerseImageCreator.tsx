@@ -46,6 +46,22 @@ const SERIF = Platform.select({ ios: 'Georgia', android: 'serif', default: 'seri
 const AMBER = '#fbbf24';
 
 type BgMode = 'gradient' | 'photo';
+type ImageStyleId = 'editorial' | 'minimal' | 'bold' | 'quiet';
+
+const IMAGE_STYLES: {
+  id: ImageStyleId;
+  label: string;
+  hint: string;
+  align: 'center' | 'left';
+  overlay: number;
+  accent: string;
+  serif: boolean;
+}[] = [
+  { id: 'editorial', label: 'Editorial', hint: 'Clásico y elegante', align: 'center', overlay: 0.35, accent: AMBER, serif: true },
+  { id: 'minimal', label: 'Minimal', hint: 'Limpio y sobrio', align: 'left', overlay: 0.46, accent: '#FFFFFF', serif: false },
+  { id: 'bold', label: 'Impacto', hint: 'Alto contraste', align: 'center', overlay: 0.58, accent: '#FDE68A', serif: false },
+  { id: 'quiet', label: 'Sereno', hint: 'Suave y contemplativo', align: 'left', overlay: 0.28, accent: '#BAE6FD', serif: true },
+];
 
 function textSizeForLength(len: number) {
   if (len > 220) return 15;
@@ -65,6 +81,7 @@ function VerseImageCard({
   bgPosY,
   bgZoom,
   textSize,
+  imageStyle,
   cardWidth,
   cardHeight,
   imageFormat,
@@ -80,6 +97,7 @@ function VerseImageCard({
   bgPosY: number;
   bgZoom: number;
   textSize: number;
+  imageStyle: (typeof IMAGE_STYLES)[number];
   cardWidth: number;
   cardHeight: number;
   imageFormat: ImageFormatId;
@@ -88,6 +106,9 @@ function VerseImageCard({
   const scale = Math.min(cardWidth, cardHeight) / 270;
   const scaledText = Math.round(textSize * scale);
   const pad = cardWidth * 0.08;
+  const textAlign = imageStyle.align;
+  const contentAlign = imageStyle.align === 'left' ? 'flex-start' : 'center';
+  const fontFamily = imageStyle.serif ? SERIF : Platform.select({ ios: 'System', android: 'sans-serif', default: 'sans-serif' });
 
   return (
     <View
@@ -113,20 +134,20 @@ function VerseImageCard({
         <LinearGradient colors={[...gradient.colors]} start={{ x: 0.15, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
       )}
 
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: 0.35 }]} />
-      <LinearGradient colors={['rgba(0,0,0,0.25)', 'transparent', 'rgba(0,0,0,0.35)']} style={StyleSheet.absoluteFill} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000', opacity: imageStyle.overlay }]} />
+      <LinearGradient colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.42)']} style={StyleSheet.absoluteFill} />
       <LinearGradient
-        colors={['rgba(251,191,36,0.12)', 'transparent']}
+        colors={[`${imageStyle.accent}26`, 'transparent']}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '30%' }}
       />
 
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: pad }}>
+      <View style={{ flex: 1, alignItems: contentAlign, justifyContent: 'center', padding: pad }}>
         <Text
           style={{
-            fontFamily: SERIF,
+            fontFamily,
             fontSize: scaledText * 2.2,
             lineHeight: scaledText * 2.2,
-            color: 'rgba(251,191,36,0.25)',
+            color: `${imageStyle.accent}40`,
             marginBottom: scaledText * 0.2,
           }}
         >
@@ -135,28 +156,29 @@ function VerseImageCard({
 
         <Text
           style={{
-            fontFamily: SERIF,
-            fontStyle: 'italic',
+            fontFamily,
+            fontStyle: imageStyle.serif ? 'italic' : 'normal',
+            fontWeight: imageStyle.id === 'bold' ? '800' : '500',
             fontSize: scaledText,
             lineHeight: scaledText * 1.55,
             color: '#ffffff',
-            textAlign: 'center',
+            textAlign,
             textShadowColor: 'rgba(0,0,0,0.5)',
             textShadowOffset: { width: 0, height: 2 },
             textShadowRadius: 20,
             marginBottom: scaledText * 0.6,
-            maxWidth: '92%',
+            maxWidth: imageStyle.align === 'left' ? '96%' : '92%',
           }}
         >
           {text}
         </Text>
 
         <LinearGradient
-          colors={['transparent', AMBER, 'transparent']}
+          colors={imageStyle.align === 'left' ? [imageStyle.accent, imageStyle.accent] : ['transparent', imageStyle.accent, 'transparent']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
           style={{
-            width: scaledText * 1.8,
+            width: imageStyle.align === 'left' ? scaledText * 2.4 : scaledText * 1.8,
             height: Math.max(2, scale * 2),
             borderRadius: 999,
             marginBottom: scaledText * 0.45,
@@ -168,12 +190,12 @@ function VerseImageCard({
             fontWeight: '600',
             letterSpacing: 1.5,
             textTransform: 'uppercase',
-            color: 'rgba(251,191,36,0.9)',
+            color: imageStyle.accent,
             fontSize: Math.max(11, scaledText * 0.48),
             textShadowColor: 'rgba(0,0,0,0.4)',
             textShadowOffset: { width: 0, height: 1 },
             textShadowRadius: 8,
-            textAlign: 'center',
+            textAlign,
           }}
         >
           {reference}
@@ -210,6 +232,7 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
   const imageFormatRef = useRef<ImageFormatId>('9:16');
   const [imageFormat, setImageFormat] = useState<ImageFormatId>('9:16');
   const [gradientIdx, setGradientIdx] = useState(0);
+  const [styleId, setStyleId] = useState<ImageStyleId>('editorial');
   const [bgMode, setBgMode] = useState<BgMode>('gradient');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
@@ -227,6 +250,7 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
   const [exporting, setExporting] = useState(false);
   const [textSize, setTextSize] = useState(20);
   const gradient = GRADIENTS[gradientIdx];
+  const imageStyle = IMAGE_STYLES.find((style) => style.id === styleId) ?? IMAGE_STYLES[0];
   const format = formatById(imageFormat);
   const exportW = format.width;
   const exportH = format.height;
@@ -247,6 +271,7 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
     bgPosY,
     bgZoom,
     textSize,
+    imageStyle,
     cardWidth: exportW,
     cardHeight: exportH,
     imageFormat,
@@ -299,6 +324,7 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
     setPhotoUri(null);
     setSelectedPhotoId(null);
     setGradientIdx(0);
+    setStyleId('editorial');
     setImageFormat('9:16');
     setBgPosX(50);
     setBgPosY(50);
@@ -378,12 +404,12 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
     try {
       const uri = await captureImage();
       if (!uri) return;
-      const perm = await MediaLibrary.requestPermissionsAsync();
+      const perm = await MediaLibrary.requestPermissionsAsync(true);
       if (!perm.granted) {
         Alert.alert('Permiso requerido', 'Necesitamos acceso para guardar la imagen en tu galería.');
         return;
       }
-      await MediaLibrary.saveToLibraryAsync(uri);
+      await MediaLibrary.Asset.create(uri);
       Alert.alert('Guardada', 'La imagen se guardó en tu galería.');
     } catch {
       Alert.alert('Error', 'No se pudo guardar la imagen.');
@@ -423,6 +449,29 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
                     <View style={{ width: fmt.previewW, height: fmt.previewH, borderWidth: 2, borderColor: active ? colors.primary : colors.textMuted, borderRadius: 3 }} />
                     <Text style={{ color: active ? colors.primary : colors.text, fontSize: 10, fontWeight: '700' }}>{fmt.label}</Text>
                     <Text style={{ color: colors.textMuted, fontSize: 8 }}>{fmt.hint}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Diseño</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.styleRow}>
+              {IMAGE_STYLES.map((style) => {
+                const active = styleId === style.id;
+                return (
+                  <Pressable
+                    key={style.id}
+                    onPress={() => setStyleId(style.id)}
+                    style={[
+                      styles.styleBtn,
+                      {
+                        borderColor: active ? colors.primary : colors.border,
+                        backgroundColor: active ? `${colors.primary}18` : colors.muted,
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: active ? colors.primary : colors.text, fontSize: 13, fontWeight: '800' }}>{style.label}</Text>
+                    <Text style={{ color: colors.textMuted, fontSize: 10 }}>{style.hint}</Text>
                   </Pressable>
                 );
               })}
@@ -482,6 +531,15 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
                   </Pressable>
                   <Pressable onPress={() => setBgPosX((v) => Math.min(100, v + 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
                     <Text style={{ color: colors.text }}>→</Text>
+                  </Pressable>
+                </View>
+                <Text style={[styles.adjustLabel, { color: colors.textMuted }]}>Mover fondo ↑ ↓</Text>
+                <View style={styles.adjustRow}>
+                  <Pressable onPress={() => setBgPosY((v) => Math.max(0, v - 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
+                    <Text style={{ color: colors.text }}>↑</Text>
+                  </Pressable>
+                  <Pressable onPress={() => setBgPosY((v) => Math.min(100, v + 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
+                    <Text style={{ color: colors.text }}>↓</Text>
                   </Pressable>
                 </View>
               </View>
@@ -648,6 +706,8 @@ const styles = StyleSheet.create({
   exportCanvas: { position: 'absolute', left: -9999, opacity: 0 },
   formatRow: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
   formatBtn: { alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 8 },
+  styleRow: { flexDirection: 'row', gap: 8, paddingVertical: 2 },
+  styleBtn: { width: 132, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, gap: 2 },
   adjustBox: { borderWidth: 1, borderRadius: 10, padding: 10, gap: 6 },
   textSizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   textSizeValue: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700' },

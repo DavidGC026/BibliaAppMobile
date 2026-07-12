@@ -11,6 +11,7 @@ import { NetworkProvider } from '@/context/NetworkContext';
 import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
 import Colors from '@/constants/Colors';
 import { loadAllDownloadedFonts } from '@/lib/fontManager';
+import { hydrateOfflineDownloads } from '@/lib/offlineDownloadManager';
 import { initOffline } from '@/lib/repo';
 import { useAppReminders } from '@/hooks/useAppReminders';
 
@@ -36,6 +37,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       initOffline().catch(() => {});
+      hydrateOfflineDownloads().catch((err) => console.error('Failed to hydrate offline downloads:', err));
       loadAllDownloadedFonts()
         .catch((err) => console.error('Failed to load user fonts on startup:', err))
         .finally(() => {

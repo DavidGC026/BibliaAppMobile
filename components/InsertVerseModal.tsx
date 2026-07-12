@@ -7,8 +7,10 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
@@ -34,6 +36,7 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
   const [bookId, setBookId] = useState<number | null>(null);
   const [chapter, setChapter] = useState(1);
   const [selected, setSelected] = useState<Pick<Verse, 'verse' | 'text'>[]>([]);
+  const [query, setQuery] = useState('');
   const [loadingVerses, setLoadingVerses] = useState(false);
 
   useEffect(() => {
@@ -55,6 +58,7 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
     if (!visible || !bookId) return;
     setLoadingVerses(true);
     setSelected([]);
+    setQuery('');
     api
       .getVerses(bibleId, bookId, chapter)
       .then(({ verses: list }) => setVerses(list))
@@ -65,6 +69,9 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
   const selectedBook = books.find((b) => b.bookId === bookId);
   const selectedBible = bibles.find((b) => b.bibleId === bibleId);
   const maxChapter = selectedBook?.chapters ?? 1;
+  const filteredVerses = query.trim()
+    ? verses.filter((v) => `${v.verse} ${v.text}`.toLowerCase().includes(query.trim().toLowerCase()))
+    : verses;
 
   const toggleVerse = (v: Verse) => {
     setSelected((prev) => {
@@ -143,7 +150,9 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
         </View>
 
         <View style={styles.listHeader}>
-          <Text style={{ color: colors.textMuted, fontWeight: '700', fontSize: 12 }}>SELECCIONA VERSÍCULOS</Text>
+          <Text style={{ color: colors.textMuted, fontWeight: '700', fontSize: 12 }}>
+            {selectedBook ? `${selectedBook.bookName} ${chapter}` : 'SELECCIONA VERSÍCULOS'}
+          </Text>
           {verses.length > 0 ? (
             <Pressable onPress={toggleAll}>
               <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 12 }}>
@@ -153,11 +162,43 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
           ) : null}
         </View>
 
+        <View style={styles.tools}>
+          <View style={[styles.searchWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor={colors.textMuted} size={16} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.text }]}
+              placeholder="Filtrar en este capítulo..."
+              placeholderTextColor={colors.textMuted}
+              value={query}
+              onChangeText={setQuery}
+            />
+          </View>
+          <View style={styles.chapterNav}>
+            <Pressable
+              style={[styles.chapterBtn, { borderColor: colors.border, opacity: chapter <= 1 ? 0.45 : 1 }]}
+              disabled={chapter <= 1}
+              onPress={() => setChapter((ch) => Math.max(1, ch - 1))}
+            >
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Anterior</Text>
+            </Pressable>
+            <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+              {chapter} / {maxChapter}
+            </Text>
+            <Pressable
+              style={[styles.chapterBtn, { borderColor: colors.border, opacity: chapter >= maxChapter ? 0.45 : 1 }]}
+              disabled={chapter >= maxChapter}
+              onPress={() => setChapter((ch) => Math.min(maxChapter, ch + 1))}
+            >
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>Siguiente</Text>
+            </Pressable>
+          </View>
+        </View>
+
         {loadingVerses ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 32 }} />
         ) : (
           <FlatList
-            data={verses}
+            data={filteredVerses}
             keyExtractor={(item) => String(item.id)}
             contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
             renderItem={({ item }) => {
@@ -219,6 +260,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
+  tools: { paddingHorizontal: 12, paddingBottom: 10, gap: 8 },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  chapterNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  chapterBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   list: { padding: 12, paddingTop: 0, gap: 8 },
   verseRow: {
     flexDirection: 'row',

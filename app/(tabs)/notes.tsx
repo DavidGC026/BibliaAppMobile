@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 
 import { DevotionalsPanel } from '@/components/notes/DevotionalsPanel';
 import { NotebooksPanel } from '@/components/notes/NotebooksPanel';
@@ -13,9 +14,9 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 type NotesSection = 'libretas' | 'diario' | 'libros';
 
 const TABS: { key: NotesSection; label: string }[] = [
-  { key: 'libretas', label: 'Libretas' },
+  { key: 'libretas', label: 'Notas' },
   { key: 'diario', label: 'Diario' },
-  { key: 'libros', label: 'Libros' },
+  { key: 'libros', label: 'Biblioteca' },
 ];
 
 export default function NotesScreen() {
@@ -35,7 +36,7 @@ export default function NotesScreen() {
     return (
       <GuestPrompt
         title="Notas"
-        message="Inicia sesión para acceder a libretas, diario espiritual y libros de estudio."
+        message="Inicia sesión para escribir, organizar y sincronizar tus notas en todos tus dispositivos."
       />
     );
   }
@@ -44,10 +45,15 @@ export default function NotesScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <OfflineBanner />
       <View style={styles.topHeader}>
-        <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>
-        <Text style={{ color: colors.textMuted, fontSize: 14 }}>
-          Libretas, vida espiritual y biblioteca personal.
-        </Text>
+        <View style={[styles.headerIcon, { backgroundColor: colors.primarySoft }]}>
+          <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={20} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
+            Un espacio flexible para ideas, apuntes, investigación y lectura.
+          </Text>
+        </View>
       </View>
       <SegmentTabs tabs={TABS} active={section} onChange={setSection} />
       {section === 'libretas' ? <NotebooksPanel /> : null}
@@ -59,5 +65,6 @@ export default function NotesScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topHeader: { paddingHorizontal: 16, paddingTop: 8, gap: 4 },
+  topHeader: { paddingHorizontal: 16, paddingTop: 8, gap: 12, flexDirection: 'row', alignItems: 'center' },
+  headerIcon: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
 });

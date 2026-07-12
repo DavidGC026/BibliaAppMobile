@@ -65,12 +65,24 @@ export function FontSelectorModal({
       await downloadFont(font);
       const list = await getDownloadedFonts();
       setDownloadedList(list);
-      Alert.alert('Éxito', `Fuente ${font.name} descargada e instalada correctamente.`);
+      return true;
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo descargar la fuente.');
+      return false;
     } finally {
       setDownloadingId(null);
     }
+  };
+
+  const selectOrDownload = async (font: FontItem) => {
+    const isDownloaded =
+      font.url === '' || downloadedList.some((f) => f.id === font.id);
+    if (!isDownloaded) {
+      const downloaded = await handleDownload(font);
+      if (!downloaded) return;
+    }
+    onSelect(font.id);
+    onClose();
   };
 
   const handleDelete = async (fontId: string) => {
@@ -113,7 +125,11 @@ export function FontSelectorModal({
 
       if (!isRegistered) {
         // Automatically start download
-        await handleDownload(newFont);
+        const downloaded = await handleDownload(newFont);
+        if (downloaded) {
+          onSelect(newFont.id);
+          onClose();
+        }
       } else {
         Alert.alert('Info', 'Esta fuente ya está en tu catálogo o descargada.');
       }
@@ -148,14 +164,7 @@ export function FontSelectorModal({
       >
         <Pressable
           style={styles.itemClickable}
-          onPress={() => {
-            if (isDownloaded) {
-              onSelect(item.id);
-              onClose();
-            } else {
-              handleDownload(item);
-            }
-          }}
+          onPress={() => void selectOrDownload(item)}
         >
           <View style={styles.itemTextContainer}>
             <Text
@@ -179,7 +188,7 @@ export function FontSelectorModal({
           ) : !isDownloaded ? (
             <Pressable
               style={[styles.downloadBtn, { backgroundColor: colors.primary }]}
-              onPress={() => handleDownload(item)}
+              onPress={() => void selectOrDownload(item)}
             >
               <Text style={{ color: colors.primaryForeground, fontWeight: '700', fontSize: 11 }}>
                 Descargar

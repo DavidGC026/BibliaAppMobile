@@ -320,10 +320,11 @@ export async function updateNotebookNote(
   title: string,
   content: string,
   tags?: string[],
+  notebookId?: number,
 ) {
   return request<{ ok: boolean }>(`/api/notebooks/notes/${noteId}`, {
     method: 'PUT',
-    body: JSON.stringify({ title, content, tags }),
+    body: JSON.stringify({ title, content, tags, notebookId }),
   });
 }
 

@@ -39,7 +39,11 @@ export function getEditorHtml(
   });
 
   const fontFamily =
-    activeFont === 'Default' ? 'system-ui, sans-serif' : `'${activeFont}', sans-serif`;
+    activeFont === 'Default'
+      ? 'system-ui, sans-serif'
+      : activeFont === 'serif' || activeFont === 'monospace'
+        ? activeFont
+        : `'${activeFont}', sans-serif`;
 
   const colorsJson = JSON.stringify(favoriteColors);
 
@@ -385,8 +389,9 @@ export function getEditorHtml(
 
       <!-- Row 3: Aux actions -->
       <div class="aux-row">
-        <button class="aux-btn" data-action="insertVerse">📖 Insertar versículo</button>
-        <button class="aux-btn aux-btn-dict" data-action="insertDictionary">📚 Insertar del diccionario</button>
+        <button class="aux-btn" data-action="insertVerse">Versículo</button>
+        <button class="aux-btn" data-action="insertReferences">Referencias</button>
+        <button class="aux-btn aux-btn-dict" data-action="insertDictionary">Diccionario</button>
       </div>
     </div>
   </div>
@@ -405,6 +410,37 @@ export function getEditorHtml(
       var savedRange = null;
       var scrollTimer = null;
       var keyboardInset = 0;
+
+      function cssEscape(value) {
+        return String(value).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'");
+      }
+
+      function ensureDynamicFontStyle() {
+        var style = document.getElementById('dynamic-font-faces');
+        if (!style) {
+          style = document.createElement('style');
+          style.id = 'dynamic-font-faces';
+          document.head.appendChild(style);
+        }
+        return style;
+      }
+
+      function buildFontFaces(fonts) {
+        var css = '';
+        Object.keys(fonts || {}).forEach(function(fontId) {
+          var b64 = fonts[fontId];
+          if (!b64) return;
+          var safeId = cssEscape(fontId);
+          css += "@font-face{font-family:'" + safeId + "';src:url('data:font/ttf;base64," + b64 + "') format('truetype');font-weight:normal;font-style:normal;font-display:swap;}\\n";
+        });
+        return css;
+      }
+
+      function fontStack(fontId) {
+        if (fontId === 'Default') return 'system-ui, sans-serif';
+        if (fontId === 'serif' || fontId === 'monospace') return fontId;
+        return "'" + cssEscape(fontId) + "', sans-serif";
+      }
 
       function saveSelection() {
         var sel = window.getSelection();
@@ -600,6 +636,11 @@ export function getEditorHtml(
 
         if (action === 'insertTable') {
           openTablePicker();
+          return;
+        }
+
+        if (action === 'insertReferences') {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openReferenceModal' }));
           return;
         }
 
@@ -884,6 +925,12 @@ export function getEditorHtml(
           });
         });
 
+        document.querySelectorAll('.aux-btn[data-action="insertReferences"]').forEach(function(btn) {
+          bindToolbarButton(btn, function() {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openReferenceModal' }));
+          });
+        });
+
         document.querySelectorAll('.aux-btn[data-action="insertDictionary"]').forEach(function(btn) {
           bindToolbarButton(btn, function() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openDictionaryModal' }));
@@ -979,6 +1026,10 @@ export function getEditorHtml(
             renderColors();
             return;
           }
+          if (action.type === 'loadFonts') {
+            ensureDynamicFontStyle().textContent = buildFontFaces(action.value || {});
+            return;
+          }
           if (action.type === 'setKeyboardInset') {
             keyboardInset = action.value || 0;
             if (keyboardInset > 0) scrollCaretIntoView();
@@ -992,14 +1043,20 @@ export function getEditorHtml(
           editor.focus();
 
           if (action.type === 'setFont') {
+            restoreSelection();
+            var fontValue = action.value === 'Default' ? 'system-ui' : action.value;
             var sel = window.getSelection();
-            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-              document.execCommand('fontName', false, action.value);
+            if (sel && sel.rangeCount > 0) {
+              document.execCommand('fontName', false, fontValue);
+              savedRange = sel.getRangeAt(0).cloneRange();
             } else {
-              editor.style.fontFamily = action.value === 'Default' ? 'system-ui, sans-serif' : "'" + action.value + "', sans-serif";
+              editor.style.fontFamily = fontStack(action.value);
             }
+            editor.style.fontFamily = fontStack(action.value);
           } else if (action.type === 'insertVerse') {
             insertHtmlAtSelection(buildVerseBlockHtml(action.value));
+          } else if (action.type === 'insertReferences') {
+            insertHtmlAtSelection(action.value);
           } else if (action.type === 'insertDictionary') {
             insertHtmlAtSelection(buildDictBlockHtml(action.value));
           }

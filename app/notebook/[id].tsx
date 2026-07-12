@@ -4,8 +4,10 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   Pressable,
   RefreshControl,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -19,8 +21,19 @@ import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as repo from '@/lib/repo';
-import { noteTagStyle, parseNoteTags, stripNotePreview } from '@/lib/notebookCovers';
+import {
+  countNoteWords,
+  estimateNoteReadMinutes,
+  isNotePinned,
+  noteHtmlToPlainText,
+  noteTagStyle,
+  parseNoteTags,
+  stripNotePreview,
+  togglePinnedNoteTag,
+} from '@/lib/notebookCovers';
 import type { Notebook, NotebookNote } from '@/lib/types';
+
+type NoteSort = 'recent' | 'title' | 'long';
 
 function formatDate(iso: string) {
   try {
@@ -34,8 +47,19 @@ function formatDate(iso: string) {
   }
 }
 
+function formatCompactDate(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'short',
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export default function NotebookDetailScreen() {
-  const { colors, radius, isDark } = useAppTheme();
+  const { colors, radius, isDark, shadow } = useAppTheme();
   const contentPadding = useContentPadding();
   const { id } = useLocalSearchParams<{ id: string }>();
   const notebookId = Number(id);
@@ -46,7 +70,9 @@ export default function NotebookDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<NoteSort>('recent');
   const [configOpen, setConfigOpen] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<NotebookNote | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -69,11 +95,27 @@ export default function NotebookDetailScreen() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return notes;
-    return notes.filter(
-      (n) => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q),
-    );
-  }, [notes, search]);
+    const sorted = [...notes].sort((a, b) => {
+      const pinnedDelta = Number(isNotePinned(b.tags)) - Number(isNotePinned(a.tags));
+      if (pinnedDelta !== 0) return pinnedDelta;
+      if (sortBy === 'title') return a.title.localeCompare(b.title, 'es');
+      if (sortBy === 'long') return countNoteWords(b.content) - countNoteWords(a.content);
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+    if (!q) return sorted;
+    return sorted.filter((n) => {
+      const plain = noteHtmlToPlainText(n.content);
+      return n.title.toLowerCase().includes(q) || plain.toLowerCase().includes(q);
+    });
+  }, [notes, search, sortBy]);
+
+  const totalWords = useMemo(() => notes.reduce((sum, note) => sum + countNoteWords(note.content), 0), [notes]);
+  const lastUpdated = useMemo(() => {
+    if (!notes.length) return null;
+    return notes.reduce((latest, note) => (
+      new Date(note.updatedAt).getTime() > new Date(latest).getTime() ? note.updatedAt : latest
+    ), notes[0].updatedAt);
+  }, [notes]);
 
   const saveNotebook = async (name: string, coverImage: string) => {
     if (!notebook) return;
@@ -116,6 +158,33 @@ export default function NotebookDetailScreen() {
         },
       },
     ]);
+  };
+
+  const togglePin = async (note: NotebookNote) => {
+    try {
+      await repo.repoUpdateNotebookNote(note.id, note.title, note.content, togglePinnedNoteTag(note.tags));
+      await load();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo actualizar la nota');
+    }
+  };
+
+  const shareNote = async (note: NotebookNote) => {
+    const body = noteHtmlToPlainText(note.content);
+    await Share.share({
+      title: note.title || 'Nota',
+      message: `${note.title || 'Sin título'}${body ? `\n\n${body}` : ''}`,
+    });
+  };
+
+  const moveNote = async (note: NotebookNote, targetNotebookId: number) => {
+    try {
+      await repo.repoMoveNotebookNote(note.id, targetNotebookId);
+      setMoveTarget(null);
+      await load();
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo mover la nota');
+    }
   };
 
   return (
@@ -167,8 +236,8 @@ export default function NotebookDetailScreen() {
                     <Text style={[styles.notebookTitle, { color: colors.text }]} numberOfLines={2}>
                       {notebook.name}
                     </Text>
-                    <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-                      {notes.length} {notes.length === 1 ? 'nota' : 'notas'} escritas
+                    <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
+                      {notes.length} {notes.length === 1 ? 'nota' : 'notas'} · {totalWords} palabras
                     </Text>
                   </View>
                   <Pressable onPress={() => setConfigOpen(true)} hitSlop={8} style={[styles.iconBtn, { borderColor: colors.border }]}>
@@ -189,6 +258,48 @@ export default function NotebookDetailScreen() {
                     onChangeText={setSearch}
                   />
                 </View>
+
+                <View style={styles.summaryRow}>
+                  <View style={[styles.summaryBox, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{notes.length}</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Notas</Text>
+                  </View>
+                  <View style={[styles.summaryBox, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{totalWords}</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Palabras</Text>
+                  </View>
+                  <View style={[styles.summaryBox, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+                    <Text style={[styles.summaryValue, { color: colors.text }]}>{lastUpdated ? formatCompactDate(lastUpdated) : '-'}</Text>
+                    <Text style={[styles.summaryLabel, { color: colors.textMuted }]}>Última</Text>
+                  </View>
+                </View>
+
+                <View style={styles.sortRow}>
+                  {[
+                    ['recent', 'Recientes'],
+                    ['title', 'A-Z'],
+                    ['long', 'Largas'],
+                  ].map(([key, label]) => {
+                    const selected = sortBy === key;
+                    return (
+                      <Pressable
+                        key={key}
+                        onPress={() => setSortBy(key as NoteSort)}
+                        style={[
+                          styles.sortChip,
+                          {
+                            backgroundColor: selected ? colors.primarySoft : colors.card,
+                            borderColor: selected ? colors.primaryBorder : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={{ color: selected ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             ) : null
           }
@@ -207,16 +318,57 @@ export default function NotebookDetailScreen() {
           }
           renderItem={({ item }) => {
             const tags = parseNoteTags(item.tags);
+            const pinned = isNotePinned(item.tags);
             return (
               <Pressable
-                style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+                style={[styles.card, shadow.sm, { backgroundColor: colors.card, borderColor: colors.border }]}
                 onPress={() => router.push(`/note/${item.id}`)}
               >
                 <View style={styles.cardHeader}>
+                  {pinned ? (
+                    <SymbolView name={{ ios: 'pin.fill', android: 'push_pin', web: 'push_pin' }} tintColor={colors.primary} size={15} />
+                  ) : null}
                   <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
                     {item.title || 'Sin título'}
                   </Text>
-                  <Pressable onPress={() => deleteNote(item)} hitSlop={8}>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      togglePin(item);
+                    }}
+                    hitSlop={8}
+                  >
+                    <SymbolView
+                      name={pinned ? { ios: 'pin.slash', android: 'keep_off', web: 'keep_off' } : { ios: 'pin', android: 'push_pin', web: 'push_pin' }}
+                      tintColor={pinned ? colors.primary : colors.textMuted}
+                      size={16}
+                    />
+                  </Pressable>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      setMoveTarget(item);
+                    }}
+                    hitSlop={8}
+                  >
+                    <SymbolView name={{ ios: 'folder', android: 'drive_file_move', web: 'drive_file_move' }} tintColor={colors.textMuted} size={16} />
+                  </Pressable>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      void shareNote(item);
+                    }}
+                    hitSlop={8}
+                  >
+                    <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.textMuted} size={16} />
+                  </Pressable>
+                  <Pressable
+                    onPress={(event) => {
+                      event.stopPropagation();
+                      deleteNote(item);
+                    }}
+                    hitSlop={8}
+                  >
                     <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.textMuted} size={16} />
                   </Pressable>
                 </View>
@@ -248,6 +400,11 @@ export default function NotebookDetailScreen() {
                   <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
                     Actualizado: {formatDate(item.updatedAt)}
                   </Text>
+                  <View style={styles.footerSpacer} />
+                  <SymbolView name={{ ios: 'text.alignleft', android: 'notes', web: 'notes' }} tintColor={colors.textMuted} size={12} />
+                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
+                    {estimateNoteReadMinutes(item.content)} min
+                  </Text>
                 </View>
               </Pressable>
             );
@@ -267,7 +424,73 @@ export default function NotebookDetailScreen() {
           onSave={saveNotebook}
         />
       ) : null}
+
+      <MoveNoteModal
+        visible={!!moveTarget}
+        note={moveTarget}
+        currentNotebookId={notebookId}
+        onClose={() => setMoveTarget(null)}
+        onMove={moveNote}
+      />
     </>
+  );
+}
+
+function MoveNoteModal({
+  visible,
+  note,
+  currentNotebookId,
+  onClose,
+  onMove,
+}: {
+  visible: boolean;
+  note: NotebookNote | null;
+  currentNotebookId: number;
+  onClose: () => void;
+  onMove: (note: NotebookNote, targetNotebookId: number) => void;
+}) {
+  const { colors } = useAppTheme();
+  const [notebooks, setNotebooks] = useState<Notebook[]>([]);
+
+  useEffect(() => {
+    if (!visible) return;
+    repo.repoListNotebooks().then(({ notebooks: list }) => setNotebooks(list)).catch(() => setNotebooks([]));
+  }, [visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.moveModal, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.moveTitle, { color: colors.text }]}>Mover nota</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 13 }} numberOfLines={2}>
+            {note?.title || 'Sin título'}
+          </Text>
+          <FlatList
+            data={notebooks.filter((item) => item.id !== currentNotebookId)}
+            keyExtractor={(item) => String(item.id)}
+            style={{ maxHeight: 280 }}
+            ListEmptyComponent={
+              <Text style={{ color: colors.textMuted, textAlign: 'center', paddingVertical: 18 }}>
+                No hay otra libreta disponible.
+              </Text>
+            }
+            renderItem={({ item }) => (
+              <Pressable
+                style={[styles.moveOption, { borderColor: colors.border }]}
+                onPress={() => {
+                  if (note) onMove(note, item.id);
+                }}
+              >
+                <Text style={{ color: colors.text, fontWeight: '700' }}>{item.name}</Text>
+              </Pressable>
+            )}
+          />
+          <Pressable onPress={onClose} style={styles.moveCancel}>
+            <Text style={{ color: colors.primary, fontWeight: '700', textAlign: 'center' }}>Cancelar</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -294,6 +517,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  summaryRow: { flexDirection: 'row', gap: 8 },
+  summaryBox: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 10, gap: 2 },
+  summaryValue: { fontSize: 15, fontWeight: '800' },
+  summaryLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+  sortRow: { flexDirection: 'row', gap: 8 },
+  sortChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   card: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 10, gap: 8 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   title: { fontSize: 16, fontWeight: '700', flex: 1 },
@@ -307,6 +536,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     marginTop: 2,
   },
+  footerSpacer: { flex: 1 },
   empty: {
     alignItems: 'center',
     gap: 10,
@@ -316,4 +546,15 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderRadius: 16,
   },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  moveModal: { width: '100%', borderWidth: 1, borderRadius: 14, padding: 16, gap: 12 },
+  moveTitle: { fontSize: 18, fontWeight: '800' },
+  moveOption: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, marginBottom: 8 },
+  moveCancel: { paddingVertical: 10 },
 });

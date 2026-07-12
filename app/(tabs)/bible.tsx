@@ -1,6 +1,7 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BibleReader } from '@/components/BibleReader';
@@ -69,6 +70,24 @@ export default function BibleScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <SegmentTabs tabs={MODES} active={mode} onChange={setMode} />
 
+      <Pressable
+        onPress={() => router.push('/downloads')}
+        style={({ pressed }) => [
+          styles.offlineStrip,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            opacity: pressed ? 0.8 : 1,
+          },
+        ]}
+      >
+        <SymbolView name={{ ios: 'arrow.down.circle.fill', android: 'download', web: 'download' }} tintColor={colors.primary} size={18} />
+        <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700', flex: 1 }}>
+          Descargar Biblia para leer sin conexión
+        </Text>
+        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>Abrir</Text>
+      </Pressable>
+
       {mode === 'reader' ? (
         <BibleReader
           key={readerTarget ? `${readerTarget.bookId}-${readerTarget.chapter}-${readerBibleId ?? ''}` : 'default'}
@@ -88,3 +107,18 @@ export default function BibleScreen() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  offlineStrip: {
+    marginHorizontal: 12,
+    marginTop: 6,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+});

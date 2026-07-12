@@ -23,6 +23,7 @@ import {
   getLocalNote,
   listLocalNotebooks,
   listLocalNotes,
+  moveLocalNote,
   resolveNotebookLocalId,
   updateLocalNotebook,
   updateLocalNote,
@@ -340,6 +341,30 @@ export async function repoUpdateNotebookNote(noteId: number, title: string, cont
   }
   await updateLocalNote(noteId, finalTitle, content, tags ? JSON.stringify(tags) : undefined);
   return { ok: true };
+}
+
+export async function repoMoveNotebookNote(noteId: number, notebookId: number) {
+  const note = await repoGetNotebookNote(noteId);
+  if (useRemote() && noteId > 0 && notebookId > 0) {
+    try {
+      await api.updateNotebookNote(noteId, note.note.title, note.note.content, parseTags(note.note.tags), notebookId);
+      const fresh = await api.getNotebookNote(noteId);
+      await upsertNoteFromServer(fresh.note);
+      return { ok: true };
+    } catch {
+      // cae a cola offline
+    }
+  }
+  await moveLocalNote(noteId, notebookId);
+  return { ok: true };
+}
+
+function parseTags(raw?: string): string[] | undefined {
+  try {
+    return raw ? JSON.parse(raw) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function repoDeleteNotebookNote(noteId: number) {

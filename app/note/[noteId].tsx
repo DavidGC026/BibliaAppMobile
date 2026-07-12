@@ -16,9 +16,11 @@ import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
+import { SymbolView } from 'expo-symbols';
 
 import { FontSelectorModal } from '@/components/FontSelectorModal';
 import { InsertDictionaryModal } from '@/components/InsertDictionaryModal';
+import { InsertReferenceModal } from '@/components/InsertReferenceModal';
 import { InsertVerseModal } from '@/components/InsertVerseModal';
 import { NoteContent } from '@/components/NoteContent';
 import { useNetwork } from '@/context/NetworkContext';
@@ -28,6 +30,7 @@ import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
 import { getDownloadedFonts } from '@/lib/fontManager';
+import { countNoteWords, estimateNoteReadMinutes } from '@/lib/notebookCovers';
 import type { StrongEntry } from '@/lib/types';
 
 const FAVORITE_COLORS_KEY = 'NOTE_FAVORITE_COLORS';
@@ -49,6 +52,11 @@ function noteHasText(html: string) {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
 }
 
+function formatSaveTime(date: Date | null) {
+  if (!date) return 'Aún sin guardar';
+  return `Guardado ${date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
 export default function NoteEditorScreen() {
   const colors = useThemeColors();
   const navigation = useNavigation();
@@ -62,8 +70,10 @@ export default function NoteEditorScreen() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [preview, setPreview] = useState(false);
   const [verseModalOpen, setVerseModalOpen] = useState(false);
+  const [referenceModalOpen, setReferenceModalOpen] = useState(false);
   const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
   const [fontModalOpen, setFontModalOpen] = useState(false);
 
@@ -132,31 +142,29 @@ export default function NoteEditorScreen() {
     loadFavs();
   }, []);
 
+  const loadFontsBase64 = useCallback(async () => {
+    const downloaded = await getDownloadedFonts();
+    const mappings: Record<string, string> = {};
+    for (const font of downloaded) {
+      const fileUri = `${FileSystem.documentDirectory}fonts/${font.id}.ttf`;
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (fileInfo.exists) {
+        const b64 = await FileSystem.readAsStringAsync(fileUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        mappings[font.id] = b64;
+      }
+    }
+    setBase64Fonts(mappings);
+    return mappings;
+  }, []);
+
   // ── Fetch and cache base64 encoded font files for offline use ──
   useEffect(() => {
-    const loadFontsBase64 = async () => {
-      try {
-        const downloaded = await getDownloadedFonts();
-        const mappings: Record<string, string> = {};
-        for (const font of downloaded) {
-          const fileUri = `${FileSystem.documentDirectory}fonts/${font.id}.ttf`;
-          const fileInfo = await FileSystem.getInfoAsync(fileUri);
-          if (fileInfo.exists) {
-            const b64 = await FileSystem.readAsStringAsync(fileUri, {
-              encoding: FileSystem.EncodingType.Base64,
-            });
-            mappings[font.id] = b64;
-          }
-        }
-        setBase64Fonts(mappings);
-      } catch (e) {
-        console.error('Error encoding fonts:', e);
-      } finally {
-        setFontsLoaded(true);
-      }
-    };
-    loadFontsBase64();
-  }, []);
+    loadFontsBase64()
+      .catch((e) => console.error('Error encoding fonts:', e))
+      .finally(() => setFontsLoaded(true));
+  }, [loadFontsBase64]);
 
   // ── Load note details if editing ──
   useEffect(() => {
@@ -175,14 +183,21 @@ export default function NoteEditorScreen() {
         setContent(note.content);
         initialContentRef.current = note.content;
         initialTitleRef.current = note.title;
+        setLastSavedAt(note.updatedAt ? new Date(note.updatedAt) : null);
       })
       .catch((err) => Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo cargar'))
       .finally(() => setLoading(false));
   }, [isNew, noteId]);
 
   // ── Font selection handler (called from FontSelectorModal) ──
-  const handleSetFont = (fontName: string) => {
+  const handleSetFont = async (fontName: string) => {
     setActiveFont(fontName);
+    try {
+      const fonts = await loadFontsBase64();
+      sendToEditor({ type: 'loadFonts', value: fonts });
+    } catch (e) {
+      console.error('Error refreshing fonts:', e);
+    }
     sendToEditor({ type: 'setFont', value: fontName });
   };
 
@@ -205,6 +220,11 @@ export default function NoteEditorScreen() {
   const handleInsertDictionary = (entry: StrongEntry) => {
     sendToEditor({ type: 'insertDictionary', value: formatDictionaryInsertion(entry) });
     setDictionaryModalOpen(false);
+  };
+
+  const handleInsertReferences = (html: string) => {
+    sendToEditor({ type: 'insertReferences', value: html });
+    setReferenceModalOpen(false);
   };
 
   const hasUnsavedChanges = useCallback(() => {
@@ -250,6 +270,7 @@ export default function NoteEditorScreen() {
         // Se guarda el título tal cual lo escribió el usuario (no 'Sin título')
         // para que la comparación de cambios pendientes sea estable.
         initialTitleRef.current = trimmedTitle;
+        setLastSavedAt(new Date());
         setSaveFlash(true);
         if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current);
         saveFlashTimerRef.current = setTimeout(() => setSaveFlash(false), 2000);
@@ -334,6 +355,8 @@ export default function NoteEditorScreen() {
         setFontModalOpen(true);
       } else if (data.type === 'openVerseModal') {
         setVerseModalOpen(true);
+      } else if (data.type === 'openReferenceModal') {
+        setReferenceModalOpen(true);
       } else if (data.type === 'openDictionaryModal') {
         setDictionaryModalOpen(true);
       }
@@ -384,6 +407,10 @@ export default function NoteEditorScreen() {
     if (!preview) Keyboard.dismiss();
     setPreview((p) => !p);
   };
+
+  const words = countNoteWords(content);
+  const readMinutes = estimateNoteReadMinutes(content);
+  const statusText = saving ? 'Guardando...' : saveFlash ? 'Guardado' : formatSaveTime(lastSavedAt);
 
   const remove = () => {
     if (isNew) return;
@@ -439,7 +466,7 @@ export default function NoteEditorScreen() {
               ) : null}
               <Pressable onPress={save} disabled={saving}>
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                  {saving ? '…' : 'Guardar'}
+                  {saving ? '...' : 'Guardar'}
                 </Text>
               </Pressable>
             </View>
@@ -452,7 +479,7 @@ export default function NoteEditorScreen() {
         <View style={styles.titleWrapper}>
           <TextInput
             style={[styles.titleInput, { color: colors.text, borderColor: colors.border }]}
-            placeholder="Título de la nota"
+            placeholder="Título"
             placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={setTitle}
@@ -468,16 +495,27 @@ export default function NoteEditorScreen() {
 
         {/* Preview Toggle */}
         <View style={styles.previewToggleWrapper}>
-          <Pressable onPress={togglePreview} style={styles.previewToggle}>
+          <Pressable
+            onPress={togglePreview}
+            style={[styles.previewToggle, { borderColor: colors.border, backgroundColor: colors.card }]}
+          >
+            <SymbolView
+              name={preview ? { ios: 'pencil', android: 'edit', web: 'edit' } : { ios: 'eye', android: 'visibility', web: 'visibility' }}
+              tintColor={colors.primary}
+              size={15}
+            />
             <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
-              {preview ? '✏️ Modo Edición' : '👁️ Vista Previa'}
+              {preview ? 'Editar' : 'Vista previa'}
             </Text>
           </Pressable>
-          {saving ? (
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Guardando…</Text>
-          ) : saveFlash ? (
-            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>✓ Guardado</Text>
-          ) : null}
+          <View style={styles.metaRow}>
+            <Text style={{ color: saveFlash ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: saveFlash ? '700' : '600' }}>
+              {statusText}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              {words} palabras · {readMinutes} min
+            </Text>
+          </View>
         </View>
 
         {/* Content Area — WebView stays mounted so edits survive preview toggle */}
@@ -519,6 +557,12 @@ export default function NoteEditorScreen() {
         onInsert={handleInsertVerse}
       />
 
+      <InsertReferenceModal
+        visible={referenceModalOpen}
+        onClose={() => setReferenceModalOpen(false)}
+        onInsert={handleInsertReferences}
+      />
+
       <InsertDictionaryModal
         visible={dictionaryModalOpen}
         onClose={() => setDictionaryModalOpen(false)}
@@ -542,15 +586,22 @@ const styles = StyleSheet.create({
   },
   previewToggleWrapper: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 12,
   },
   previewToggle: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
+  metaRow: { flex: 1, alignItems: 'flex-end', gap: 2 },
   editorContainer: {
     flex: 1,
   },

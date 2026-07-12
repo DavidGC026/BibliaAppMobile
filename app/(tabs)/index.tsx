@@ -1,6 +1,6 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -21,7 +21,9 @@ import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
+import * as repo from '@/lib/repo';
 import { pickFeaturedDevotional, parseDevotionalContent } from '@/lib/devotional';
+import { getLastPassage, type LastPassage } from '@/lib/readerState';
 import type { ChurchEvent, Devotional, FeedAnnouncement } from '@/lib/types';
 
 function goBible(mode: 'reader' | 'search' | 'dictionary' = 'reader', strong?: string) {
@@ -44,6 +46,7 @@ export default function HomeScreen() {
   const [announcements, setAnnouncements] = useState<FeedAnnouncement[]>([]);
   const [recentDevotionals, setRecentDevotionals] = useState<Devotional[]>([]);
   const [featuredDevotional, setFeaturedDevotional] = useState<Devotional | null>(null);
+  const [lastPassage, setLastPassage] = useState<LastPassage | null>(null);
 
   useEffect(() => {
     if (authLoading || isGuest) return;
@@ -70,6 +73,18 @@ export default function HomeScreen() {
     }).catch(() => {});
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      getLastPassage().then((passage) => {
+        if (active) setLastPassage(passage);
+      });
+      return () => {
+        active = false;
+      };
+    }, []),
+  );
+
   if (authLoading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -81,6 +96,33 @@ export default function HomeScreen() {
   const firstName = user?.name?.split(' ')[0] ?? 'hermano';
   const spiritualProgress = devotionalCount > 0 ? 'Constante' : 'Iniciando';
   const featuredPreview = featuredDevotional ? parseDevotionalContent(featuredDevotional) : null;
+
+  const createQuickNote = async () => {
+    if (isGuest) {
+      router.push('/login');
+      return;
+    }
+    try {
+      const { notebooks } = await repo.repoListNotebooks();
+      const notebook = notebooks[0] ?? await repo.repoCreateNotebook('Notas rápidas', 'grad-blue');
+      router.push(`/note/new?notebookId=${notebook.id}`);
+    } catch {
+      router.push('/(tabs)/notes');
+    }
+  };
+
+  const continueReading = () => {
+    if (!lastPassage) return;
+    router.push({
+      pathname: '/(tabs)/bible',
+      params: {
+        mode: 'reader',
+        bookId: String(lastPassage.bookId),
+        chapter: String(lastPassage.chapter),
+        bibleId: String(lastPassage.bibleId),
+      },
+    });
+  };
 
   return (
     <ScrollView
@@ -116,6 +158,29 @@ export default function HomeScreen() {
       ) : null}
 
       <VerseOfDayCard />
+
+      {lastPassage ? (
+        <Card
+          onPress={continueReading}
+          style={[styles.continueCard, { backgroundColor: colors.card, borderColor: colors.primaryBorder }]}
+        >
+          <View style={[styles.continueIcon, { backgroundColor: colors.primarySoft }]}>
+            <SymbolView name={{ ios: 'book.fill', android: 'menu_book', web: 'menu_book' }} tintColor={colors.primary} size={22} />
+          </View>
+          <View style={{ flex: 1, gap: 3 }}>
+            <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' }}>
+              Continuar lectura
+            </Text>
+            <Text style={{ color: colors.text, fontSize: 17, fontWeight: '800' }}>
+              {lastPassage.bookName} {lastPassage.chapter}
+            </Text>
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+              {lastPassage.bibleAbbr}
+            </Text>
+          </View>
+          <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '800' }}>Abrir</Text>
+        </Card>
+      ) : null}
 
       {!isGuest && featuredDevotional ? (
         <Card
@@ -296,10 +361,10 @@ export default function HomeScreen() {
           />
           <QuickActionCard
             icon={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }}
-            title="Mis notas"
-            description={isGuest ? 'Requiere iniciar sesión' : 'Cuadernos y libretas personales'}
+            title="Nota rápida"
+            description={isGuest ? 'Requiere iniciar sesión' : 'Captura una idea al instante'}
             locked={isGuest}
-            onPress={() => (isGuest ? router.push('/login') : router.push('/(tabs)/notes'))}
+            onPress={() => void createQuickNote()}
           />
           <QuickActionCard
             icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
@@ -362,5 +427,7 @@ const styles = StyleSheet.create({
   devBadge: { alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
   devTitle: { fontSize: 15, fontWeight: '700' },
   featuredDevotional: { gap: 8, borderWidth: 1 },
+  continueCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1 },
+  continueIcon: { width: 46, height: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   actions: { gap: 10 },
 });

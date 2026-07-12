@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SymbolView } from 'expo-symbols';
 
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
@@ -25,11 +26,22 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
+import {
+  DEFAULT_READER_PREFERENCES,
+  getReaderPreferences,
+  saveLastPassage,
+  saveReaderPreferences,
+  type ReaderAlign,
+  type ReaderDensity,
+} from '@/lib/readerState';
 import { buildImageCreatorData, buildSelectionShareText, formatVerseRange } from '@/lib/verseUtils';
 import { cancelStreakReminderForToday } from '@/lib/localNotifications';
 import { markReadToday } from '@/lib/readingToday';
 import type { BibleVersion, Book, Verse, VerseHighlight, VerseNoteLink } from '@/lib/types';
 import { HIGHLIGHT_COLORS, getHighlightTheme, verseHighlightStyle } from '@/lib/highlightColors';
+
+const READER_FONT_MIN = 16;
+const READER_FONT_MAX = 24;
 
 export function BibleReader({
   initialBookId,
@@ -62,6 +74,11 @@ export function BibleReader({
   const [refsModalOpen, setRefsModalOpen] = useState(false);
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const readerPrefsReadyRef = useRef(false);
+  const [readerFontSize, setReaderFontSize] = useState(DEFAULT_READER_PREFERENCES.fontSize);
+  const [readerDensity, setReaderDensity] = useState<ReaderDensity>(DEFAULT_READER_PREFERENCES.density);
+  const [readerAlign, setReaderAlign] = useState<ReaderAlign>(DEFAULT_READER_PREFERENCES.align);
   const [loading, setLoading] = useState(true);
   const [loadingChapter, setLoadingChapter] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -71,6 +88,9 @@ export function BibleReader({
   const selectedBook = books.find((b) => b.bookId === bookId) ?? null;
   const maxChapter = selectedBook?.chapters ?? 1;
   const currentBible = bibles.find((b) => b.bibleId === bibleId);
+  const chapterProgress = maxChapter > 0 ? chapter / maxChapter : 0;
+  const readerLineHeight = Math.round(readerFontSize * (readerDensity === 'relaxed' ? 1.72 : 1.48));
+  const verseGap = readerDensity === 'relaxed' ? 10 : 4;
   const highlightMap = new Map(highlights.map((h) => [h.verse, h.color]));
   const noteMap = new Map(notes.map((n) => [n.verse, n]));
 
@@ -89,6 +109,27 @@ export function BibleReader({
       bibleAbbr: currentBible?.abbr ?? 'RVR1960',
     });
   }, [selectedVerses, verses, selectedBook, chapter, currentBible?.abbr]);
+
+  useEffect(() => {
+    getReaderPreferences()
+      .then((prefs) => {
+        setReaderFontSize(prefs.fontSize);
+        setReaderDensity(prefs.density);
+        setReaderAlign(prefs.align);
+      })
+      .finally(() => {
+        readerPrefsReadyRef.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!readerPrefsReadyRef.current) return;
+    saveReaderPreferences({
+      fontSize: readerFontSize,
+      density: readerDensity,
+      align: readerAlign,
+    }).catch(() => {});
+  }, [readerFontSize, readerDensity, readerAlign]);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +204,17 @@ export function BibleReader({
   useEffect(() => {
     if (bookId) loadChapter();
   }, [bookId, chapter, bibleId, isGuest, loadChapter]);
+
+  useEffect(() => {
+    if (!bookId || !selectedBook || !currentBible || verses.length === 0) return;
+    saveLastPassage({
+      bibleId,
+      bibleAbbr: currentBible.abbr,
+      bookId,
+      bookName: selectedBook.bookName,
+      chapter,
+    }).catch(() => {});
+  }, [bibleId, bookId, chapter, selectedBook, currentBible, verses.length]);
 
   // Registrar lectura tras 5s (web: bible-reader/index.tsx)
   useEffect(() => {
@@ -389,27 +441,58 @@ export function BibleReader({
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <View style={styles.headingRow}>
-          <Text style={[styles.chapterHeading, { color: colors.text }]} numberOfLines={1}>
-            {selectedBook?.bookName ?? ''} {chapter}
-          </Text>
-          <Pressable
-            style={[styles.versionPill, { backgroundColor: colors.muted, borderRadius: radius.full }]}
-            onPress={() => setVersionOpen(true)}
-          >
-            <Text style={[styles.versionText, { color: colors.text }]}>
-              {currentBible?.abbr ?? 'Versión'}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.chapterEyebrow, { color: colors.primary }]}>
+              Capítulo {chapter} de {maxChapter}
             </Text>
-            <Text style={[styles.caret, { color: colors.textMuted }]}>▾</Text>
-          </Pressable>
+            <Text style={[styles.chapterHeading, { color: colors.text }]} numberOfLines={1}>
+              {selectedBook?.bookName ?? ''} {chapter}
+            </Text>
+          </View>
+          <View style={styles.headerActions}>
+            <Pressable
+              style={[styles.iconPill, { backgroundColor: colors.primarySoft, borderRadius: radius.full }]}
+              onPress={() => router.push('/downloads')}
+              accessibilityLabel="Descargas offline"
+            >
+              <SymbolView name={{ ios: 'arrow.down.circle.fill', android: 'download', web: 'download' }} tintColor={colors.primary} size={18} />
+            </Pressable>
+            <Pressable
+              style={[styles.iconPill, { backgroundColor: colors.muted, borderRadius: radius.full }]}
+              onPress={() => setSettingsOpen(true)}
+              accessibilityLabel="Ajustes de lectura"
+            >
+              <SymbolView name={{ ios: 'textformat.size', android: 'format_size', web: 'format_size' }} tintColor={colors.text} size={17} />
+            </Pressable>
+            <Pressable
+              style={[styles.versionPill, { backgroundColor: colors.muted, borderRadius: radius.full }]}
+              onPress={() => setVersionOpen(true)}
+            >
+              <Text style={[styles.versionText, { color: colors.text }]}>
+                {currentBible?.abbr ?? 'Versión'}
+              </Text>
+              <SymbolView name={{ ios: 'chevron.down', android: 'keyboard_arrow_down', web: 'keyboard_arrow_down' }} tintColor={colors.textMuted} size={14} />
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={styles.readerMeta}>
+          <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
+            <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.max(4, chapterProgress * 100)}%` }]} />
+          </View>
+          <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+            {verses.length} versículos
+          </Text>
         </View>
 
         {loadingChapter ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
         ) : (
-          <View style={styles.verses}>
+          <View style={[styles.verses, { gap: verseGap }]}>
             {verses.map((v) => {
               const hl = highlightMap.get(v.verse);
               const hasNote = noteMap.has(v.verse);
+              const isFavorite = chapterFavorites.has(v.verse);
               const isSelected = selectedVerses.includes(v.verse);
               return (
                 <Pressable
@@ -420,16 +503,45 @@ export function BibleReader({
                   style={[
                     styles.verseRow,
                     hl && !isSelected ? verseHighlightStyle(hl, isDark) : null,
-                    isSelected ? { backgroundColor: colors.primarySoft, borderRadius: 6, paddingLeft: 8 } : null,
+                    isSelected ? { backgroundColor: colors.primarySoft, borderRadius: 8, paddingLeft: 8 } : null,
                   ]}
                 >
-                  <Text style={[styles.verseLine, { color: colors.text }]}>
-                    <Text style={[styles.verseNum, { color: colors.primary }]}>
+                  <View style={styles.verseContentRow}>
+                    <Text style={[styles.verseNumBadge, { color: colors.primary, backgroundColor: colors.primarySoft }]}>
                       {v.verse}
-                      {hasNote ? ' 📝' : ''}{' '}
                     </Text>
-                    {v.text}
-                  </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.verseLine,
+                          {
+                            color: colors.text,
+                            fontSize: readerFontSize,
+                            lineHeight: readerLineHeight,
+                            textAlign: readerAlign,
+                          },
+                        ]}
+                      >
+                        {v.text}
+                      </Text>
+                      {(hasNote || isFavorite) ? (
+                        <View style={styles.verseSignals}>
+                          {hasNote ? (
+                            <View style={[styles.signalPill, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                              <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={12} />
+                              <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>Nota</Text>
+                            </View>
+                          ) : null}
+                          {isFavorite ? (
+                            <View style={[styles.signalPill, { borderColor: '#F59E0B55', backgroundColor: '#F59E0B14' }]}>
+                              <SymbolView name={{ ios: 'star.fill', android: 'star', web: 'star' }} tintColor="#F59E0B" size={12} />
+                              <Text style={{ color: '#B45309', fontSize: 10, fontWeight: '700' }}>Favorito</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
                 </Pressable>
               );
             })}
@@ -570,6 +682,99 @@ export function BibleReader({
         </Pressable>
       </Modal>
 
+      <Modal visible={settingsOpen} animationType="slide" transparent onRequestClose={() => setSettingsOpen(false)}>
+        <Pressable style={[styles.modalOverlay, { paddingBottom: insets.bottom }]} onPress={() => setSettingsOpen(false)}>
+          <Pressable style={[styles.sheet, { backgroundColor: colors.card }]} onPress={() => {}}>
+            <View style={styles.settingsHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Lectura</Text>
+              <Pressable onPress={() => setSettingsOpen(false)} hitSlop={10}>
+                <Text style={{ color: colors.textMuted, fontSize: 20 }}>×</Text>
+              </Pressable>
+            </View>
+
+            <View style={[styles.previewTextBox, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+              <Text
+                style={{
+                  color: colors.text,
+                  fontSize: readerFontSize,
+                  lineHeight: readerLineHeight,
+                  textAlign: readerAlign,
+                }}
+              >
+                Tu palabra es lámpara a mis pies, y lumbrera a mi camino.
+              </Text>
+            </View>
+
+            <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Tamaño</Text>
+            <View style={styles.settingRow}>
+              <Pressable
+                style={[styles.settingBtn, { borderColor: colors.border }]}
+                onPress={() => setReaderFontSize((v) => Math.max(READER_FONT_MIN, v - 1))}
+              >
+                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>−</Text>
+              </Pressable>
+              <Text style={[styles.settingValue, { color: colors.text }]}>{readerFontSize}</Text>
+              <Pressable
+                style={[styles.settingBtn, { borderColor: colors.border }]}
+                onPress={() => setReaderFontSize((v) => Math.min(READER_FONT_MAX, v + 1))}
+              >
+                <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>+</Text>
+              </Pressable>
+            </View>
+
+            <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Espaciado</Text>
+            <View style={styles.segmentRow}>
+              {[
+                ['relaxed', 'Amplio'],
+                ['compact', 'Compacto'],
+              ].map(([key, label]) => {
+                const selected = readerDensity === key;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[
+                      styles.segmentBtn,
+                      {
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: selected ? colors.primarySoft : colors.card,
+                      },
+                    ]}
+                    onPress={() => setReaderDensity(key as ReaderDensity)}
+                  >
+                    <Text style={{ color: selected ? colors.primary : colors.textMuted, fontWeight: '700' }}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Alineación</Text>
+            <View style={styles.segmentRow}>
+              {[
+                ['left', 'Izquierda'],
+                ['justify', 'Justificada'],
+              ].map(([key, label]) => {
+                const selected = readerAlign === key;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[
+                      styles.segmentBtn,
+                      {
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: selected ? colors.primarySoft : colors.card,
+                      },
+                    ]}
+                    onPress={() => setReaderAlign(key as ReaderAlign)}
+                  >
+                    <Text style={{ color: selected ? colors.primary : colors.textMuted, fontWeight: '700' }}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={noteModalOpen} animationType="slide" transparent onRequestClose={() => void closeNoteModal()}>
         <View style={[styles.modalOverlay, { paddingBottom: insets.bottom + keyboardHeight }]}>
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
@@ -646,8 +851,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   versionText: { fontSize: 13, fontWeight: '700' },
-  caret: { fontSize: 11 },
-  content: { paddingHorizontal: 20, paddingTop: 12 },
+  iconPill: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
+  content: { paddingHorizontal: 18, paddingTop: 12 },
   guestBanner: { borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 },
   error: { textAlign: 'center', fontSize: 14, marginBottom: 8 },
   headingRow: {
@@ -655,13 +860,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    marginBottom: 16,
+    marginBottom: 10,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chapterEyebrow: { fontSize: 11, fontWeight: '800', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 2 },
   chapterHeading: { flex: 1, fontSize: 26, fontWeight: '800' },
-  verses: { gap: 6 },
-  verseRow: { paddingVertical: 4, paddingHorizontal: 4 },
-  verseLine: { fontSize: 19, lineHeight: 32 },
-  verseNum: { fontWeight: '700', fontSize: 13 },
+  readerMeta: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
+  progressTrack: { flex: 1, height: 5, borderRadius: 999, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 999 },
+  verses: {},
+  verseRow: { paddingVertical: 8, paddingHorizontal: 4 },
+  verseContentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  verseLine: {},
+  verseNumBadge: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontWeight: '800',
+    fontSize: 12,
+    lineHeight: 28,
+    marginTop: 2,
+  },
+  verseSignals: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  signalPill: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   actionBar: {
     position: 'absolute',
     left: 12,
@@ -694,6 +918,14 @@ const styles = StyleSheet.create({
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12 },
   modalTitle: { fontSize: 18, fontWeight: '700' },
+  settingsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  previewTextBox: { borderWidth: 1, borderRadius: 12, padding: 14 },
+  settingLabel: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 4 },
+  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  settingBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  settingValue: { minWidth: 48, textAlign: 'center', fontSize: 18, fontWeight: '800' },
+  segmentRow: { flexDirection: 'row', gap: 8 },
+  segmentBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   versionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
   noteInput: {
     borderWidth: 1,

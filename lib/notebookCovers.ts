@@ -26,6 +26,8 @@ export const NOTE_TAGS = [
   { id: 'crecimiento', label: 'Crecimiento', bgLight: '#D1FAE5', textLight: '#047857', bgDark: '#064e3b', textDark: '#A7F3D0' },
 ] as const;
 
+export const PINNED_NOTE_TAG = '__pinned';
+
 export function getPresetCover(id?: string | null) {
   return NOTEBOOK_PRESET_COVERS.find((c) => c.id === id) ?? NOTEBOOK_PRESET_COVERS[0];
 }
@@ -55,6 +57,16 @@ export function parseNoteTags(raw?: string): string[] {
   }
 }
 
+export function isNotePinned(raw?: string) {
+  return parseNoteTags(raw).includes(PINNED_NOTE_TAG);
+}
+
+export function togglePinnedNoteTag(raw?: string) {
+  const tags = parseNoteTags(raw).filter((tag) => tag !== PINNED_NOTE_TAG);
+  if (!isNotePinned(raw)) tags.push(PINNED_NOTE_TAG);
+  return tags;
+}
+
 export function noteTagStyle(tagId: string, isDark: boolean) {
   const tag = NOTE_TAGS.find((t) => t.id === tagId);
   if (!tag) return null;
@@ -65,7 +77,7 @@ export function noteTagStyle(tagId: string, isDark: boolean) {
   };
 }
 
-function htmlToPlainText(html: string) {
+export function noteHtmlToPlainText(html: string) {
   return html
     .replace(/<br\s*\/?>/gi, ' ')
     .replace(/<\/(p|div|li|h[1-6]|blockquote|tr)>/gi, ' ')
@@ -83,7 +95,7 @@ function htmlToPlainText(html: string) {
 export function stripNotePreview(content: string, max = 100) {
   const looksHtml = /<[a-z][^>]*>/i.test(content);
   const plain = looksHtml
-    ? htmlToPlainText(content)
+    ? noteHtmlToPlainText(content)
     : content
         .replace(/!\[.*?\]\(.*?\)/g, '[imagen]')
         .replace(/\[.*?\]\(.*?\)/g, '[archivo]')
@@ -93,4 +105,17 @@ export function stripNotePreview(content: string, max = 100) {
 
   if (plain.length <= max) return plain;
   return `${plain.substring(0, max).trim()}…`;
+}
+
+export function countNoteWords(content: string) {
+  const looksHtml = /<[a-z][^>]*>/i.test(content);
+  const plain = looksHtml ? noteHtmlToPlainText(content) : stripNotePreview(content, Number.MAX_SAFE_INTEGER);
+  if (!plain) return 0;
+  return plain.split(/\s+/).filter(Boolean).length;
+}
+
+export function estimateNoteReadMinutes(content: string) {
+  const words = countNoteWords(content);
+  if (!words) return 0;
+  return Math.max(1, Math.ceil(words / 220));
 }

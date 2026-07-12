@@ -159,6 +159,20 @@ export async function updateLocalNote(id: number, title: string, content: string
   }
 }
 
+export async function moveLocalNote(id: number, notebookId: number) {
+  const note = await getFirst<{ id: number }>('SELECT id FROM notes WHERE id = ? OR server_id = ?', [id, id]);
+  if (!note) throw new Error('Nota no encontrada');
+  const notebook = await getFirst<{ id: number }>(
+    'SELECT id FROM notebooks WHERE deleted = 0 AND (id = ? OR server_id = ?)',
+    [notebookId, notebookId],
+  );
+  if (!notebook) throw new Error('Libreta no encontrada');
+  await run(
+    'UPDATE notes SET notebook_id = ?, updated_at = ?, dirty = 1 WHERE id = ?',
+    [notebook.id, nowIso(), note.id],
+  );
+}
+
 export async function deleteLocalNote(id: number) {
   const row = await getFirst<{ id: number }>('SELECT id FROM notes WHERE id = ? OR server_id = ?', [id, id]);
   if (!row) return;
