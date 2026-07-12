@@ -184,6 +184,7 @@ export default function HomeScreen() {
   const quickActionHandlers: Record<HomeActionKey, () => void> = {
     read: () => goBible('reader'),
     search: () => goBible('search'),
+    universalSearch: () => router.push('/search'),
     note: () => void createQuickNote(),
     downloads: () => router.push('/downloads'),
     image: openImageCreator,

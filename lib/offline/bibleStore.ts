@@ -61,6 +61,26 @@ export async function getLocalVerses(bibleId: number, bookId: number, chapter: n
   }));
 }
 
+export async function searchLocalVerses(bibleId: number, query: string, limit = 30): Promise<Verse[]> {
+  const rows = await getAll<{ id: number; book_id: number; chapter: number; verse: number; text: string; book_name: string }>(
+    `SELECT v.id, v.book_id, v.chapter, v.verse, v.text, b.book_name
+     FROM verses v
+     JOIN books b ON b.bible_id = v.bible_id AND b.book_id = v.book_id
+     WHERE v.bible_id = ? AND v.text LIKE ? COLLATE NOCASE
+     ORDER BY v.book_id, v.chapter, v.verse
+     LIMIT ?`,
+    [bibleId, `%${query}%`, limit],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    bookId: r.book_id,
+    bookName: r.book_name,
+    chapter: r.chapter,
+    verse: r.verse,
+    text: r.text,
+  }));
+}
+
 export async function getDownloadedSize(bibleId: number): Promise<number> {
   const row = await getFirst<{ cnt: number }>(
     'SELECT COUNT(*) AS cnt FROM verses WHERE bible_id = ?',

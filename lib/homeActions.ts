@@ -6,6 +6,7 @@ const HOME_ACTIONS_KEY = 'BIBLIA_HOME_ACTIONS';
 export type HomeActionKey =
   | 'read'
   | 'search'
+  | 'universalSearch'
   | 'note'
   | 'downloads'
   | 'image'
@@ -33,8 +34,14 @@ export const HOME_ACTION_CATALOG: HomeActionMeta[] = [
   {
     key: 'search',
     title: 'Buscador avanzado',
-    description: 'Busca versículos y palabras clave',
+    description: 'Busca versículos y palabras clave en la Biblia',
     icon: { ios: 'magnifyingglass', android: 'search', web: 'search' },
+  },
+  {
+    key: 'universalSearch',
+    title: 'Búsqueda universal',
+    description: 'Busca a la vez en Biblia, notas, devocionales y diccionario',
+    icon: { ios: 'sparkle.magnifyingglass', android: 'travel_explore', web: 'travel_explore' },
   },
   {
     key: 'note',
@@ -91,6 +98,7 @@ export const HOME_ACTION_CATALOG: HomeActionMeta[] = [
 export const DEFAULT_HOME_ACTIONS: HomeActionKey[] = [
   'read',
   'search',
+  'universalSearch',
   'note',
   'stats',
   'activity',

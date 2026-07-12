@@ -153,6 +153,7 @@ function RootLayoutNav() {
         <Stack.Screen name="favorites" options={{ title: 'Favoritos' }} />
         <Stack.Screen name="downloads" options={{ title: 'Descargas' }} />
         <Stack.Screen name="customize-home" options={{ title: 'Accesos rápidos' }} />
+        <Stack.Screen name="search" options={{ title: 'Búsqueda' }} />
         <Stack.Screen name="rainbow" options={{ title: 'Mapa de referencias' }} />
       </Stack>
     </ThemeProvider>

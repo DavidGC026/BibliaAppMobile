@@ -11,6 +11,7 @@ import {
   getLocalVerses,
   isBibleDownloaded,
   listLocalBibles,
+  searchLocalVerses,
   type DownloadProgress,
 } from '@/lib/offline/bibleStore';
 import {
@@ -142,6 +143,19 @@ export async function repoGetVerses(bibleId: number, bookId: number, chapter: nu
   return { verses };
 }
 
+/** Prioriza el texto ya descargado localmente; si hay conexión y no hay Biblia offline, busca en el servidor. */
+export async function repoSearchVerses(bibleId: number, query: string): Promise<{ verses: Verse[]; isReference: boolean; source: 'local' | 'remote' }> {
+  if (await isBibleDownloaded(bibleId)) {
+    const verses = await searchLocalVerses(bibleId, query);
+    if (verses.length > 0) return { verses, isReference: false, source: 'local' };
+  }
+  if (getIsOnline()) {
+    const res = await api.searchVerses(bibleId, query);
+    return { verses: res.verses, isReference: !!res.isReference, source: 'remote' };
+  }
+  return { verses: [], isReference: false, source: 'local' };
+}
+
 export async function repoGetCrossReferences(
   bibleId: number,
   bookId: number,
@@ -260,6 +274,30 @@ export async function repoListRecentNotebookNotes(limit = 3): Promise<{ notes: R
   return {
     notes: notesByNotebook
       .flat()
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, limit),
+  };
+}
+
+export async function repoSearchNotes(query: string, limit = 20): Promise<{ notes: RecentNotebookNote[] }> {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return { notes: [] };
+
+  const { notebooks } = await loadNotebooksView();
+  const notesByNotebook = await Promise.all(
+    notebooks.map(async (notebook) => {
+      const { notes } = await loadNotebookNotesView(notebook.id);
+      return notes.map((note) => ({ ...note, notebookName: notebook.name }));
+    }),
+  );
+
+  const matches = notesByNotebook.flat().filter((note) => {
+    const plainContent = note.content.replace(/<[^>]*>/g, ' ').toLowerCase();
+    return note.title.toLowerCase().includes(q) || plainContent.includes(q);
+  });
+
+  return {
+    notes: matches
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, limit),
   };
