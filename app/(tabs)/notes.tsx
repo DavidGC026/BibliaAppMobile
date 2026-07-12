@@ -6,6 +6,7 @@ import { DevotionalsPanel } from '@/components/notes/DevotionalsPanel';
 import { NotebooksPanel } from '@/components/notes/NotebooksPanel';
 import { StudyBooksPanel } from '@/components/notes/StudyBooksPanel';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { SyncStatusBadge } from '@/components/SyncStatusBadge';
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { SegmentTabs } from '@/components/ui/SegmentTabs';
 import { useAuth } from '@/context/AuthContext';
@@ -53,6 +54,9 @@ export default function NotesScreen() {
           <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
             Un espacio flexible para ideas, apuntes, investigación y lectura.
           </Text>
+          <View style={{ marginTop: 6 }}>
+            <SyncStatusBadge />
+          </View>
         </View>
       </View>
       <SegmentTabs tabs={TABS} active={section} onChange={setSection} />

@@ -4,6 +4,7 @@ import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { OfflineStatusBadge } from '@/components/OfflineStatusBadge';
 import { ReminderSettings } from '@/components/ReminderSettings';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
 import { useAuth } from '@/context/AuthContext';
@@ -15,10 +16,12 @@ function MenuRow({
   icon,
   label,
   onPress,
+  right,
 }: {
   icon: SymbolViewProps['name'];
   label: string;
   onPress: () => void;
+  right?: React.ReactNode;
 }) {
   const { colors } = useAppTheme();
 
@@ -28,6 +31,7 @@ function MenuRow({
         <SymbolView name={icon} tintColor={colors.primary} size={20} />
       </View>
       <Text style={[styles.menuLabel, { color: colors.text }]}>{label}</Text>
+      {right}
       <Text style={{ color: colors.textMuted, fontSize: 18 }}>›</Text>
     </Pressable>
   );
@@ -100,6 +104,7 @@ export default function ProfileScreen() {
             icon={{ ios: 'arrow.down.circle.fill', android: 'download', web: 'download' }}
             label="Descargas offline"
             onPress={() => router.push('/downloads')}
+            right={<OfflineStatusBadge compact />}
           />
           <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
           <MenuRow

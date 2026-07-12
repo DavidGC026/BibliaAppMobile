@@ -21,6 +21,8 @@ import {
   deleteLocalNote,
   evictNotebook,
   evictNote,
+  getDirtyNotebooks,
+  getDirtyNotes,
   getLocalNote,
   listLocalNotebooks,
   listLocalNotes,
@@ -301,6 +303,12 @@ export async function repoSearchNotes(query: string, limit = 20): Promise<{ note
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, limit),
   };
+}
+
+/** Notas y libretas modificadas localmente que aun no se subieron al servidor. */
+export async function repoCountPendingSync(): Promise<number> {
+  const [notebooks, notes] = await Promise.all([getDirtyNotebooks(), getDirtyNotes()]);
+  return notebooks.length + notes.length;
 }
 
 export async function repoGetNotebookNote(noteId: number): Promise<{ note: NotebookNote }> {

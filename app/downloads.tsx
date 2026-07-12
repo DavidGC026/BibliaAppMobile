@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { OfflineBanner } from '@/components/OfflineBanner';
+import { OfflineStatusBadge } from '@/components/OfflineStatusBadge';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
@@ -144,8 +145,6 @@ export default function DownloadsScreen() {
   const taskForStudy = (key: StudyKey) =>
     tasks.find((task) => task.kind === key && task.status !== 'done');
 
-  const hasActiveDownloads = tasks.some((task) => task.status === 'queued' || task.status === 'running');
-
   const startStudyDownload = async (key: StudyKey) => {
     try {
       await enqueueStudyDownload(key);
@@ -207,12 +206,7 @@ export default function DownloadsScreen() {
         <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
           Descarga primero tu versión bíblica favorita. Para estudio profundo, agrega Strong y referencias cruzadas.
         </Text>
-        {hasActiveDownloads ? (
-          <View style={styles.activeBox}>
-            <ActivityIndicator color={colors.primary} size="small" />
-            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>Descarga en segundo plano activa</Text>
-          </View>
-        ) : null}
+        <OfflineStatusBadge />
       </Card>
 
       {loading ? (
@@ -245,7 +239,10 @@ export default function DownloadsScreen() {
               ) : b.downloaded ? (
                 <Button label="Eliminar" variant="outline" onPress={() => removeDownload(b.bibleId, b.abbr)} />
               ) : (
-                <Button label="Descargar" onPress={() => startDownload(b)} />
+                <Button
+                  label={task?.status === 'error' ? 'Reintentar' : 'Descargar'}
+                  onPress={() => startDownload(b)}
+                />
               )}
             </View>
           </Card>
@@ -284,7 +281,10 @@ export default function DownloadsScreen() {
             ) : s.downloaded ? (
               <Button label="Eliminar" variant="outline" onPress={() => removeStudyDownload(s.key, s.title)} />
             ) : (
-              <Button label="Descargar" onPress={() => startStudyDownload(s.key)} />
+              <Button
+                label={task?.status === 'error' ? 'Reintentar' : 'Descargar'}
+                onPress={() => startStudyDownload(s.key)}
+              />
             )}
           </View>
         </Card>
@@ -320,7 +320,6 @@ const styles = StyleSheet.create({
   card: { gap: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroCard: { gap: 8, borderWidth: 1 },
-  activeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
   progressWrap: { gap: 4, marginTop: 4 },
   progressTrack: { height: 6, borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 999 },

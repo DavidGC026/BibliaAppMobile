@@ -70,6 +70,24 @@ export function getOfflineDownloadSnapshot() {
   return tasks.map((task) => ({ ...task, progress: task.progress ? { ...task.progress } : undefined }));
 }
 
+export type OfflineStatusSummary = {
+  status: 'idle' | 'syncing' | 'error';
+  queued: number;
+  running: number;
+  error: number;
+  done: number;
+};
+
+/** Resume el estado global de las descargas offline: listo, en curso o con fallos. */
+export function summarizeOfflineDownloads(list: OfflineDownloadTask[] = tasks): OfflineStatusSummary {
+  const queued = list.filter((t) => t.status === 'queued').length;
+  const running = list.filter((t) => t.status === 'running').length;
+  const error = list.filter((t) => t.status === 'error').length;
+  const done = list.filter((t) => t.status === 'done').length;
+  const status: OfflineStatusSummary['status'] = running + queued > 0 ? 'syncing' : error > 0 ? 'error' : 'idle';
+  return { status, queued, running, error, done };
+}
+
 export function subscribeOfflineDownloads(listener: Listener) {
   listeners.add(listener);
   listener(getOfflineDownloadSnapshot());
