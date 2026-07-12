@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView, type SymbolViewProps } from 'expo-symbols';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -19,10 +19,20 @@ import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
 import type { RecentNotebookNote } from '@/lib/repo';
+import { addSearchHistoryEntry, clearSearchHistory, getSearchHistory, removeSearchHistoryEntry } from '@/lib/searchHistory';
 import type { Devotional, StrongEntry, Verse } from '@/lib/types';
 
 const MIN_QUERY = 2;
 const SECTION_LIMIT = 5;
+
+type SearchFilter = 'verses' | 'notes' | 'devotionals' | 'dictionary';
+
+const FILTERS: { key: SearchFilter; label: string; guestOnly?: boolean }[] = [
+  { key: 'verses', label: 'Biblia' },
+  { key: 'notes', label: 'Notas' },
+  { key: 'devotionals', label: 'Devocionales' },
+  { key: 'dictionary', label: 'Diccionario' },
+];
 
 type SectionState<T> = { items: T[]; loading: boolean };
 
@@ -47,7 +57,28 @@ export default function UniversalSearchScreen() {
   const [notes, setNotes] = useState<SectionState<RecentNotebookNote>>(emptySection());
   const [devotionals, setDevotionals] = useState<SectionState<Devotional>>(emptySection());
   const [dictionary, setDictionary] = useState<SectionState<StrongEntry>>(emptySection());
+  const [history, setHistory] = useState<string[]>([]);
+  const [filters, setFilters] = useState<Set<SearchFilter>>(
+    () => new Set(FILTERS.map((f) => f.key)),
+  );
   const requestId = useRef(0);
+
+  useEffect(() => {
+    getSearchHistory().then(setHistory);
+  }, []);
+
+  const toggleFilter = (key: SearchFilter) => {
+    setFilters((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        if (next.size === 1) return next;
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const q = query.trim();
@@ -59,36 +90,45 @@ export default function UniversalSearchScreen() {
       return;
     }
 
+    const searchVerses = filters.has('verses');
+    const searchDictionary = filters.has('dictionary');
+    const searchNotes = filters.has('notes') && !isGuest;
+    const searchDevotionals = filters.has('devotionals') && !isGuest;
+
     const id = ++requestId.current;
-    setVerses((s) => ({ ...s, loading: true }));
-    setDictionary((s) => ({ ...s, loading: true }));
-    if (!isGuest) {
-      setNotes((s) => ({ ...s, loading: true }));
-      setDevotionals((s) => ({ ...s, loading: true }));
-    }
+    setVerses(searchVerses ? { items: [], loading: true } : emptySection());
+    setDictionary(searchDictionary ? { items: [], loading: true } : emptySection());
+    setNotes(searchNotes ? { items: [], loading: true } : emptySection());
+    setDevotionals(searchDevotionals ? { items: [], loading: true } : emptySection());
 
     const timer = setTimeout(() => {
-      repo
-        .repoSearchVerses(DEFAULT_BIBLE_ID, q)
-        .then((res) => {
-          if (requestId.current !== id) return;
-          setVerses({ items: res.verses.slice(0, SECTION_LIMIT), loading: false });
-        })
-        .catch(() => {
-          if (requestId.current === id) setVerses(emptySection());
-        });
+      addSearchHistoryEntry(q).then(setHistory);
 
-      repo
-        .repoSearchDictionary({ q, lang: 'all' })
-        .then((res) => {
-          if (requestId.current !== id) return;
-          setDictionary({ items: res.entries.slice(0, SECTION_LIMIT), loading: false });
-        })
-        .catch(() => {
-          if (requestId.current === id) setDictionary(emptySection());
-        });
+      if (searchVerses) {
+        repo
+          .repoSearchVerses(DEFAULT_BIBLE_ID, q)
+          .then((res) => {
+            if (requestId.current !== id) return;
+            setVerses({ items: res.verses.slice(0, SECTION_LIMIT), loading: false });
+          })
+          .catch(() => {
+            if (requestId.current === id) setVerses(emptySection());
+          });
+      }
 
-      if (!isGuest) {
+      if (searchDictionary) {
+        repo
+          .repoSearchDictionary({ q, lang: 'all' })
+          .then((res) => {
+            if (requestId.current !== id) return;
+            setDictionary({ items: res.entries.slice(0, SECTION_LIMIT), loading: false });
+          })
+          .catch(() => {
+            if (requestId.current === id) setDictionary(emptySection());
+          });
+      }
+
+      if (searchNotes) {
         repo
           .repoSearchNotes(q, SECTION_LIMIT)
           .then((res) => {
@@ -98,7 +138,9 @@ export default function UniversalSearchScreen() {
           .catch(() => {
             if (requestId.current === id) setNotes(emptySection());
           });
+      }
 
+      if (searchDevotionals) {
         api
           .listDevotionals()
           .then(({ devotionals: list }) => {
@@ -121,7 +163,7 @@ export default function UniversalSearchScreen() {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [query, isGuest]);
+  }, [query, isGuest, filters]);
 
   const hasQuery = query.trim().length >= MIN_QUERY;
   const totalResults = verses.items.length + notes.items.length + devotionals.items.length + dictionary.items.length;
@@ -152,10 +194,60 @@ export default function UniversalSearchScreen() {
         {anyLoading ? <ActivityIndicator color={colors.primary} size="small" /> : null}
       </View>
 
+      <View style={styles.historyRow}>
+        {FILTERS.filter((f) => !(isGuest && (f.key === 'notes' || f.key === 'devotionals'))).map((f) => {
+          const active = filters.has(f.key);
+          return (
+            <Pressable
+              key={f.key}
+              onPress={() => toggleFilter(f.key)}
+              style={[
+                styles.filterChip,
+                { borderColor: active ? colors.primary : colors.border },
+                active && { backgroundColor: colors.primarySoft },
+              ]}
+            >
+              <Text style={{ color: active ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+                {f.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {!hasQuery ? (
-        <Text style={[styles.hint, { color: colors.textMuted }]}>
-          Escribe al menos {MIN_QUERY} caracteres para buscar en toda la app.
-        </Text>
+        <>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>
+            Escribe al menos {MIN_QUERY} caracteres para buscar en toda la app.
+          </Text>
+          {history.length > 0 ? (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Búsquedas recientes</Text>
+                <Pressable
+                  onPress={() => {
+                    setHistory([]);
+                    clearSearchHistory().catch(() => {});
+                  }}
+                >
+                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Borrar</Text>
+                </Pressable>
+              </View>
+              <View style={styles.historyRow}>
+                {history.map((entry) => (
+                  <View key={entry} style={[styles.historyChip, { borderColor: colors.border, backgroundColor: colors.card }]}>
+                    <Pressable onPress={() => setQuery(entry)}>
+                      <Text style={{ color: colors.text, fontSize: 13, fontWeight: '600' }}>{entry}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => removeSearchHistoryEntry(entry).then(setHistory)} hitSlop={8}>
+                      <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={colors.textMuted} size={12} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : null}
+        </>
       ) : null}
 
       {hasQuery && !anyLoading && totalResults === 0 ? (
@@ -309,4 +401,15 @@ const styles = StyleSheet.create({
   sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionTitle: { fontSize: 15, fontWeight: '700' },
   resultCard: { gap: 4 },
+  historyRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  historyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
 });
