@@ -13,6 +13,7 @@ import {
 import { FeedPostCard } from '@/components/FeedPostCard';
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -147,9 +148,11 @@ export default function FeedScreen() {
         loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>
-            {error ?? 'No hay publicaciones todavía.'}
-          </Text>
+          <EmptyState
+            emoji="💬"
+            title={error ? 'No se pudo cargar la comunidad' : 'Sin publicaciones todavía'}
+            message={error ?? 'Sé el primero en compartir algo con tu iglesia.'}
+          />
         )
       }
       renderItem={({ item }) => <FeedPostCard post={item} onUpdate={updatePost} />}
@@ -166,5 +169,4 @@ const styles = StyleSheet.create({
   segmentBtn: { flex: 1, paddingVertical: 8, alignItems: 'center' },
   compose: { gap: 10 },
   composeInput: { borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, minHeight: 72, textAlignVertical: 'top' },
-  empty: { textAlign: 'center', marginTop: 40, fontSize: 15 },
 });

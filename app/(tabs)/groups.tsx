@@ -14,6 +14,7 @@ import {
 import { AuthedImage } from '@/components/AuthedImage';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -159,9 +160,11 @@ export default function GroupsScreen() {
         loading ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
         ) : (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>
-            {error ?? 'Aún no perteneces a ningún grupo.'}
-          </Text>
+          <EmptyState
+            emoji="👥"
+            title={error ? 'No se pudieron cargar los grupos' : 'Aún no perteneces a ningún grupo'}
+            message={error ?? 'Pide a un líder de tu iglesia que te agregue a un grupo.'}
+          />
         )
       }
       renderItem={({ item }) => <GroupCard group={item} />}
@@ -223,10 +226,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginTop: 4,
-  },
-  empty: {
-    textAlign: 'center',
-    marginTop: 40,
-    fontSize: 15,
   },
 });

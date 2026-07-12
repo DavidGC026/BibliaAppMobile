@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 
 import { GuestPrompt } from '@/components/GuestPrompt';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useAuth } from '@/context/AuthContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useContentPadding } from '@/hooks/useContentPadding';
@@ -114,9 +115,11 @@ export default function NotificationsScreen() {
             loading ? (
               <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
             ) : (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>
-                No tienes notificaciones.
-              </Text>
+              <EmptyState
+                emoji="🔔"
+                title="Sin notificaciones"
+                message="Aquí verás reacciones, comentarios y avisos de tu comunidad."
+              />
             )
           }
           renderItem={({ item }) => (
@@ -158,5 +161,4 @@ const styles = StyleSheet.create({
   list: { padding: 16, flexGrow: 1 },
   card: { borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 10, gap: 4 },
   cardText: { fontSize: 15, lineHeight: 22, fontWeight: '600' },
-  empty: { textAlign: 'center', marginTop: 40 },
 });

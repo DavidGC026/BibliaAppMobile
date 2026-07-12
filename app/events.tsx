@@ -18,6 +18,7 @@ import {
 import { SymbolView } from 'expo-symbols';
 
 import { GuestPrompt } from '@/components/GuestPrompt';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -309,9 +310,11 @@ export default function EventsScreen() {
           loading ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
           ) : (
-            <Text style={[styles.empty, { color: colors.textMuted }]}>
-              {error ?? 'No hay eventos próximos.'}
-            </Text>
+            <EmptyState
+              emoji="📅"
+              title={error ? 'No se pudieron cargar los eventos' : 'Sin eventos próximos'}
+              message={error ?? 'Cuando tu iglesia o tus grupos publiquen eventos aparecerán aquí.'}
+            />
           )
         }
         renderItem={({ item }) => (
@@ -466,7 +469,6 @@ const styles = StyleSheet.create({
   badge: { alignSelf: 'flex-start', fontSize: 12, fontWeight: '600', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' },
   rsvpRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   rsvpBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  empty: { textAlign: 'center', marginTop: 40, fontSize: 15 },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
