@@ -11,6 +11,9 @@ import { ReferencesExplorer } from '@/components/ReferencesExplorer';
 import { StrongDictionary } from '@/components/StrongDictionary';
 import { SegmentTabs } from '@/components/ui/SegmentTabs';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { listLocalBibles } from '@/lib/repo';
+
+const OFFLINE_STRIP_MS = 10000;
 
 type BibleMode = 'reader' | 'search' | 'references' | 'dictionary' | 'plans';
 
@@ -46,6 +49,25 @@ export default function BibleScreen() {
     const id = Number(params.bibleId);
     return Number.isFinite(id) && id > 0 ? id : undefined;
   });
+  const [showOfflineStrip, setShowOfflineStrip] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listLocalBibles()
+      .then((bibles) => {
+        if (!cancelled && !bibles.some((b) => b.downloaded)) setShowOfflineStrip(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showOfflineStrip) return;
+    const timer = setTimeout(() => setShowOfflineStrip(false), OFFLINE_STRIP_MS);
+    return () => clearTimeout(timer);
+  }, [showOfflineStrip]);
 
   useEffect(() => {
     const target = parseReaderTarget(params.bookId, params.chapter);
@@ -70,23 +92,28 @@ export default function BibleScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
       <SegmentTabs tabs={MODES} active={mode} onChange={setMode} />
 
-      <Pressable
-        onPress={() => router.push('/downloads')}
-        style={({ pressed }) => [
-          styles.offlineStrip,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            opacity: pressed ? 0.8 : 1,
-          },
-        ]}
-      >
-        <SymbolView name={{ ios: 'arrow.down.circle.fill', android: 'download', web: 'download' }} tintColor={colors.primary} size={18} />
-        <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700', flex: 1 }}>
-          Descargar Biblia para leer sin conexión
-        </Text>
-        <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>Abrir</Text>
-      </Pressable>
+      {showOfflineStrip ? (
+        <Pressable
+          onPress={() => {
+            setShowOfflineStrip(false);
+            router.push('/downloads');
+          }}
+          style={({ pressed }) => [
+            styles.offlineStrip,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+        >
+          <SymbolView name={{ ios: 'arrow.down.circle.fill', android: 'download', web: 'download' }} tintColor={colors.primary} size={18} />
+          <Text style={{ color: colors.text, fontSize: 13, fontWeight: '700', flex: 1 }}>
+            Descargar Biblia para leer sin conexión
+          </Text>
+          <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>Abrir</Text>
+        </Pressable>
+      ) : null}
 
       {mode === 'reader' ? (
         <BibleReader
