@@ -31,6 +31,7 @@ import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
 import { getDownloadedFonts } from '@/lib/fontManager';
 import { countNoteWords, estimateNoteReadMinutes, noteHtmlToPlainText } from '@/lib/notebookCovers';
+import { exportNoteAsPdf } from '@/lib/noteExport';
 import { shareNote } from '@/lib/share';
 import type { StrongEntry } from '@/lib/types';
 
@@ -413,6 +414,26 @@ export default function NoteEditorScreen() {
   const readMinutes = estimateNoteReadMinutes(content);
   const statusText = saving ? 'Guardando...' : saveFlash ? 'Guardado' : formatSaveTime(lastSavedAt);
 
+  const openShareOptions = () => {
+    Alert.alert('Compartir nota', undefined, [
+      {
+        text: 'Compartir como texto',
+        onPress: () => void shareNote({ title, body: noteHtmlToPlainText(content) }),
+      },
+      {
+        text: 'Exportar como PDF',
+        onPress: async () => {
+          try {
+            await exportNoteAsPdf({ title, contentHtml: content });
+          } catch {
+            Alert.alert('Error', 'No se pudo generar el PDF.');
+          }
+        },
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
+  };
+
   const remove = () => {
     if (isNew) return;
     Alert.alert('Eliminar nota', '¿Seguro que quieres eliminar esta nota?', [
@@ -461,11 +482,7 @@ export default function NoteEditorScreen() {
           headerRight: () => (
             <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: 8, alignItems: 'center' }}>
               {!isNew ? (
-                <Pressable
-                  onPress={() => void shareNote({ title, body: noteHtmlToPlainText(content) })}
-                  hitSlop={8}
-                  accessibilityLabel="Compartir nota"
-                >
+                <Pressable onPress={openShareOptions} hitSlop={8} accessibilityLabel="Compartir nota">
                   <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={18} />
                 </Pressable>
               ) : null}

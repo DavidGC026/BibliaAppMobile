@@ -20,6 +20,7 @@ import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as repo from '@/lib/repo';
+import { exportNoteAsPdf } from '@/lib/noteExport';
 import { shareNote } from '@/lib/share';
 import {
   countNoteWords,
@@ -169,8 +170,24 @@ export default function NotebookDetailScreen() {
     }
   };
 
-  const shareNoteAction = async (note: NotebookNote) => {
-    await shareNote({ title: note.title, body: noteHtmlToPlainText(note.content) });
+  const shareNoteAction = (note: NotebookNote) => {
+    Alert.alert('Compartir nota', undefined, [
+      {
+        text: 'Compartir como texto',
+        onPress: () => void shareNote({ title: note.title, body: noteHtmlToPlainText(note.content) }),
+      },
+      {
+        text: 'Exportar como PDF',
+        onPress: async () => {
+          try {
+            await exportNoteAsPdf({ title: note.title, contentHtml: note.content });
+          } catch {
+            Alert.alert('Error', 'No se pudo generar el PDF.');
+          }
+        },
+      },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
   };
 
   const moveNote = async (note: NotebookNote, targetNotebookId: number) => {
@@ -352,7 +369,7 @@ export default function NotebookDetailScreen() {
                   <Pressable
                     onPress={(event) => {
                       event.stopPropagation();
-                      void shareNoteAction(item);
+                      shareNoteAction(item);
                     }}
                     hitSlop={8}
                   >
