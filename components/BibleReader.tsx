@@ -28,11 +28,14 @@ import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
 import {
   DEFAULT_READER_PREFERENCES,
+  READER_THEME_OPTIONS,
+  READER_THEME_PALETTES,
   getReaderPreferences,
   saveLastPassage,
   saveReaderPreferences,
   type ReaderAlign,
   type ReaderDensity,
+  type ReaderTheme,
 } from '@/lib/readerState';
 import { buildImageCreatorData, buildSelectionShareText, formatVerseRange } from '@/lib/verseUtils';
 import { cancelStreakReminderForToday } from '@/lib/localNotifications';
@@ -79,6 +82,7 @@ export function BibleReader({
   const [readerFontSize, setReaderFontSize] = useState(DEFAULT_READER_PREFERENCES.fontSize);
   const [readerDensity, setReaderDensity] = useState<ReaderDensity>(DEFAULT_READER_PREFERENCES.density);
   const [readerAlign, setReaderAlign] = useState<ReaderAlign>(DEFAULT_READER_PREFERENCES.align);
+  const [readerTheme, setReaderTheme] = useState<ReaderTheme>(DEFAULT_READER_PREFERENCES.theme);
   const [loading, setLoading] = useState(true);
   const [loadingChapter, setLoadingChapter] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -91,6 +95,17 @@ export function BibleReader({
   const chapterProgress = maxChapter > 0 ? chapter / maxChapter : 0;
   const readerLineHeight = Math.round(readerFontSize * (readerDensity === 'relaxed' ? 1.72 : 1.48));
   const verseGap = readerDensity === 'relaxed' ? 10 : 4;
+  const readerPalette = readerTheme === 'auto' ? null : READER_THEME_PALETTES[readerTheme];
+  const readingColors = {
+    background: readerPalette?.background ?? colors.background,
+    text: readerPalette?.text ?? colors.text,
+    muted: readerPalette?.muted ?? colors.textMuted,
+    card: readerPalette?.card ?? colors.cardMuted,
+    border: readerPalette?.border ?? colors.border,
+    accent: readerPalette?.accent ?? colors.primary,
+    accentSoft: readerPalette?.accentSoft ?? colors.primarySoft,
+  };
+  const readerIsDark = readerPalette ? readerPalette.dark : isDark;
   const highlightMap = new Map(highlights.map((h) => [h.verse, h.color]));
   const noteMap = new Map(notes.map((n) => [n.verse, n]));
 
@@ -116,6 +131,7 @@ export function BibleReader({
         setReaderFontSize(prefs.fontSize);
         setReaderDensity(prefs.density);
         setReaderAlign(prefs.align);
+        setReaderTheme(prefs.theme);
       })
       .finally(() => {
         readerPrefsReadyRef.current = true;
@@ -128,8 +144,9 @@ export function BibleReader({
       fontSize: readerFontSize,
       density: readerDensity,
       align: readerAlign,
+      theme: readerTheme,
     }).catch(() => {});
-  }, [readerFontSize, readerDensity, readerAlign]);
+  }, [readerFontSize, readerDensity, readerAlign, readerTheme]);
 
   useEffect(() => {
     let cancelled = false;
@@ -418,7 +435,7 @@ export function BibleReader({
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: readingColors.background }}>
       <OfflineBanner />
       <ScrollView
         style={{ flex: 1 }}
@@ -442,10 +459,10 @@ export function BibleReader({
 
         <View style={styles.headingRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.chapterEyebrow, { color: colors.primary }]}>
+            <Text style={[styles.chapterEyebrow, { color: readingColors.accent }]}>
               Capítulo {chapter} de {maxChapter}
             </Text>
-            <Text style={[styles.chapterHeading, { color: colors.text }]} numberOfLines={1}>
+            <Text style={[styles.chapterHeading, { color: readingColors.text }]} numberOfLines={1}>
               {selectedBook?.bookName ?? ''} {chapter}
             </Text>
           </View>
@@ -477,10 +494,10 @@ export function BibleReader({
         </View>
 
         <View style={styles.readerMeta}>
-          <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
-            <View style={[styles.progressFill, { backgroundColor: colors.primary, width: `${Math.max(4, chapterProgress * 100)}%` }]} />
+          <View style={[styles.progressTrack, { backgroundColor: readingColors.card }]}>
+            <View style={[styles.progressFill, { backgroundColor: readingColors.accent, width: `${Math.max(4, chapterProgress * 100)}%` }]} />
           </View>
-          <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700' }}>
+          <Text style={{ color: readingColors.muted, fontSize: 12, fontWeight: '700' }}>
             {verses.length} versículos
           </Text>
         </View>
@@ -502,12 +519,12 @@ export function BibleReader({
                   delayLongPress={400}
                   style={[
                     styles.verseRow,
-                    hl && !isSelected ? verseHighlightStyle(hl, isDark) : null,
-                    isSelected ? { backgroundColor: colors.primarySoft, borderRadius: 8, paddingLeft: 8 } : null,
+                    hl && !isSelected ? verseHighlightStyle(hl, readerIsDark) : null,
+                    isSelected ? { backgroundColor: readingColors.accentSoft, borderRadius: 8, paddingLeft: 8 } : null,
                   ]}
                 >
                   <View style={styles.verseContentRow}>
-                    <Text style={[styles.verseNumBadge, { color: colors.primary, backgroundColor: colors.primarySoft }]}>
+                    <Text style={[styles.verseNumBadge, { color: readingColors.accent, backgroundColor: readingColors.accentSoft }]}>
                       {v.verse}
                     </Text>
                     <View style={{ flex: 1 }}>
@@ -515,7 +532,7 @@ export function BibleReader({
                         style={[
                           styles.verseLine,
                           {
-                            color: colors.text,
+                            color: readingColors.text,
                             fontSize: readerFontSize,
                             lineHeight: readerLineHeight,
                             textAlign: readerAlign,
@@ -527,9 +544,9 @@ export function BibleReader({
                       {(hasNote || isFavorite) ? (
                         <View style={styles.verseSignals}>
                           {hasNote ? (
-                            <View style={[styles.signalPill, { borderColor: colors.border, backgroundColor: colors.card }]}>
-                              <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={12} />
-                              <Text style={{ color: colors.textMuted, fontSize: 10, fontWeight: '700' }}>Nota</Text>
+                            <View style={[styles.signalPill, { borderColor: readingColors.border, backgroundColor: readingColors.card }]}>
+                              <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={readingColors.accent} size={12} />
+                              <Text style={{ color: readingColors.muted, fontSize: 10, fontWeight: '700' }}>Nota</Text>
                             </View>
                           ) : null}
                           {isFavorite ? (
@@ -692,10 +709,10 @@ export function BibleReader({
               </Pressable>
             </View>
 
-            <View style={[styles.previewTextBox, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+            <View style={[styles.previewTextBox, { backgroundColor: readingColors.background, borderColor: readingColors.border }]}>
               <Text
                 style={{
-                  color: colors.text,
+                  color: readingColors.text,
                   fontSize: readerFontSize,
                   lineHeight: readerLineHeight,
                   textAlign: readerAlign,
@@ -703,6 +720,33 @@ export function BibleReader({
               >
                 Tu palabra es lámpara a mis pies, y lumbrera a mi camino.
               </Text>
+            </View>
+
+            <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Tema</Text>
+            <View style={styles.segmentRow}>
+              {READER_THEME_OPTIONS.map((opt) => {
+                const selected = readerTheme === opt.key;
+                const palette = opt.key === 'auto' ? null : READER_THEME_PALETTES[opt.key];
+                return (
+                  <Pressable
+                    key={opt.key}
+                    style={[
+                      styles.themeBtn,
+                      {
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: palette?.background ?? colors.background,
+                      },
+                      selected && { borderWidth: 2 },
+                    ]}
+                    onPress={() => setReaderTheme(opt.key)}
+                    accessibilityLabel={`Tema ${opt.label}`}
+                  >
+                    <Text style={{ color: palette?.text ?? colors.text, fontSize: 11, fontWeight: '700' }}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Tamaño</Text>
@@ -926,6 +970,7 @@ const styles = StyleSheet.create({
   settingValue: { minWidth: 48, textAlign: 'center', fontSize: 18, fontWeight: '800' },
   segmentRow: { flexDirection: 'row', gap: 8 },
   segmentBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  themeBtn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   versionRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1 },
   noteInput: {
     borderWidth: 1,
