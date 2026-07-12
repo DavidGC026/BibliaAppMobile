@@ -76,6 +76,10 @@ export {
 };
 export type { DownloadProgress, StudyDownloadInfo, StudyDownloadProgress };
 
+export type RecentNotebookNote = NotebookNote & {
+  notebookName: string;
+};
+
 /** Online + sesión → trabajar contra el servidor; offline → SQLite. */
 function useRemote(): boolean {
   return getIsOnline() && !!api.getApiToken();
@@ -242,6 +246,23 @@ export async function repoListNotebooks(): Promise<{ notebooks: Notebook[] }> {
 
 export async function repoListNotebookNotes(notebookId: number): Promise<{ notes: NotebookNote[] }> {
   return loadNotebookNotesView(notebookId);
+}
+
+export async function repoListRecentNotebookNotes(limit = 3): Promise<{ notes: RecentNotebookNote[] }> {
+  const { notebooks } = await loadNotebooksView();
+  const notesByNotebook = await Promise.all(
+    notebooks.map(async (notebook) => {
+      const { notes } = await loadNotebookNotesView(notebook.id);
+      return notes.map((note) => ({ ...note, notebookName: notebook.name }));
+    }),
+  );
+
+  return {
+    notes: notesByNotebook
+      .flat()
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      .slice(0, limit),
+  };
 }
 
 export async function repoGetNotebookNote(noteId: number): Promise<{ note: NotebookNote }> {

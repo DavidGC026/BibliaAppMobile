@@ -24,6 +24,7 @@ import * as api from '@/lib/api';
 import * as repo from '@/lib/repo';
 import { pickFeaturedDevotional, parseDevotionalContent } from '@/lib/devotional';
 import { getLastPassage, type LastPassage } from '@/lib/readerState';
+import type { RecentNotebookNote } from '@/lib/repo';
 import type { ChurchEvent, Devotional, FeedAnnouncement } from '@/lib/types';
 
 function goBible(mode: 'reader' | 'search' | 'dictionary' = 'reader', strong?: string) {
@@ -47,6 +48,7 @@ export default function HomeScreen() {
   const [recentDevotionals, setRecentDevotionals] = useState<Devotional[]>([]);
   const [featuredDevotional, setFeaturedDevotional] = useState<Devotional | null>(null);
   const [lastPassage, setLastPassage] = useState<LastPassage | null>(null);
+  const [recentNotes, setRecentNotes] = useState<RecentNotebookNote[]>([]);
 
   useEffect(() => {
     if (authLoading || isGuest) return;
@@ -79,10 +81,19 @@ export default function HomeScreen() {
       getLastPassage().then((passage) => {
         if (active) setLastPassage(passage);
       });
+      if (!isGuest) {
+        repo.repoListRecentNotebookNotes(3).then(({ notes }) => {
+          if (active) setRecentNotes(notes);
+        }).catch(() => {
+          if (active) setRecentNotes([]);
+        });
+      } else {
+        setRecentNotes([]);
+      }
       return () => {
         active = false;
       };
-    }, []),
+    }, [isGuest]),
   );
 
   if (authLoading) {
@@ -122,6 +133,10 @@ export default function HomeScreen() {
         bibleId: String(lastPassage.bibleId),
       },
     });
+  };
+
+  const openRecentNote = (note: RecentNotebookNote) => {
+    router.push(`/note/${note.id}`);
   };
 
   return (
@@ -180,6 +195,37 @@ export default function HomeScreen() {
           </View>
           <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '800' }}>Abrir</Text>
         </Card>
+      ) : null}
+
+      {!isGuest && recentNotes.length > 0 ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Notas recientes</Text>
+            <Pressable onPress={() => router.push('/(tabs)/notes')}>
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Ver libretas →</Text>
+            </Pressable>
+          </View>
+          <View style={styles.recentNotesList}>
+            {recentNotes.map((note) => (
+              <Card key={note.id} onPress={() => openRecentNote(note)} style={styles.recentNoteCard}>
+                <View style={[styles.recentNoteIcon, { backgroundColor: colors.primarySoft }]}>
+                  <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={18} />
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }} numberOfLines={1}>
+                    {note.title || 'Nota sin titulo'}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+                    {note.notebookName} · {formatNoteDate(note.updatedAt)}
+                  </Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }} numberOfLines={2}>
+                    {notePreview(note.content)}
+                  </Text>
+                </View>
+              </Card>
+            ))}
+          </View>
+        </View>
       ) : null}
 
       {!isGuest && featuredDevotional ? (
@@ -399,6 +445,26 @@ export default function HomeScreen() {
   );
 }
 
+function notePreview(content: string) {
+  const clean = content
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return clean || 'Sin contenido todavia';
+}
+
+function formatNoteDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'reciente';
+  return date.toLocaleDateString('es', { day: 'numeric', month: 'short' });
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: 16 },
@@ -429,5 +495,8 @@ const styles = StyleSheet.create({
   featuredDevotional: { gap: 8, borderWidth: 1 },
   continueCard: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1 },
   continueIcon: { width: 46, height: 46, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  recentNotesList: { gap: 10 },
+  recentNoteCard: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  recentNoteIcon: { width: 38, height: 38, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
   actions: { gap: 10 },
 });
