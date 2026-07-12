@@ -21,6 +21,7 @@ import {
   formatDevotionalDate,
   parseDevotionalContent,
 } from '@/lib/devotional';
+import { shareDevotional } from '@/lib/share';
 import { parseVerseReference } from '@/lib/verseRef';
 import type { Devotional } from '@/lib/types';
 
@@ -91,7 +92,21 @@ export default function DevotionalReadScreen() {
         options={{
           title: 'Devocional',
           headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 16, paddingHorizontal: 8, alignItems: 'center' }}>
+              <Pressable
+                onPress={() =>
+                  void shareDevotional({
+                    title: devotional.title,
+                    verseRef: devotional.verseRef,
+                    reflection: content.reflection,
+                    application: content.application,
+                  })
+                }
+                hitSlop={8}
+                accessibilityLabel="Compartir devocional"
+              >
+                <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={20} />
+              </Pressable>
               <Pressable onPress={() => router.push(`/devotional/${devotional.id}`)}>
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>Editar</Text>
               </Pressable>

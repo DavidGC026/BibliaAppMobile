@@ -9,11 +9,14 @@ import {
   View,
 } from 'react-native';
 
+import { SymbolView } from 'expo-symbols';
+
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import * as api from '@/lib/api';
+import { shareVerse } from '@/lib/share';
 import type { Favorite } from '@/lib/types';
 
 function openInReader(f: Favorite) {
@@ -114,9 +117,23 @@ export function FavoritesPanel({ compact, onViewAll }: FavoritesPanelProps) {
               </Text>
             </View>
             {!compact ? (
-              <Pressable onPress={() => remove(f)} hitSlop={8}>
-                <Text style={{ color: colors.danger, fontSize: 13, fontWeight: '600' }}>Eliminar</Text>
-              </Pressable>
+              <View style={styles.itemActions}>
+                <Pressable
+                  onPress={() =>
+                    void shareVerse({
+                      text: f.verse_text,
+                      reference: `${f.book_name} ${f.chapter}:${f.verse}`,
+                    })
+                  }
+                  hitSlop={8}
+                  accessibilityLabel="Compartir versículo"
+                >
+                  <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={16} />
+                </Pressable>
+                <Pressable onPress={() => remove(f)} hitSlop={8}>
+                  <Text style={{ color: colors.danger, fontSize: 13, fontWeight: '600' }}>Eliminar</Text>
+                </Pressable>
+              </View>
             ) : null}
           </View>
           <Text style={[styles.verseText, { color: colors.text }]} numberOfLines={compact ? 2 : undefined}>
@@ -143,6 +160,7 @@ const styles = StyleSheet.create({
   list: { gap: 12 },
   item: { gap: 8 },
   itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  itemActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   refBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
   verseText: { fontSize: 17, lineHeight: 26, fontStyle: 'italic' },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 32 },

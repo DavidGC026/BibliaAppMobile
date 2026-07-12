@@ -11,12 +11,15 @@ import {
   View,
 } from 'react-native';
 
+import { SymbolView } from 'expo-symbols';
+
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import * as api from '@/lib/api';
 import { HIGHLIGHT_PALETTE, highlightBadgeStyle, verseHighlightStyle } from '@/lib/highlightColors';
+import { shareVerse } from '@/lib/share';
 import type { HighlightItem } from '@/lib/types';
 
 function openInReader(h: HighlightItem) {
@@ -261,9 +264,24 @@ export function HighlightsPanel({ compact, onViewAll }: HighlightsPanelProps) {
                       {h.bible_abbr ? ` (${h.bible_abbr})` : ''}
                     </Text>
                   </View>
-                  <Pressable onPress={() => remove(h)} hitSlop={8}>
-                    <Text style={{ color: colors.danger, fontSize: 12, fontWeight: '600' }}>Quitar</Text>
-                  </Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <Pressable
+                      onPress={() =>
+                        void shareVerse({
+                          text: h.text,
+                          reference: `${h.book_name} ${h.chapter}:${h.verse}`,
+                          abbr: h.bible_abbr || undefined,
+                        })
+                      }
+                      hitSlop={8}
+                      accessibilityLabel="Compartir versículo"
+                    >
+                      <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={15} />
+                    </Pressable>
+                    <Pressable onPress={() => remove(h)} hitSlop={8}>
+                      <Text style={{ color: colors.danger, fontSize: 12, fontWeight: '600' }}>Quitar</Text>
+                    </Pressable>
+                  </View>
                 </View>
                 <Text style={[styles.highlightText, { color: colors.text }]}>"{h.text}"</Text>
                 <Text style={{ color: colors.textMuted, fontSize: 10, marginTop: 4 }}>

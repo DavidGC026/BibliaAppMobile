@@ -30,7 +30,8 @@ import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
 import { getDownloadedFonts } from '@/lib/fontManager';
-import { countNoteWords, estimateNoteReadMinutes } from '@/lib/notebookCovers';
+import { countNoteWords, estimateNoteReadMinutes, noteHtmlToPlainText } from '@/lib/notebookCovers';
+import { shareNote } from '@/lib/share';
 import type { StrongEntry } from '@/lib/types';
 
 const FAVORITE_COLORS_KEY = 'NOTE_FAVORITE_COLORS';
@@ -458,7 +459,16 @@ export default function NoteEditorScreen() {
         options={{
           title: isNew ? 'Nueva nota' : 'Editar nota',
           headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: 8, alignItems: 'center' }}>
+              {!isNew ? (
+                <Pressable
+                  onPress={() => void shareNote({ title, body: noteHtmlToPlainText(content) })}
+                  hitSlop={8}
+                  accessibilityLabel="Compartir nota"
+                >
+                  <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={18} />
+                </Pressable>
+              ) : null}
               {!isNew ? (
                 <Pressable onPress={remove}>
                   <Text style={{ color: colors.danger, fontWeight: '600' }}>Borrar</Text>

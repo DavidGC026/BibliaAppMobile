@@ -7,7 +7,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -37,6 +36,7 @@ import {
   type ReaderDensity,
   type ReaderTheme,
 } from '@/lib/readerState';
+import { safeShare } from '@/lib/share';
 import { buildImageCreatorData, buildSelectionShareText, formatVerseRange } from '@/lib/verseUtils';
 import { cancelStreakReminderForToday } from '@/lib/localNotifications';
 import { markReadToday } from '@/lib/readingToday';
@@ -360,11 +360,7 @@ export function BibleReader({
       bibleAbbr: currentBible?.abbr ?? 'RVR1960',
     });
     if (!share) return;
-    try {
-      await Share.share({ title: share.title, message: share.text, url: share.url });
-    } catch {
-      // usuario canceló
-    }
+    await safeShare({ title: share.title, message: share.text, url: share.url });
   };
 
   const openNoteModal = () => {

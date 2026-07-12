@@ -7,7 +7,6 @@ import {
   Modal,
   Pressable,
   RefreshControl,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -21,6 +20,7 @@ import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as repo from '@/lib/repo';
+import { shareNote } from '@/lib/share';
 import {
   countNoteWords,
   estimateNoteReadMinutes,
@@ -169,12 +169,8 @@ export default function NotebookDetailScreen() {
     }
   };
 
-  const shareNote = async (note: NotebookNote) => {
-    const body = noteHtmlToPlainText(note.content);
-    await Share.share({
-      title: note.title || 'Nota',
-      message: `${note.title || 'Sin título'}${body ? `\n\n${body}` : ''}`,
-    });
+  const shareNoteAction = async (note: NotebookNote) => {
+    await shareNote({ title: note.title, body: noteHtmlToPlainText(note.content) });
   };
 
   const moveNote = async (note: NotebookNote, targetNotebookId: number) => {
@@ -356,7 +352,7 @@ export default function NotebookDetailScreen() {
                   <Pressable
                     onPress={(event) => {
                       event.stopPropagation();
-                      void shareNote(item);
+                      void shareNoteAction(item);
                     }}
                     hitSlop={8}
                   >

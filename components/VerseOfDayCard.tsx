@@ -6,7 +6,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   View,
@@ -21,6 +20,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import { resolveVerseBackgroundImage } from '@/lib/resolveVerseBackground';
+import { shareVerse } from '@/lib/share';
 import { updateVerseWidget } from '@/lib/verseWidgetUpdate';
 import type { BibleVersion, VerseOfDay } from '@/lib/types';
 
@@ -86,13 +86,7 @@ export function VerseOfDayCard() {
   }
 
   const share = async () => {
-    try {
-      await Share.share({
-        message: `"${data.text}"\n\n— ${data.reference} (${abbr})\nTema: ${data.theme}\n\nLee más en: https://biblia2.dvguzman.com`,
-      });
-    } catch {
-      // Ignorar cancelación
-    }
+    await shareVerse({ text: data.text, reference: data.reference, abbr });
   };
 
   const readChapter = () => {
