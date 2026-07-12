@@ -112,6 +112,12 @@ export default function ProfileScreen() {
             label="Favoritos"
             onPress={() => router.push('/favorites')}
           />
+          <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+          <MenuRow
+            icon={{ ios: 'square.grid.2x2.fill', android: 'grid_view', web: 'grid_view' }}
+            label="Personalizar accesos rápidos"
+            onPress={() => router.push('/customize-home')}
+          />
         </Card>
       </View>
 

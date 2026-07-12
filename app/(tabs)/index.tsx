@@ -3,6 +3,7 @@ import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +24,7 @@ import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import * as repo from '@/lib/repo';
 import { pickFeaturedDevotional, parseDevotionalContent } from '@/lib/devotional';
+import { DEFAULT_HOME_ACTIONS, getHomeActions, HOME_ACTION_CATALOG, type HomeActionKey } from '@/lib/homeActions';
 import { getLastPassage, type LastPassage } from '@/lib/readerState';
 import type { RecentNotebookNote } from '@/lib/repo';
 import type { ChurchEvent, Devotional, Favorite, FeedAnnouncement, HighlightItem } from '@/lib/types';
@@ -51,6 +53,7 @@ export default function HomeScreen() {
   const [recentNotes, setRecentNotes] = useState<RecentNotebookNote[]>([]);
   const [recentFavorites, setRecentFavorites] = useState<Favorite[]>([]);
   const [recentHighlights, setRecentHighlights] = useState<HighlightItem[]>([]);
+  const [homeActions, setHomeActions] = useState<HomeActionKey[]>(DEFAULT_HOME_ACTIONS);
 
   useEffect(() => {
     if (authLoading || isGuest) return;
@@ -82,6 +85,9 @@ export default function HomeScreen() {
       let active = true;
       getLastPassage().then((passage) => {
         if (active) setLastPassage(passage);
+      });
+      getHomeActions().then((actions) => {
+        if (active) setHomeActions(actions);
       });
       if (!isGuest) {
         Promise.all([
@@ -165,6 +171,26 @@ export default function HomeScreen() {
         bibleId: String(favorite.bible_id),
       },
     });
+  };
+
+  const openImageCreator = () => {
+    Alert.alert(
+      'Imagen de versículo',
+      'Selecciona un versículo en el lector y toca el ícono de imagen para crearla.',
+      [{ text: 'Ir al lector', onPress: () => goBible('reader') }, { text: 'Cancelar', style: 'cancel' }],
+    );
+  };
+
+  const quickActionHandlers: Record<HomeActionKey, () => void> = {
+    read: () => goBible('reader'),
+    search: () => goBible('search'),
+    note: () => void createQuickNote(),
+    downloads: () => router.push('/downloads'),
+    image: openImageCreator,
+    stats: () => (isGuest ? router.push('/login') : router.push('/statistics')),
+    activity: () => (isGuest ? router.push('/login') : router.push('/activity')),
+    dictionary: () => goBible('dictionary'),
+    community: () => (isGuest ? router.push('/login') : router.push('/(tabs)/feed')),
   };
 
   const openHighlight = (highlight: HighlightItem) => {
@@ -495,57 +521,30 @@ export default function HomeScreen() {
       ) : null}
 
       <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Acciones rápidas</Text>
+        <View style={styles.sectionHeader}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Acciones rápidas</Text>
+          <Pressable onPress={() => router.push('/customize-home')}>
+            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>Personalizar →</Text>
+          </Pressable>
+        </View>
         <View style={styles.actions}>
-          <QuickActionCard
-            icon={{ ios: 'book.fill', android: 'menu_book', web: 'menu_book' }}
-            title="Ir a lectura"
-            description="Lee la Biblia capítulo a capítulo"
-            onPress={() => goBible('reader')}
-          />
-          <QuickActionCard
-            icon={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-            title="Buscador avanzado"
-            description="Busca versículos y palabras clave"
-            onPress={() => goBible('search')}
-          />
-          <QuickActionCard
-            icon={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }}
-            title="Nota rápida"
-            description={isGuest ? 'Requiere iniciar sesión' : 'Captura una idea al instante'}
-            locked={isGuest}
-            onPress={() => void createQuickNote()}
-          />
-          <QuickActionCard
-            icon={{ ios: 'chart.bar.fill', android: 'bar_chart', web: 'bar_chart' }}
-            title="Estadísticas"
-            description={isGuest ? 'Requiere iniciar sesión' : 'Progreso de lectura por libro'}
-            locked={isGuest}
-            onPress={() => (isGuest ? router.push('/login') : router.push('/statistics'))}
-          />
-          <QuickActionCard
-            icon={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
-            title="Actividad"
-            description={isGuest ? 'Requiere iniciar sesión' : 'Calendario y progreso reciente'}
-            locked={isGuest}
-            onPress={() => (isGuest ? router.push('/login') : router.push('/activity'))}
-          />
-          <QuickActionCard
-            icon={{ ios: 'character.book.closed.fill', android: 'menu_book', web: 'menu_book' }}
-            title="Diccionario Strong"
-            description="Códigos griegos y hebreos del texto bíblico"
-            onPress={() => goBible('dictionary')}
-          />
-          <QuickActionCard
-            icon={{ ios: 'person.2.fill', android: 'groups', web: 'groups' }}
-            title="Comunidad"
-            description={isGuest ? 'Requiere iniciar sesión' : 'Publicaciones de tu iglesia'}
-            locked={isGuest}
-            onPress={() => (isGuest ? router.push('/login') : router.push('/(tabs)/feed'))}
-          />
+          {homeActions
+            .map((key) => HOME_ACTION_CATALOG.find((action) => action.key === key))
+            .filter((action): action is (typeof HOME_ACTION_CATALOG)[number] => Boolean(action))
+            .map((action) => (
+              <QuickActionCard
+                key={action.key}
+                icon={action.icon}
+                title={action.title}
+                description={isGuest && action.guestDescription ? action.guestDescription : action.description}
+                locked={isGuest && action.requiresAuth}
+                onPress={quickActionHandlers[action.key]}
+              />
+            ))}
         </View>
       </View>
     </ScrollView>
+
   );
 }
 
