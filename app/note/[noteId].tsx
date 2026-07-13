@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
 import { SymbolView } from 'expo-symbols';
+import * as ImagePicker from 'expo-image-picker';
+import * as api from '@/lib/api';
 
 import { FontSelectorModal } from '@/components/FontSelectorModal';
 import { InsertDictionaryModal } from '@/components/InsertDictionaryModal';
@@ -29,7 +31,7 @@ import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
 import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
-import { getDownloadedFonts } from '@/lib/fontManager';
+import { deleteNoteFont, getDownloadedFonts, getNoteFont, saveNoteFont } from '@/lib/fontManager';
 import { countNoteWords, estimateNoteReadMinutes, noteHtmlToPlainText } from '@/lib/notebookCovers';
 import { exportNoteAsPdf } from '@/lib/noteExport';
 import { shareNote } from '@/lib/share';
@@ -78,6 +80,7 @@ export default function NoteEditorScreen() {
   const [referenceModalOpen, setReferenceModalOpen] = useState(false);
   const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
   const [fontModalOpen, setFontModalOpen] = useState(false);
+  const [imageEditMode, setImageEditMode] = useState(false);
 
   // Formatting state
   const [activeFont, setActiveFont] = useState('Default');
@@ -116,6 +119,10 @@ export default function NoteEditorScreen() {
   // Scroll caret when keyboard opens; blur editor on Android when it closes (back button).
   useEffect(() => {
     if (preview) return;
+    if (imageEditMode) {
+      Keyboard.dismiss();
+      return;
+    }
     sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight });
     if (
       Platform.OS === 'android' &&
@@ -125,7 +132,7 @@ export default function NoteEditorScreen() {
       sendToEditor({ type: 'blurEditor' });
     }
     prevKeyboardHeightRef.current = keyboardHeight;
-  }, [keyboardHeight, preview]);
+  }, [imageEditMode, keyboardHeight, preview]);
 
   // ── Load color palette favorites ──
   useEffect(() => {
@@ -180,12 +187,14 @@ export default function NoteEditorScreen() {
     setLoading(true);
     repo
       .repoGetNotebookNote(id)
-      .then(({ note }) => {
+      .then(async ({ note }) => {
         setTitle(note.title);
         setContent(note.content);
         initialContentRef.current = note.content;
         initialTitleRef.current = note.title;
         setLastSavedAt(note.updatedAt ? new Date(note.updatedAt) : null);
+        // Restaurar la fuente elegida para esta nota antes de montar el editor
+        setActiveFont(await getNoteFont(id));
       })
       .catch((err) => Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo cargar'))
       .finally(() => setLoading(false));
@@ -194,6 +203,12 @@ export default function NoteEditorScreen() {
   // ── Font selection handler (called from FontSelectorModal) ──
   const handleSetFont = async (fontName: string) => {
     setActiveFont(fontName);
+    // Persistir de inmediato: cambiar solo la fuente no altera el HTML
+    // guardado, así que no pasa por el flujo de guardado de contenido.
+    const realId = isNew ? createdIdRef.current : Number(noteId);
+    if (realId != null && !Number.isNaN(realId)) {
+      void saveNoteFont(realId, fontName);
+    }
     try {
       const fonts = await loadFontsBase64();
       sendToEditor({ type: 'loadFonts', value: fonts });
@@ -264,6 +279,8 @@ export default function NoteEditorScreen() {
           if (Number.isNaN(parsedNotebookId)) throw new Error('Cuaderno no válido');
           const created = await repo.repoCreateNotebookNote(parsedNotebookId, finalTitle, htmlContent);
           createdIdRef.current = created.id;
+          // La fuente elegida antes del primer guardado aún no tenía id de nota
+          if (activeFont !== 'Default') void saveNoteFont(created.id, activeFont);
         } else {
           const id = isNew ? createdIdRef.current! : Number(noteId);
           await repo.repoUpdateNotebookNote(id, finalTitle, htmlContent);
@@ -301,7 +318,7 @@ export default function NoteEditorScreen() {
         setSaving(false);
       }
     },
-    [isNew, isOnline, noteId, parsedNotebookId, title],
+    [activeFont, isNew, isOnline, noteId, parsedNotebookId, title],
   );
 
   const requestEditorHtml = useCallback(
@@ -337,6 +354,57 @@ export default function NoteEditorScreen() {
     [navigation, persistNote],
   );
 
+  const handleImagePick = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permiso denegado', 'Se necesita acceso a la galería para insertar imágenes.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.80,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      let imageUrl = '';
+
+      if (isOnline) {
+        try {
+          const fileName = asset.fileName ?? `note-img-${Date.now()}.jpg`;
+          const mimeType = asset.mimeType ?? 'image/jpeg';
+          const uploadRes = await api.uploadImage(asset.uri, fileName, mimeType);
+          imageUrl = uploadRes.url;
+        } catch (uploadErr) {
+          console.warn('Upload failed, falling back to base64:', uploadErr);
+        }
+      }
+
+      if (!imageUrl) {
+        // Fallback to base64
+        try {
+          const b64 = await FileSystem.readAsStringAsync(asset.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          const mime = asset.mimeType ?? 'image/jpeg';
+          imageUrl = `data:${mime};base64,${b64}`;
+        } catch (readErr) {
+          Alert.alert('Error', 'No se pudo leer la imagen local.');
+          return;
+        }
+      }
+
+      sendToEditor({ type: 'insertImage', value: imageUrl });
+    } catch (err) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo seleccionar la imagen');
+    }
+  };
+
   const onWebViewMessage = (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -361,6 +429,11 @@ export default function NoteEditorScreen() {
         setReferenceModalOpen(true);
       } else if (data.type === 'openDictionaryModal') {
         setDictionaryModalOpen(true);
+      } else if (data.type === 'openImagePicker') {
+        void handleImagePick();
+      } else if (data.type === 'imageEditMode') {
+        setImageEditMode(!!data.active);
+        if (data.active) Keyboard.dismiss();
       }
     } catch (e) {
       console.error('Error parsing WebView message:', e);
@@ -444,6 +517,7 @@ export default function NoteEditorScreen() {
         onPress: async () => {
           try {
             await repo.repoDeleteNotebookNote(Number(noteId));
+            void deleteNoteFont(Number(noteId));
             router.back();
           } catch (err) {
             Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo eliminar');
@@ -501,7 +575,13 @@ export default function NoteEditorScreen() {
         }}
       />
 
-      <View style={{ flex: 1, backgroundColor: colors.background, paddingBottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: colors.background,
+          paddingBottom: !imageEditMode && keyboardHeight > 0 ? keyboardHeight : insets.bottom,
+        }}
+      >
         {/* Title Input */}
         <View style={styles.titleWrapper}>
           <TextInput
@@ -510,6 +590,7 @@ export default function NoteEditorScreen() {
             placeholderTextColor={colors.textMuted}
             value={title}
             onChangeText={setTitle}
+            editable={!imageEditMode}
             returnKeyType="next"
             submitBehavior="submit"
             onSubmitEditing={() => {
@@ -564,7 +645,7 @@ export default function NoteEditorScreen() {
           {preview ? (
             <ScrollView style={styles.previewContainer}>
               <View style={[styles.previewBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <NoteContent content={content || 'Sin contenido'} />
+                <NoteContent content={content || 'Sin contenido'} font={activeFont} />
               </View>
             </ScrollView>
           ) : null}

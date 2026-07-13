@@ -9,6 +9,7 @@ import { getDownloadedFonts } from '@/lib/fontManager';
 
 interface NoteContentProps {
   content: string;
+  font?: string;
 }
 
 // Convert older Markdown formatting into HTML for backward compatibility
@@ -65,7 +66,7 @@ function convertMarkdownToHtml(text: string): string {
   return html;
 }
 
-export function NoteContent({ content }: NoteContentProps) {
+export function NoteContent({ content, font = 'Default' }: NoteContentProps) {
   const colors = useThemeColors();
   const [webViewHeight, setWebViewHeight] = useState(150);
   const [base64Fonts, setBase64Fonts] = useState<Record<string, string>>({});
@@ -117,7 +118,7 @@ export function NoteContent({ content }: NoteContentProps) {
   const editorHtml = getEditorHtml(
     colors,
     htmlContent,
-    'Default',
+    font,
     base64Fonts,
     true // isReadOnly = true
   );

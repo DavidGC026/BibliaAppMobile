@@ -17,7 +17,7 @@ import { useContentPadding } from '@/hooks/useContentPadding';
 import {
   deleteFont,
   downloadFont,
-  fetchGoogleFontUrl,
+  fetchGoogleFont,
   getDownloadedFonts,
   POPULAR_FONTS,
   type FontItem,
@@ -54,7 +54,7 @@ export function FontSelectorModal({
 
   // Combine default system fonts, popular list, and extra downloaded ones
   const systemFonts: FontItem[] = [
-    { id: 'Default', name: 'Defect (Sans)', category: 'Sistema', url: '' },
+    { id: 'Default', name: 'Predeterminada (Sans)', category: 'Sistema', url: '' },
     { id: 'serif', name: 'Serif (Sistema)', category: 'Sistema', url: '' },
     { id: 'monospace', name: 'Monospace (Sistema)', category: 'Sistema', url: '' },
   ];
@@ -109,11 +109,13 @@ export function FontSelectorModal({
     if (!q) return;
     setSearching(true);
     try {
-      const url = await fetchGoogleFontUrl(q);
-      const fontId = q.replace(/\s+/g, '');
+      // family es el nombre canónico de Google Fonts, no lo que tecleó el
+      // usuario; así el id coincide con el de POPULAR_FONTS y descargas previas.
+      const { url, family } = await fetchGoogleFont(q);
+      const fontId = family.replace(/\s+/g, '');
       const newFont: FontItem = {
         id: fontId,
-        name: q,
+        name: family,
         category: 'Google Fonts',
         url,
       };
@@ -131,7 +133,8 @@ export function FontSelectorModal({
           onClose();
         }
       } else {
-        Alert.alert('Info', 'Esta fuente ya está en tu catálogo o descargada.');
+        // Ya está en el catálogo: seleccionarla directamente
+        await selectOrDownload(newFont);
       }
       setSearchQuery('');
     } catch (err) {

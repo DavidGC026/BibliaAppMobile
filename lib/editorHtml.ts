@@ -189,6 +189,165 @@ export function getEditorHtml(
 
     a { color: ${colors.primary}; }
 
+    /* ── Image Block ────────────────────────────────── */
+    .note-image-block {
+      max-width: 100%;
+      box-sizing: border-box;
+      transition: outline 0.15s ease;
+    }
+    .note-image-block img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px;
+      display: block;
+      margin: 0 auto;
+    }
+
+    /* ── Image Edit Panel ──────────────────────────────── */
+    body.image-editing .toolbar-area {
+      display: none;
+    }
+    body.image-editing #editor {
+      padding-bottom: 220px;
+    }
+    #image-edit-panel {
+      position: fixed;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      z-index: 99999;
+      display: none;
+      background: ${colors.card};
+      border: 1px solid ${colors.border};
+      border-radius: 16px;
+      padding: 10px;
+      box-shadow: 0 16px 38px rgba(0,0,0,0.22);
+      font-family: system-ui, sans-serif;
+      color: ${colors.text};
+    }
+    #image-edit-panel .panel-grabber {
+      width: 34px;
+      height: 4px;
+      border-radius: 999px;
+      background: ${colors.border};
+      margin: 0 auto 10px;
+    }
+    #image-edit-panel .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    #image-edit-panel .panel-title {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    #image-edit-panel .panel-kicker {
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: ${colors.textMuted};
+    }
+    #image-edit-panel .panel-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: ${colors.text};
+    }
+    #image-edit-panel .panel-close {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid ${colors.border};
+      background: ${colors.background};
+      color: ${colors.text};
+      font-size: 18px;
+      line-height: 1;
+    }
+    #image-edit-panel .panel-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    #image-edit-panel .panel-value {
+      min-width: 46px;
+      padding: 6px 8px;
+      border-radius: 9px;
+      background: ${colors.primarySoft};
+      color: ${colors.primary};
+      text-align: center;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    #image-edit-panel .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      margin-bottom: 10px;
+    }
+    #image-edit-panel .panel-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: ${colors.textMuted};
+    }
+    #image-edit-panel .segmented {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+    }
+    #image-edit-panel .panel-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.1fr;
+      gap: 6px;
+    }
+    #image-edit-panel button {
+      min-height: 38px;
+      border-radius: 10px;
+      border: 1px solid ${colors.border};
+      background: ${colors.background};
+      color: ${colors.text};
+      font-size: 12px;
+      font-weight: 800;
+      font-family: system-ui, sans-serif;
+      transition: opacity 0.15s ease, transform 0.1s ease, background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #image-edit-panel button:active {
+      transform: scale(0.97);
+      opacity: 0.78;
+    }
+    #image-edit-panel button.active {
+      background: ${colors.primary};
+      border-color: ${colors.primary};
+      color: #ffffff;
+    }
+    #image-edit-panel .danger {
+      background: ${colors.danger};
+      border-color: ${colors.danger};
+      color: #ffffff;
+    }
+    #image-edit-panel input[type="range"] {
+      flex: 1;
+      height: 7px;
+      -webkit-appearance: none;
+      background: ${colors.border};
+      border-radius: 999px;
+      outline: none;
+    }
+    #image-edit-panel input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: ${colors.primary};
+      border: 3px solid ${colors.card};
+      box-shadow: 0 2px 8px rgba(0,0,0,0.22);
+      cursor: pointer;
+    }
+
     /* ── Toolbar (only in edit mode) ──────────────────── */
     .toolbar-area {
       display: ${isReadOnly ? 'none' : 'flex'};
@@ -375,6 +534,7 @@ export function getEditorHtml(
         <div class="sep"></div>
 
         <button class="tb" data-action="insertTable">⊞</button>
+        <button class="tb" data-action="insertImage">🖼️</button>
 
         <div class="sep"></div>
 
@@ -410,6 +570,234 @@ export function getEditorHtml(
       var savedRange = null;
       var scrollTimer = null;
       var keyboardInset = 0;
+
+      var activeImage = null;
+      var activeImageBlock = null;
+      var panel = null;
+      var imageEditActive = false;
+
+      function setImageEditMode(active) {
+        if (imageEditActive === active) return;
+        imageEditActive = active;
+        document.body.classList.toggle('image-editing', active);
+        if (active) {
+          editor.blur();
+          editor.setAttribute('contenteditable', 'false');
+        } else if (!isReadOnly) {
+          editor.setAttribute('contenteditable', 'true');
+        }
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'imageEditMode',
+          active: active
+        }));
+      }
+
+      function createPanel() {
+        if (panel) return;
+        panel = document.createElement('div');
+        panel.id = 'image-edit-panel';
+
+        panel.innerHTML = [
+          '<div class="panel-grabber"></div>',
+          '<div class="panel-header">',
+          '  <div class="panel-title">',
+          '    <span class="panel-kicker">Imagen seleccionada</span>',
+          '    <span class="panel-name">Editar imagen</span>',
+          '  </div>',
+          '  <button type="button" class="panel-close" id="btn-image-close" aria-label="Cerrar">×</button>',
+          '</div>',
+          '<div class="panel-section">',
+          '  <div class="panel-row">',
+          '    <span class="panel-label">Tamaño</span>',
+          '    <input type="range" id="panel-width-slider" min="20" max="100" step="5" />',
+          '    <span class="panel-value" id="panel-width-lbl">60%</span>',
+          '  </div>',
+          '</div>',
+          '<div class="panel-section">',
+          '  <span class="panel-label">Alineación</span>',
+          '  <div class="segmented">',
+          '    <button type="button" id="btn-align-left">Izq.</button>',
+          '    <button type="button" id="btn-align-center">Centro</button>',
+          '    <button type="button" id="btn-align-right">Der.</button>',
+          '    <button type="button" id="btn-align-full">100%</button>',
+          '  </div>',
+          '</div>',
+          '<div class="panel-actions">',
+          '  <button type="button" id="btn-move-up">Subir</button>',
+          '  <button type="button" id="btn-move-down">Bajar</button>',
+          '  <button type="button" class="danger" id="btn-image-delete">Borrar</button>',
+          '</div>'
+        // ponytail: en este template literal hay que escribir join('\\n');
+        // si se usa join con escape simple, el WebView recibe un string
+        // partido y todo el script falla (toolbar, colores, fuentes).
+        ].join('\\n');
+
+        document.body.appendChild(panel);
+
+        // Bind events
+        var slider = document.getElementById('panel-width-slider');
+        slider.addEventListener('input', function() {
+          if (!activeImageBlock) return;
+          var w = this.value + '%';
+          activeImageBlock.style.width = w;
+          document.getElementById('panel-width-lbl').textContent = w;
+          keepImageVisible();
+          notifyChange();
+        });
+
+        document.getElementById('btn-image-close').addEventListener('click', hidePanel);
+        document.getElementById('btn-align-left').addEventListener('click', function() { setAlign('left'); });
+        document.getElementById('btn-align-center').addEventListener('click', function() { setAlign('center'); });
+        document.getElementById('btn-align-right').addEventListener('click', function() { setAlign('right'); });
+        document.getElementById('btn-align-full').addEventListener('click', function() { setAlign('full'); });
+
+        document.getElementById('btn-move-up').addEventListener('click', function() {
+          if (!activeImageBlock) return;
+          var prev = activeImageBlock.previousElementSibling;
+          if (prev) {
+            activeImageBlock.parentNode.insertBefore(activeImageBlock, prev);
+            keepImageVisible();
+            notifyChange();
+          }
+        });
+
+        document.getElementById('btn-move-down').addEventListener('click', function() {
+          if (!activeImageBlock) return;
+          var next = activeImageBlock.nextElementSibling;
+          if (next) {
+            activeImageBlock.parentNode.insertBefore(activeImageBlock, next.nextElementSibling);
+            keepImageVisible();
+            notifyChange();
+          }
+        });
+
+        document.getElementById('btn-image-delete').addEventListener('click', function() {
+          if (!activeImageBlock) return;
+          activeImageBlock.remove();
+          hidePanel();
+          notifyChange();
+        });
+
+        panel.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+        });
+        panel.addEventListener('touchstart', function(e) {
+          e.stopPropagation();
+        }, { passive: true });
+      }
+
+      function setAlign(align) {
+        if (!activeImageBlock) return;
+        activeImageBlock.style.display = 'block';
+        activeImageBlock.style.float = 'none';
+        activeImageBlock.style.margin = '12px auto';
+        activeImageBlock.style.textAlign = 'center';
+
+        var slider = document.getElementById('panel-width-slider');
+        var w = slider.value + '%';
+
+        if (align === 'left') {
+          activeImageBlock.style.display = 'inline-block';
+          activeImageBlock.style.float = 'left';
+          activeImageBlock.style.margin = '8px 16px 8px 0';
+          activeImageBlock.style.textAlign = 'left';
+        } else if (align === 'right') {
+          activeImageBlock.style.display = 'inline-block';
+          activeImageBlock.style.float = 'right';
+          activeImageBlock.style.margin = '8px 0 8px 16px';
+          activeImageBlock.style.textAlign = 'right';
+        } else if (align === 'full') {
+          activeImageBlock.style.display = 'block';
+          activeImageBlock.style.float = 'none';
+          activeImageBlock.style.margin = '12px 0';
+          activeImageBlock.style.width = '100%';
+          slider.value = 100;
+          document.getElementById('panel-width-lbl').textContent = '100%';
+        } else {
+          activeImageBlock.style.display = 'block';
+          activeImageBlock.style.float = 'none';
+          activeImageBlock.style.margin = '12px auto';
+          activeImageBlock.style.textAlign = 'center';
+        }
+
+        updateAlignButtons(align);
+        keepImageVisible();
+        notifyChange();
+      }
+
+      function updateAlignButtons(activeAlign) {
+        ['left', 'center', 'right', 'full'].forEach(function(a) {
+          var btn = document.getElementById('btn-align-' + a);
+          if (!btn) return;
+          btn.classList.toggle('active', a === activeAlign);
+        });
+      }
+
+      function keepImageVisible() {
+        if (!activeImageBlock) return;
+        requestAnimationFrame(function() {
+          var rect = activeImageBlock.getBoundingClientRect();
+          var panelHeight = panel ? panel.offsetHeight : 210;
+          var safeBottom = window.innerHeight - panelHeight - 28;
+          if (rect.bottom > safeBottom) {
+            editor.scrollTop += rect.bottom - safeBottom;
+          } else if (rect.top < 18) {
+            editor.scrollTop += rect.top - 18;
+          }
+        });
+      }
+
+      function showImageEditPanel(img, block) {
+        if (isReadOnly) return;
+        activeImage = img;
+        activeImageBlock = block;
+        createPanel();
+
+        var currentWidth = block.style.width || '60%';
+        var numWidth = parseInt(currentWidth, 10) || 60;
+        
+        var slider = document.getElementById('panel-width-slider');
+        slider.value = numWidth;
+        document.getElementById('panel-width-lbl').textContent = numWidth + '%';
+
+        var align = 'center';
+        if (block.style.float === 'left') {
+          align = 'left';
+        } else if (block.style.float === 'right') {
+          align = 'right';
+        } else if (block.style.width === '100%') {
+          align = 'full';
+        }
+        updateAlignButtons(align);
+
+        setImageEditMode(true);
+        panel.style.display = 'block';
+        keepImageVisible();
+
+        document.querySelectorAll('.note-image-block').forEach(function(b) {
+          b.style.outline = 'none';
+        });
+        block.style.outline = '2px solid ${colors.primary}';
+        block.style.outlineOffset = '2px';
+      }
+
+      function hidePanel() {
+        if (panel) {
+          panel.style.display = 'none';
+        }
+        setImageEditMode(false);
+        document.querySelectorAll('.note-image-block').forEach(function(b) {
+          b.style.outline = 'none';
+        });
+        activeImage = null;
+        activeImageBlock = null;
+      }
+
+      function buildImageBlockHtml(url) {
+        return '<div class="note-image-block" style="text-align: center; width: 60%; max-width: 100%; display: block; margin: 12px auto;">' +
+               '  <img src="' + url + '" style="width: 100%; height: auto; border-radius: 8px;" />' +
+               '</div><p><br></p>';
+      }
 
       function cssEscape(value) {
         return String(value).replace(/\\\\/g, '\\\\\\\\').replace(/'/g, "\\\\'");
@@ -623,6 +1011,11 @@ export function getEditorHtml(
         restoreSelection();
         var action = btn.getAttribute('data-action');
         var val = btn.getAttribute('data-val') || null;
+
+        if (action === 'insertImage') {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openImagePicker' }));
+          return;
+        }
 
         if (action === 'openFontModal') {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openFontModal' }));
@@ -945,12 +1338,42 @@ export function getEditorHtml(
           scrollCaretIntoView();
         });
         editor.addEventListener('focus', scrollCaretIntoView);
-        editor.addEventListener('click', scrollCaretIntoView);
+        
+        editor.addEventListener('click', function(e) {
+          var t = e.target;
+          if (t && t.tagName === 'IMG') {
+            var block = t.closest('.note-image-block');
+            if (!block) {
+              block = document.createElement('div');
+              block.className = 'note-image-block';
+              block.style.textAlign = 'center';
+              block.style.width = '60%';
+              block.style.maxWidth = '100%';
+              block.style.display = 'block';
+              block.style.margin = '12px auto';
+              t.parentNode.insertBefore(block, t);
+              block.appendChild(t);
+            }
+            showImageEditPanel(t, block);
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          hidePanel();
+          scrollCaretIntoView();
+        });
+
+        editor.addEventListener('scroll', function() {
+          if (activeImageBlock) {
+            keepImageVisible();
+          }
+        });
 
         // Android: al cerrar el teclado con "atrás" el editor conserva el foco,
         // así que un tap normal ya no vuelve a mostrar el teclado. Forzamos
         // blur+focus dentro del gesto del usuario para que el IME reaparezca.
         editor.addEventListener('click', function(e) {
+          if (imageEditActive) return;
           if (keyboardInset > 0) return;
           if (document.activeElement !== editor) return;
           var t = e.target;
@@ -1053,6 +1476,8 @@ export function getEditorHtml(
               editor.style.fontFamily = fontStack(action.value);
             }
             editor.style.fontFamily = fontStack(action.value);
+          } else if (action.type === 'insertImage') {
+            insertHtmlAtSelection(buildImageBlockHtml(action.value));
           } else if (action.type === 'insertVerse') {
             insertHtmlAtSelection(buildVerseBlockHtml(action.value));
           } else if (action.type === 'insertReferences') {

@@ -29,22 +29,81 @@ export const POPULAR_FONTS: FontItem[] = [
   { id: 'JetBrainsMono', name: 'JetBrains Mono', category: 'Monospace', url: 'https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxTOlOQ.ttf' }
 ];
 
-export async function fetchGoogleFontUrl(fontName: string): Promise<string> {
-  const formattedName = fontName.trim().replace(/\s+/g, '+');
+export interface GoogleFontResult {
+  url: string;
+  // Nombre canónico según Google Fonts (p. ej. "Playfair Display"),
+  // independiente de cómo lo haya escrito el usuario.
+  family: string;
+}
+
+async function tryFetchGoogleFontCss(familyQuery: string): Promise<GoogleFontResult | null> {
+  // Sin User-Agent de navegador moderno la API sirve TTF (el formato que
+  // acepta expo-font); con UA de Chrome devuelve woff/woff2.
+  const response = await fetch(
+    `https://fonts.googleapis.com/css?family=${familyQuery.replace(/\s+/g, '+')}`,
+  );
+  if (!response.ok) return null;
+  const css = await response.text();
+  const urlMatch = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+?\.(?:ttf|otf))\)/i);
+  if (!urlMatch) return null;
+  const familyMatch = css.match(/font-family:\s*'([^']+)'/);
+  return {
+    url: urlMatch[1],
+    family: familyMatch ? familyMatch[1] : familyQuery,
+  };
+}
+
+export async function fetchGoogleFont(fontName: string): Promise<GoogleFontResult> {
+  const trimmed = fontName.trim();
+  // La API css?family= es sensible a mayúsculas ("lobster" → 400, "Lobster"
+  // → 200), así que se prueba tal cual y luego con cada palabra capitalizada.
+  const titleCased = trimmed
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+  const candidates = trimmed === titleCased ? [trimmed] : [trimmed, titleCased];
   try {
-    // Sin User-Agent de navegador moderno la API sirve TTF (el formato que
-    // acepta expo-font); con UA de Chrome devuelve woff/woff2.
-    const response = await fetch(`https://fonts.googleapis.com/css?family=${formattedName}`);
-    if (!response.ok) throw new Error('No se pudo buscar la fuente en Google Fonts');
-    const css = await response.text();
-    const match = css.match(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+?\.(?:ttf|otf))\)/i);
-    if (match && match[1]) {
-      return match[1];
+    for (const candidate of candidates) {
+      const result = await tryFetchGoogleFontCss(candidate);
+      if (result) return result;
     }
-    throw new Error('No se encontró el archivo de la fuente (TTF)');
+    throw new Error('No existe en Google Fonts o no ofrece archivo TTF. Revisa el nombre exacto (p. ej. "PT Sans").');
   } catch (error) {
-    console.error('Error in fetchGoogleFontUrl:', error);
-    throw new Error(`Error al buscar la fuente "${fontName}": ${error instanceof Error ? error.message : String(error)}`);
+    console.error('Error in fetchGoogleFont:', error);
+    throw new Error(`Error al buscar la fuente "${trimmed}": ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+// ── Fuente elegida por nota ─────────────────────────────────────────
+// El editor aplica la fuente de toda la nota como estilo del contenedor
+// (no queda dentro del HTML guardado), así que se persiste aparte.
+const noteFontKey = (noteId: number) => `NOTE_FONT_${noteId}`;
+
+export async function getNoteFont(noteId: number): Promise<string> {
+  try {
+    return (await SecureStore.getItemAsync(noteFontKey(noteId))) || 'Default';
+  } catch {
+    return 'Default';
+  }
+}
+
+export async function saveNoteFont(noteId: number, fontId: string): Promise<void> {
+  try {
+    if (fontId === 'Default') {
+      await SecureStore.deleteItemAsync(noteFontKey(noteId));
+    } else {
+      await SecureStore.setItemAsync(noteFontKey(noteId), fontId);
+    }
+  } catch (e) {
+    console.error(`Error saving font preference for note ${noteId}:`, e);
+  }
+}
+
+export async function deleteNoteFont(noteId: number): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(noteFontKey(noteId));
+  } catch {
+    // Limpieza de preferencia: ignorar si no existe
   }
 }
 
@@ -77,7 +136,7 @@ export async function downloadFont(font: FontItem): Promise<boolean> {
     // URLs de gstatic guardadas caducan cuando Google rota la versión
     let url = font.url;
     try {
-      url = await fetchGoogleFontUrl(font.name);
+      url = (await fetchGoogleFont(font.name)).url;
     } catch {
       // Sin acceso a la API o fuente no listada: probar la URL guardada
     }
