@@ -26,8 +26,10 @@ import {
   getLocalNote,
   listLocalNotebooks,
   listLocalNotes,
+  markNoteSynced,
   moveLocalNote,
   resolveNotebookLocalId,
+  setNoteServerId,
   updateLocalNotebook,
   updateLocalNote,
   upsertNoteFromServer,
@@ -372,41 +374,32 @@ export async function repoDeleteNotebook(id: number) {
 
 export async function repoCreateNotebookNote(notebookId: number, title: string, content: string) {
   const finalTitle = title.trim() || 'Sin título';
+  const note = await createLocalNote(notebookId, finalTitle, content);
   if (useRemote() && notebookId > 0) {
     try {
       const res = await api.createNotebookNote(notebookId, finalTitle, content);
-      const ts = nowIso();
-      await upsertNoteFromServer({
-        id: res.id,
-        notebookId,
-        title: res.title,
-        content: res.content,
-        tags: '[]',
-        createdAt: ts,
-        updatedAt: ts,
-      });
-      return { id: res.id, title: res.title, content: res.content };
+      await setNoteServerId(note.id, res.id);
+      return { id: res.id, title: finalTitle, content };
     } catch {
-      // cae a cola offline
+      // queda en SQLite como dirty para reintentar luego
     }
   }
-  const note = await createLocalNote(notebookId, finalTitle, content);
   return { id: note.id, title: note.title, content: note.content };
 }
 
 export async function repoUpdateNotebookNote(noteId: number, title: string, content: string, tags?: string[]) {
   const finalTitle = title.trim() || 'Sin título';
+  await updateLocalNote(noteId, finalTitle, content, tags ? JSON.stringify(tags) : undefined);
   if (useRemote() && noteId > 0) {
     try {
       await api.updateNotebookNote(noteId, finalTitle, content, tags);
-      const fresh = await api.getNotebookNote(noteId);
-      await upsertNoteFromServer(fresh.note);
+      const local = await getLocalNote(noteId);
+      if (local) await markNoteSynced(local.id);
       return { ok: true };
     } catch {
-      // cae a cola offline
+      // queda en SQLite como dirty para reintentar luego
     }
   }
-  await updateLocalNote(noteId, finalTitle, content, tags ? JSON.stringify(tags) : undefined);
   return { ok: true };
 }
 
