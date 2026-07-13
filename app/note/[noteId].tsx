@@ -554,19 +554,19 @@ export default function NoteEditorScreen() {
         options={{
           title: isNew ? 'Nueva nota' : 'Editar nota',
           headerRight: () => (
-            <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: 8, alignItems: 'center' }}>
+            <View style={styles.headerActions}>
               {!isNew ? (
-                <Pressable onPress={openShareOptions} hitSlop={8} accessibilityLabel="Compartir nota">
+                <Pressable onPress={openShareOptions} hitSlop={8} accessibilityLabel="Compartir nota" style={styles.headerIconBtn}>
                   <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={18} />
                 </Pressable>
               ) : null}
               {!isNew ? (
-                <Pressable onPress={remove}>
-                  <Text style={{ color: colors.danger, fontWeight: '600' }}>Borrar</Text>
+                <Pressable onPress={remove} hitSlop={8} accessibilityLabel="Borrar nota" style={styles.headerIconBtn}>
+                  <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.danger} size={18} />
                 </Pressable>
               ) : null}
-              <Pressable onPress={save} disabled={saving}>
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>
+              <Pressable onPress={save} disabled={saving} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
+                <Text style={{ color: colors.primaryForeground, fontWeight: '800', fontSize: 13 }}>
                   {saving ? '...' : 'Guardar'}
                 </Text>
               </Pressable>
@@ -582,10 +582,9 @@ export default function NoteEditorScreen() {
           paddingBottom: !imageEditMode && keyboardHeight > 0 ? keyboardHeight : insets.bottom,
         }}
       >
-        {/* Title Input */}
-        <View style={styles.titleWrapper}>
+        <View style={[styles.documentHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <TextInput
-            style={[styles.titleInput, { color: colors.text, borderColor: colors.border }]}
+            style={[styles.titleInput, { color: colors.text }]}
             placeholder="Título"
             placeholderTextColor={colors.textMuted}
             value={title}
@@ -599,31 +598,40 @@ export default function NoteEditorScreen() {
               );
             }}
           />
-        </View>
 
-        {/* Preview Toggle */}
-        <View style={styles.previewToggleWrapper}>
-          <Pressable
-            onPress={togglePreview}
-            style={[styles.previewToggle, { borderColor: colors.border, backgroundColor: colors.card }]}
-          >
-            <SymbolView
-              name={preview ? { ios: 'pencil', android: 'edit', web: 'edit' } : { ios: 'eye', android: 'visibility', web: 'visibility' }}
-              tintColor={colors.primary}
-              size={15}
-            />
-            <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>
-              {preview ? 'Editar' : 'Vista previa'}
-            </Text>
-          </Pressable>
-          <View style={styles.metaRow}>
-            <Text style={{ color: saveFlash ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: saveFlash ? '700' : '600' }}>
-              {statusText}
-            </Text>
-            <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-              {words} palabras · {readMinutes} min
-            </Text>
+          <View style={styles.documentMetaRow}>
+            <View style={styles.statusCluster}>
+              <View style={[styles.statusDot, { backgroundColor: saveFlash ? colors.primary : colors.border }]} />
+              <Text style={{ color: saveFlash ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: saveFlash ? '800' : '700' }}>
+                {statusText}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                {words} palabras · {readMinutes} min
+              </Text>
+            </View>
+            <Pressable
+              onPress={togglePreview}
+              style={[styles.previewToggle, { borderColor: preview ? colors.primaryBorder : colors.border, backgroundColor: preview ? colors.primarySoft : colors.cardMuted }]}
+            >
+              <SymbolView
+                name={preview ? { ios: 'pencil', android: 'edit', web: 'edit' } : { ios: 'eye', android: 'visibility', web: 'visibility' }}
+                tintColor={colors.primary}
+                size={15}
+              />
+              <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 12 }}>
+                {preview ? 'Editar' : 'Vista previa'}
+              </Text>
+            </Pressable>
           </View>
+
+          {imageEditMode ? (
+            <View style={[styles.inlineNotice, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
+              <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} tintColor={colors.primary} size={14} />
+              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>
+                Editando imagen
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Content Area — WebView stays mounted so edits survive preview toggle */}
@@ -682,32 +690,55 @@ export default function NoteEditorScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  headerActions: { flexDirection: 'row', gap: 8, paddingHorizontal: 8, alignItems: 'center' },
+  headerIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  saveBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
+  documentHeader: {
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 10,
+  },
   titleWrapper: {
     paddingHorizontal: 16,
     paddingTop: 8,
   },
   titleInput: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '800',
-    borderBottomWidth: 1,
-    paddingVertical: 10,
+    paddingVertical: 2,
   },
-  previewToggleWrapper: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  documentMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
+  statusCluster: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
+  statusDot: { width: 7, height: 7, borderRadius: 999 },
   previewToggle: {
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 10,
     borderWidth: 1,
     borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  inlineNotice: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
   metaRow: { flex: 1, alignItems: 'flex-end', gap: 2 },
   editorContainer: {
@@ -720,11 +751,12 @@ const styles = StyleSheet.create({
   previewContainer: {
     ...StyleSheet.absoluteFill,
     paddingHorizontal: 16,
+    paddingTop: 4,
   },
   previewBox: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 16,
+    padding: 16,
     minHeight: 280,
     marginBottom: 20,
   },

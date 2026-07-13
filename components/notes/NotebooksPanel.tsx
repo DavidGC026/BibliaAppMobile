@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
-import { BookCover } from '@/components/BookCover';
 import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { Button } from '@/components/ui/Button';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -150,9 +149,7 @@ export function NotebooksPanel() {
         style={{ flex: 1 }}
         contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
         data={filteredNotebooks}
-        numColumns={2}
         keyExtractor={(item) => String(item.id)}
-        columnWrapperStyle={styles.row}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -166,25 +163,26 @@ export function NotebooksPanel() {
         }
         ListHeaderComponent={
           <View style={styles.header}>
-            <View style={styles.headerRow}>
+            <View style={[styles.commandPanel, shadow.sm, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}>
               <View style={{ flex: 1 }}>
-                <Text style={[typography.h2, { color: colors.text }]}>Espacio de notas</Text>
-                <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                  Ideas, reuniones, clases, proyectos y estudio personal.
+                <Text style={[typography.h2, { color: colors.text }]}>Biblioteca de trabajo</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+                  Libretas activas, apuntes recientes y material de estudio en un solo lugar.
                 </Text>
               </View>
-              <Button label="Nueva" onPress={openCreate} />
+              <Button label="Nueva libreta" onPress={openCreate} style={styles.createBtn} />
             </View>
+
             <View style={styles.statsRow}>
-              <View style={[styles.statPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.statPill, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
                 <Text style={[styles.statValue, { color: colors.text }]}>{notebooks.length}</Text>
                 <Text style={[styles.statLabel, { color: colors.textMuted }]}>Libretas</Text>
               </View>
-              <View style={[styles.statPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.statPill, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
                 <Text style={[styles.statValue, { color: colors.text }]}>{totalNotes}</Text>
                 <Text style={[styles.statLabel, { color: colors.textMuted }]}>Notas</Text>
               </View>
-              <View style={[styles.statPill, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.statPill, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
                 <Text style={[styles.statValue, { color: colors.text }]}>{totalWords}</Text>
                 <Text style={[styles.statLabel, { color: colors.textMuted }]}>Palabras</Text>
               </View>
@@ -220,17 +218,30 @@ export function NotebooksPanel() {
           const summary = summaries[item.id] ?? { noteCount: 0, wordCount: 0, updatedAt: null };
           return (
             <Pressable
-              style={[styles.shelfItem, shadow.sm, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}
+              style={[styles.notebookCard, shadow.sm, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}
               onPress={() => router.push(`/notebook/${item.id}`)}
             >
-              <View style={styles.coverActions}>
+              <View style={[styles.notebookMark, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
+                <SymbolView name={{ ios: 'book.closed', android: 'book', web: 'book' }} tintColor={colors.primary} size={19} />
+              </View>
+
+              <View style={styles.notebookInfo}>
+                <Text style={[styles.notebookTitle, { color: colors.text }]} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }} numberOfLines={1}>
+                  {summary.noteCount} {summary.noteCount === 1 ? 'nota' : 'notas'} · {summary.wordCount} palabras · {formatNotebookDate(summary.updatedAt)}
+                </Text>
+              </View>
+
+              <View style={styles.cardActions}>
                 <Pressable
                   onPress={(event) => {
                     event.stopPropagation();
                     openEdit(item);
                   }}
                   hitSlop={6}
-                  style={[styles.actionBtn, { backgroundColor: colors.card }]}
+                  style={[styles.actionBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}
                 >
                   <SymbolView name={{ ios: 'pencil', android: 'edit', web: 'edit' }} tintColor={colors.textMuted} size={14} />
                 </Pressable>
@@ -240,18 +251,11 @@ export function NotebooksPanel() {
                     confirmDelete(item);
                   }}
                   hitSlop={6}
-                  style={[styles.actionBtn, { backgroundColor: colors.card }]}
+                  style={[styles.actionBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}
                 >
                   <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.danger} size={14} />
                 </Pressable>
               </View>
-              <BookCover title={item.name} coverImage={item.coverImage} />
-              <Text style={[styles.shelfLabel, { color: colors.text }]} numberOfLines={2}>
-                {item.name}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12, textAlign: 'center' }}>
-                {summary.noteCount} {summary.noteCount === 1 ? 'nota' : 'notas'} · {formatNotebookDate(summary.updatedAt)}
-              </Text>
             </Pressable>
           );
         }}
@@ -287,11 +291,19 @@ function summarizeNotes(notes: NotebookNote[]): NotebookSummary {
 const styles = StyleSheet.create({
   list: { padding: 16, flexGrow: 1 },
   header: { gap: 12, marginBottom: 16 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  commandPanel: {
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  createBtn: { paddingHorizontal: 14, paddingVertical: 10 },
   statsRow: { flexDirection: 'row', gap: 8 },
   statPill: {
     flex: 1,
     borderWidth: 1,
+    borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
     gap: 2,
@@ -307,18 +319,29 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
-  row: { gap: 12, marginBottom: 20, justifyContent: 'space-between' },
-  shelfItem: { width: '48%', alignItems: 'center', gap: 10, borderWidth: 1, padding: 12, minHeight: 232 },
-  coverActions: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 2,
+  notebookCard: {
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: 'row',
-    gap: 4,
+    alignItems: 'center',
+    gap: 12,
   },
-  actionBtn: { padding: 6, borderRadius: 8 },
-  shelfLabel: { fontSize: 13, fontWeight: '700', textAlign: 'center', width: '100%' },
+  notebookMark: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notebookInfo: { flex: 1, gap: 3, minWidth: 0 },
+  notebookTitle: { fontSize: 15, fontWeight: '800' },
+  cardActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  actionBtn: { width: 32, height: 32, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { alignItems: 'center', gap: 12, marginTop: 48, paddingHorizontal: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '800' },
 });

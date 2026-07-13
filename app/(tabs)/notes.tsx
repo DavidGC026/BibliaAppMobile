@@ -45,16 +45,18 @@ export default function NotesScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <OfflineBanner />
-      <View style={styles.topHeader}>
-        <View style={[styles.headerIcon, { backgroundColor: colors.primarySoft }]}>
-          <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={20} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>
-          <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 20 }}>
-            Un espacio flexible para ideas, apuntes, investigación y lectura.
-          </Text>
-          <View style={{ marginTop: 6 }}>
+      <View style={styles.headerShell}>
+        <View style={[styles.topHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.headerIcon, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
+            <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={20} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
+              Apuntes, investigación, diario y biblioteca personal.
+            </Text>
+          </View>
+          <View style={styles.syncWrap}>
             <SyncStatusBadge />
           </View>
         </View>
@@ -69,6 +71,8 @@ export default function NotesScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  topHeader: { paddingHorizontal: 16, paddingTop: 8, gap: 12, flexDirection: 'row', alignItems: 'center' },
-  headerIcon: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  headerShell: { paddingHorizontal: 16, paddingTop: 8 },
+  topHeader: { padding: 14, gap: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 16 },
+  headerIcon: { width: 42, height: 42, borderRadius: 12, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  syncWrap: { alignSelf: 'flex-start', maxWidth: 132 },
 });

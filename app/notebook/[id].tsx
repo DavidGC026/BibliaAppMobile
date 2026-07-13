@@ -243,20 +243,21 @@ export default function NotebookDetailScreen() {
           ListHeaderComponent={
             notebook ? (
               <View style={styles.header}>
-                <View style={styles.notebookRow}>
-                  <BookCover title={notebook.name} coverImage={notebook.coverImage} width={48} height={64} />
+                <View style={[styles.notebookPanel, shadow.sm, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}>
+                  <BookCover title={notebook.name} coverImage={notebook.coverImage} width={44} height={58} />
                   <View style={styles.notebookMeta}>
+                    <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>Libreta activa</Text>
                     <Text style={[styles.notebookTitle, { color: colors.text }]} numberOfLines={2}>
                       {notebook.name}
                     </Text>
                     <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }}>
-                      {notes.length} {notes.length === 1 ? 'nota' : 'notas'} · {totalWords} palabras
+                      {notes.length} {notes.length === 1 ? 'nota' : 'notas'} · {totalWords} palabras · {lastUpdated ? `última ${formatCompactDate(lastUpdated)}` : 'sin actividad'}
                     </Text>
                   </View>
-                  <Pressable onPress={() => setConfigOpen(true)} hitSlop={8} style={[styles.iconBtn, { borderColor: colors.border }]}>
+                  <Pressable onPress={() => setConfigOpen(true)} hitSlop={8} style={[styles.iconBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
                     <SymbolView name={{ ios: 'pencil', android: 'edit', web: 'edit' }} tintColor={colors.textMuted} size={16} />
                   </Pressable>
-                  <Pressable onPress={deleteNotebook} hitSlop={8} style={[styles.iconBtn, { borderColor: colors.border }]}>
+                  <Pressable onPress={deleteNotebook} hitSlop={8} style={[styles.iconBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
                     <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.danger} size={16} />
                   </Pressable>
                 </View>
@@ -301,7 +302,7 @@ export default function NotebookDetailScreen() {
                         style={[
                           styles.sortChip,
                           {
-                            backgroundColor: selected ? colors.primarySoft : colors.card,
+                            backgroundColor: selected ? colors.primarySoft : colors.cardMuted,
                             borderColor: selected ? colors.primaryBorder : colors.border,
                           },
                         ]}
@@ -338,18 +339,27 @@ export default function NotebookDetailScreen() {
                 onPress={() => router.push(`/note/${item.id}`)}
               >
                 <View style={styles.cardHeader}>
-                  {pinned ? (
-                    <SymbolView name={{ ios: 'pin.fill', android: 'push_pin', web: 'push_pin' }} tintColor={colors.primary} size={15} />
-                  ) : null}
-                  <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-                    {item.title || 'Sin título'}
-                  </Text>
+                  <View style={styles.titleBlock}>
+                    <View style={styles.titleRow}>
+                      {pinned ? (
+                        <SymbolView name={{ ios: 'pin.fill', android: 'push_pin', web: 'push_pin' }} tintColor={colors.primary} size={14} />
+                      ) : null}
+                      <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                        {item.title || 'Sin título'}
+                      </Text>
+                    </View>
+                    <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
+                      {formatDate(item.updatedAt)} · {estimateNoteReadMinutes(item.content)} min
+                    </Text>
+                  </View>
+                  <View style={styles.noteActions}>
                   <Pressable
                     onPress={(event) => {
                       event.stopPropagation();
                       togglePin(item);
                     }}
                     hitSlop={8}
+                    style={[styles.noteActionBtn, { backgroundColor: pinned ? colors.primarySoft : colors.cardMuted, borderColor: pinned ? colors.primaryBorder : colors.border }]}
                   >
                     <SymbolView
                       name={pinned ? { ios: 'pin.slash', android: 'keep_off', web: 'keep_off' } : { ios: 'pin', android: 'push_pin', web: 'push_pin' }}
@@ -363,6 +373,7 @@ export default function NotebookDetailScreen() {
                       setMoveTarget(item);
                     }}
                     hitSlop={8}
+                    style={[styles.noteActionBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}
                   >
                     <SymbolView name={{ ios: 'folder', android: 'drive_file_move', web: 'drive_file_move' }} tintColor={colors.textMuted} size={16} />
                   </Pressable>
@@ -372,6 +383,7 @@ export default function NotebookDetailScreen() {
                       shareNoteAction(item);
                     }}
                     hitSlop={8}
+                    style={[styles.noteActionBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}
                   >
                     <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.textMuted} size={16} />
                   </Pressable>
@@ -381,9 +393,11 @@ export default function NotebookDetailScreen() {
                       deleteNote(item);
                     }}
                     hitSlop={8}
+                    style={[styles.noteActionBtn, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}
                   >
                     <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.textMuted} size={16} />
                   </Pressable>
+                  </View>
                 </View>
 
                 {tags.length > 0 ? (
@@ -409,15 +423,16 @@ export default function NotebookDetailScreen() {
                 )}
 
                 <View style={[styles.cardFooter, { borderTopColor: colors.border }]}>
-                  <SymbolView name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }} tintColor={colors.textMuted} size={12} />
-                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
-                    Actualizado: {formatDate(item.updatedAt)}
-                  </Text>
-                  <View style={styles.footerSpacer} />
-                  <SymbolView name={{ ios: 'text.alignleft', android: 'notes', web: 'notes' }} tintColor={colors.textMuted} size={12} />
-                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '600' }}>
-                    {estimateNoteReadMinutes(item.content)} min
-                  </Text>
+                  <View style={styles.footerMetric}>
+                    <SymbolView name={{ ios: 'text.alignleft', android: 'notes', web: 'notes' }} tintColor={colors.textMuted} size={12} />
+                    <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700' }}>
+                      {countNoteWords(item.content)} palabras
+                    </Text>
+                  </View>
+                  <View style={styles.footerMetric}>
+                    <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor={colors.primary} size={13} />
+                    <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800' }}>Abrir</Text>
+                  </View>
                 </View>
               </Pressable>
             );
@@ -510,8 +525,9 @@ function MoveNoteModal({
 const styles = StyleSheet.create({
   list: { padding: 16, flexGrow: 1, gap: 0 },
   header: { gap: 14, marginBottom: 16 },
-  notebookRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  notebookPanel: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, padding: 12 },
   notebookMeta: { flex: 1, gap: 4 },
+  sectionLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.8, textTransform: 'uppercase' },
   notebookTitle: { fontSize: 18, fontWeight: '800' },
   iconBtn: {
     width: 34,
@@ -531,25 +547,30 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
   summaryRow: { flexDirection: 'row', gap: 8 },
-  summaryBox: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 10, gap: 2 },
+  summaryBox: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 10, gap: 2 },
   summaryValue: { fontSize: 15, fontWeight: '800' },
   summaryLabel: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
   sortRow: { flexDirection: 'row', gap: 8 },
   sortChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 10, gap: 8 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  title: { fontSize: 16, fontWeight: '700', flex: 1 },
+  card: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 10, gap: 10 },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 },
+  titleBlock: { flex: 1, gap: 3, minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  title: { fontSize: 16, fontWeight: '800', flex: 1 },
+  noteActions: { flexDirection: 'row', gap: 5 },
+  noteActionBtn: { width: 30, height: 30, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    gap: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 8,
     marginTop: 2,
   },
-  footerSpacer: { flex: 1 },
+  footerMetric: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   empty: {
     alignItems: 'center',
     gap: 10,
