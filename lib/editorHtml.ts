@@ -641,8 +641,7 @@ export function getEditorHtml(
           var w = this.value + '%';
           activeImageBlock.style.width = w;
           document.getElementById('panel-width-lbl').textContent = w;
-          keepImageVisible();
-          notifyChange();
+          notifyChangeNow();
         });
 
         document.getElementById('btn-image-close').addEventListener('click', hidePanel);
@@ -657,7 +656,7 @@ export function getEditorHtml(
           if (prev) {
             activeImageBlock.parentNode.insertBefore(activeImageBlock, prev);
             keepImageVisible();
-            notifyChange();
+            notifyChangeNow();
           }
         });
 
@@ -667,7 +666,7 @@ export function getEditorHtml(
           if (next) {
             activeImageBlock.parentNode.insertBefore(activeImageBlock, next.nextElementSibling);
             keepImageVisible();
-            notifyChange();
+            notifyChangeNow();
           }
         });
 
@@ -675,7 +674,7 @@ export function getEditorHtml(
           if (!activeImageBlock) return;
           activeImageBlock.remove();
           hidePanel();
-          notifyChange();
+          notifyChangeNow();
         });
 
         panel.addEventListener('mousedown', function(e) {
@@ -722,7 +721,7 @@ export function getEditorHtml(
 
         updateAlignButtons(align);
         keepImageVisible();
-        notifyChange();
+        notifyChangeNow();
       }
 
       function updateAlignButtons(activeAlign) {
@@ -788,6 +787,7 @@ export function getEditorHtml(
         setImageEditMode(false);
         document.querySelectorAll('.note-image-block').forEach(function(b) {
           b.style.outline = 'none';
+          b.style.outlineOffset = '';
         });
         activeImage = null;
         activeImageBlock = null;
@@ -797,6 +797,19 @@ export function getEditorHtml(
         return '<div class="note-image-block" style="text-align: center; width: 60%; max-width: 100%; display: block; margin: 12px auto;">' +
                '  <img src="' + url + '" style="width: 100%; height: auto; border-radius: 8px;" />' +
                '</div><p><br></p>';
+      }
+
+      function clearImageEditingChrome() {
+        if (panel) {
+          panel.style.display = 'none';
+        }
+        document.querySelectorAll('.note-image-block').forEach(function(b) {
+          b.style.outline = 'none';
+          b.style.outlineOffset = '';
+        });
+        activeImage = null;
+        activeImageBlock = null;
+        setImageEditMode(false);
       }
 
       function cssEscape(value) {
@@ -1077,12 +1090,18 @@ export function getEditorHtml(
         scrollCaretIntoView();
       }
 
-      function insertHtmlAtSelection(html) {
+      function insertHtmlAtSelection(html, shouldFocus) {
         restoreSelection();
-        editor.focus();
+        if (shouldFocus !== false) editor.focus();
         var sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0) return;
-        var range = sel.getRangeAt(0);
+        var range = null;
+        if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+          range = sel.getRangeAt(0);
+        } else {
+          range = document.createRange();
+          range.selectNodeContents(editor);
+          range.collapse(false);
+        }
         var holder = document.createElement('div');
         holder.innerHTML = html;
         var frag = document.createDocumentFragment();
@@ -1363,12 +1382,6 @@ export function getEditorHtml(
           scrollCaretIntoView();
         });
 
-        editor.addEventListener('scroll', function() {
-          if (activeImageBlock) {
-            keepImageVisible();
-          }
-        });
-
         // Android: al cerrar el teclado con "atrás" el editor conserva el foco,
         // así que un tap normal ya no vuelve a mostrar el teclado. Forzamos
         // blur+focus dentro del gesto del usuario para que el IME reaparezca.
@@ -1417,14 +1430,26 @@ export function getEditorHtml(
       // tecla se nota en notas largas. El guardado real usa getHtml, que lee
       // innerHTML directamente, así que nunca ve contenido desfasado.
       var notifyTimer = null;
+      function postCurrentHtml() {
+        window.ReactNativeWebView.postMessage(JSON.stringify({
+          type: 'onChange',
+          html: editor.innerHTML
+        }));
+      }
+
+      function notifyChangeNow() {
+        if (notifyTimer) {
+          clearTimeout(notifyTimer);
+          notifyTimer = null;
+        }
+        postCurrentHtml();
+      }
+
       function notifyChange() {
         if (notifyTimer) clearTimeout(notifyTimer);
         notifyTimer = setTimeout(function() {
           notifyTimer = null;
-          window.ReactNativeWebView.postMessage(JSON.stringify({
-            type: 'onChange',
-            html: editor.innerHTML
-          }));
+          postCurrentHtml();
         }, 250);
       }
 
@@ -1434,6 +1459,11 @@ export function getEditorHtml(
           var action = JSON.parse(jsonStr);
 
           if (action.type === 'getHtml') {
+            if (notifyTimer) {
+              clearTimeout(notifyTimer);
+              notifyTimer = null;
+            }
+            clearImageEditingChrome();
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'getHtmlResponse',
               html: editor.innerHTML
@@ -1463,6 +1493,12 @@ export function getEditorHtml(
             return;
           }
 
+          if (action.type === 'insertImage') {
+            insertHtmlAtSelection(buildImageBlockHtml(action.value), false);
+            notifyChangeNow();
+            return;
+          }
+
           editor.focus();
 
           if (action.type === 'setFont') {
@@ -1476,8 +1512,6 @@ export function getEditorHtml(
               editor.style.fontFamily = fontStack(action.value);
             }
             editor.style.fontFamily = fontStack(action.value);
-          } else if (action.type === 'insertImage') {
-            insertHtmlAtSelection(buildImageBlockHtml(action.value));
           } else if (action.type === 'insertVerse') {
             insertHtmlAtSelection(buildVerseBlockHtml(action.value));
           } else if (action.type === 'insertReferences') {

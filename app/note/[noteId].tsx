@@ -334,7 +334,7 @@ export default function NoteEditorScreen() {
         if (!saveHtmlPendingRef.current) return;
         saveHtmlPendingRef.current = false;
         onHtml(content);
-      }, 450);
+      }, 5000);
     },
     [content, preview],
   );
