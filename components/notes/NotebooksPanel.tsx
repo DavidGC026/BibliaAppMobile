@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
+import { BookCover } from '@/components/BookCover';
 import { NotebookConfigModal } from '@/components/NotebookConfigModal';
 import { Button } from '@/components/ui/Button';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -149,7 +150,9 @@ export function NotebooksPanel() {
         style={{ flex: 1 }}
         contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}
         data={filteredNotebooks}
+        numColumns={2}
         keyExtractor={(item) => String(item.id)}
+        columnWrapperStyle={styles.gridRow}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -221,19 +224,6 @@ export function NotebooksPanel() {
               style={[styles.notebookCard, shadow.sm, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl }]}
               onPress={() => router.push(`/notebook/${item.id}`)}
             >
-              <View style={[styles.notebookMark, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
-                <SymbolView name={{ ios: 'book.closed', android: 'book', web: 'book' }} tintColor={colors.primary} size={19} />
-              </View>
-
-              <View style={styles.notebookInfo}>
-                <Text style={[styles.notebookTitle, { color: colors.text }]} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={{ color: colors.textMuted, fontSize: 12, lineHeight: 17 }} numberOfLines={1}>
-                  {summary.noteCount} {summary.noteCount === 1 ? 'nota' : 'notas'} · {summary.wordCount} palabras · {formatNotebookDate(summary.updatedAt)}
-                </Text>
-              </View>
-
               <View style={styles.cardActions}>
                 <Pressable
                   onPress={(event) => {
@@ -255,6 +245,22 @@ export function NotebooksPanel() {
                 >
                   <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.danger} size={14} />
                 </Pressable>
+              </View>
+
+              <BookCover title={item.name} coverImage={item.coverImage} width={112} height={152} />
+
+              <View style={styles.notebookInfo}>
+                <Text style={[styles.notebookTitle, { color: colors.text }]} numberOfLines={2}>
+                  {item.name}
+                </Text>
+                <View style={[styles.notebookMetaPill, { backgroundColor: colors.cardMuted, borderColor: colors.border }]}>
+                  <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '800' }} numberOfLines={1}>
+                    {summary.noteCount} {summary.noteCount === 1 ? 'nota' : 'notas'} · {formatNotebookDate(summary.updatedAt)}
+                  </Text>
+                </View>
+                <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', textAlign: 'center' }} numberOfLines={1}>
+                  {summary.wordCount} palabras
+                </Text>
               </View>
             </Pressable>
           );
@@ -319,29 +325,27 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   searchInput: { flex: 1, fontSize: 14, padding: 0 },
+  gridRow: { justifyContent: 'space-between', marginBottom: 14 },
   notebookCard: {
+    width: '48%',
     borderWidth: 1,
     padding: 12,
-    marginBottom: 10,
-    flexDirection: 'row',
+    minHeight: 258,
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
-  notebookMark: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notebookInfo: { flex: 1, gap: 3, minWidth: 0 },
-  notebookTitle: { fontSize: 15, fontWeight: '800' },
+  notebookInfo: { alignItems: 'center', gap: 6, minWidth: 0, width: '100%' },
+  notebookTitle: { fontSize: 13, fontWeight: '800', textAlign: 'center', lineHeight: 17, minHeight: 34 },
+  notebookMetaPill: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4, maxWidth: '100%' },
   cardActions: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 2,
     flexDirection: 'row',
-    gap: 6,
+    gap: 5,
   },
-  actionBtn: { width: 32, height: 32, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  actionBtn: { width: 30, height: 30, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   empty: { alignItems: 'center', gap: 12, marginTop: 48, paddingHorizontal: 16 },
   emptyTitle: { fontSize: 18, fontWeight: '800' },
 });
