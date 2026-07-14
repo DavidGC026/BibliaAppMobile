@@ -104,6 +104,9 @@ export function getEditorHtml(
       pointer-events: none;
     }
 
+    /* Color semántico: se resuelve con el tema actual, no se guarda negro/blanco. */
+    #editor .note-color-auto { color: ${colors.text} !important; }
+
     /* ── Typography Niceness ──────────────────────────── */
     ul, ol { padding-left: 24px; margin: 6px 0; }
     li { margin: 3px 0; }
@@ -1602,6 +1605,7 @@ export function getEditorHtml(
         var autoDot = document.createElement('div');
         autoDot.className = 'color-dot auto' + (activeColor === 'auto' ? ' active' : '');
         autoDot.setAttribute('data-color', 'auto');
+        autoDot.setAttribute('aria-label', 'Color automático');
         autoDot.textContent = 'A';
         bindToolbarButton(autoDot, function() {
           activeColor = 'auto';
@@ -1673,9 +1677,10 @@ export function getEditorHtml(
           wrapRangeStyle('color', color);
         }
         notifyChange();
+        commitHistory();
       }
 
-      /* ── "Auto": quita el color explícito para heredar el del tema ── */
+      /* ── "Auto": marcador semántico que siempre usa el color del tema ── */
       function clearColor() {
         restoreSelection();
         editor.focus();
@@ -1683,7 +1688,7 @@ export function getEditorHtml(
         if (!sel || sel.rangeCount === 0) return;
         var range = sel.getRangeAt(0);
         var span = document.createElement('span');
-        span.style.color = 'inherit';
+        span.className = 'note-color-auto';
 
         if (range.collapsed) {
           span.appendChild(document.createTextNode('\\u200B'));
@@ -1698,9 +1703,14 @@ export function getEditorHtml(
             span.appendChild(fragment);
             range.insertNode(span);
           }
-          // Limpia colores explícitos anidados para que "heredar" gane.
-          span.querySelectorAll('[style]').forEach(function(el) { el.style.color = ''; });
-          span.style.color = 'inherit';
+          // Evita guardar colores redundantes dentro del tramo automático.
+          span.querySelectorAll('[style]').forEach(function(el) {
+            el.style.color = '';
+            if (!el.getAttribute('style')) el.removeAttribute('style');
+          });
+          span.querySelectorAll('font[color]').forEach(function(el) {
+            el.removeAttribute('color');
+          });
           range.selectNodeContents(span);
           range.collapse(false);
         }
