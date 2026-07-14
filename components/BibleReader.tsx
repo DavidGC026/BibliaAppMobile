@@ -29,6 +29,7 @@ import {
   DEFAULT_READER_PREFERENCES,
   READER_THEME_OPTIONS,
   READER_THEME_PALETTES,
+  getLastPassage,
   getReaderPreferences,
   saveLastPassage,
   saveReaderPreferences,
@@ -157,9 +158,15 @@ export function BibleReader({
         const { bibles: bibleList } = await repo.repoListBibles();
         if (cancelled) return;
         setBibles(bibleList);
+        // Sin destino explícito, retomar el último pasaje leído
+        const lastPassage = initialBookId && initialChapter ? null : await getLastPassage();
+        if (cancelled) return;
         const initialBible =
           (initialBibleId && bibleList.some((b) => b.bibleId === initialBibleId)
             ? initialBibleId
+            : null) ??
+          (lastPassage && bibleList.some((b) => b.bibleId === lastPassage.bibleId)
+            ? lastPassage.bibleId
             : null) ??
           bibleList.find((b) => b.bibleId === DEFAULT_BIBLE_ID)?.bibleId ??
           bibleList[0]?.bibleId ??
@@ -168,11 +175,20 @@ export function BibleReader({
         const { books: bookList } = await repo.repoListBooks(initialBible);
         if (cancelled) return;
         setBooks(bookList);
+        const lastBook = lastPassage
+          ? bookList.find((b) => b.bookId === lastPassage.bookId) ?? null
+          : null;
         const startBookId = initialBookId && bookList.some((b) => b.bookId === initialBookId)
           ? initialBookId
-          : bookList[0]?.bookId ?? null;
+          : lastBook?.bookId ?? bookList[0]?.bookId ?? null;
         setBookId(startBookId);
-        setChapter(initialChapter && initialChapter > 0 ? initialChapter : 1);
+        if (initialChapter && initialChapter > 0) {
+          setChapter(initialChapter);
+        } else if (lastBook && startBookId === lastBook.bookId && lastPassage!.chapter > 0) {
+          setChapter(Math.min(lastPassage!.chapter, lastBook.chapters || lastPassage!.chapter));
+        } else {
+          setChapter(1);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Error al cargar la Biblia');
       } finally {

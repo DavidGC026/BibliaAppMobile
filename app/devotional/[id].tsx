@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,21 +16,33 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import { DEVOTIONAL_EMOTIONS, parseDevotionalContent } from '@/lib/devotional';
+import { parsePlanProgress } from '@/lib/readingPlans';
 
 export default function DevotionalEditorScreen() {
   const { colors, typography } = useAppTheme();
   const contentPadding = useContentPadding();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, planId, planDay, planTitle, planVerseRef } = useLocalSearchParams<{
+    id: string;
+    planId?: string;
+    planDay?: string;
+    planTitle?: string;
+    planVerseRef?: string;
+  }>();
   const isNew = id === 'new';
   const parsedId = isNew ? NaN : Number(id);
 
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(isNew ? planTitle ?? '' : '');
   const [emotion, setEmotion] = useState<string | null>(null);
-  const [verseRef, setVerseRef] = useState('');
+  const [verseRef, setVerseRef] = useState(isNew ? planVerseRef ?? '' : '');
   const [reflection, setReflection] = useState('');
   const [application, setApplication] = useState('');
+  // Contexto de plan de lectura (nuevo: desde params; edición: del contenido guardado)
+  const planContextRef = useRef<{ planId?: number; planDay?: number }>({
+    planId: planId ? Number(planId) : undefined,
+    planDay: planDay ? Number(planDay) : undefined,
+  });
 
   useEffect(() => {
     if (isNew || Number.isNaN(parsedId)) return;
@@ -46,6 +58,8 @@ export default function DevotionalEditorScreen() {
         setVerseRef(dev.verseRef ?? '');
         setReflection(content.reflection ?? '');
         setApplication(content.application ?? '');
+        // No perder la vinculación al plan al editar
+        planContextRef.current = { planId: content.planId, planDay: content.planDay };
       })
       .catch((err) => Alert.alert('Error', err instanceof Error ? err.message : 'No se pudo cargar'))
       .finally(() => setLoading(false));
@@ -59,14 +73,32 @@ export default function DevotionalEditorScreen() {
     }
     setSaving(true);
     try {
+      const { planId: ctxPlanId, planDay: ctxPlanDay } = planContextRef.current;
       const payload = {
         title: trimmed,
         emotion,
         verseRef: verseRef.trim() || null,
-        content: { reflection: reflection.trim(), application: application.trim() },
+        content: {
+          reflection: reflection.trim(),
+          application: application.trim(),
+          ...(ctxPlanId && ctxPlanDay ? { planId: ctxPlanId, planDay: ctxPlanDay } : {}),
+        },
       };
       if (isNew) {
         await api.createDevotional(payload);
+        // Como en la web: escribir el devocional marca el día del plan como completado
+        if (ctxPlanId && ctxPlanDay) {
+          try {
+            const { userPlans } = await api.getReadingPlans();
+            const up = userPlans.find((u) => u.planId === ctxPlanId);
+            const done = up ? parsePlanProgress(up.progress) : null;
+            if (done && !done.includes(ctxPlanDay)) {
+              await api.updatePlanProgress(ctxPlanId, [...done, ctxPlanDay].sort((a, b) => a - b));
+            }
+          } catch {
+            // El devocional ya quedó guardado; el usuario puede marcar el día manualmente
+          }
+        }
       } else {
         await api.updateDevotional(parsedId, payload);
       }

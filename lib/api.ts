@@ -493,7 +493,17 @@ export async function uploadImage(localUri: string, fileName: string, mimeType: 
   if (!response.ok) {
     throw new Error((data as ApiError).error ?? `Error ${response.status}`);
   }
-  return data as { url: string; mediaId: number };
+  return data as { url: string; mediaId: number; filename?: string };
+}
+
+/**
+ * URL pública y absoluta de un archivo subido. Las notas insertan esta URL en
+ * su HTML: debe ser absoluta (el WebView carga por srcDoc, sin baseUrl) y sin
+ * auth (`/api/media/:id` exige sesión y el <img> del WebView no manda token).
+ * Next sirve `public/uploads/` estáticamente sin autenticación.
+ */
+export function getPublicUploadUrl(filename: string) {
+  return `${API_BASE_URL}/uploads/${encodeURIComponent(filename)}`;
 }
 
 // — Actividad y estadísticas —

@@ -12,6 +12,8 @@ interface ButtonProps {
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
   fullWidth?: boolean;
+  /** Fuerza el color del texto (p. ej. botones outline sobre una foto oscura). */
+  textColor?: string;
 }
 
 export function Button({
@@ -22,9 +24,12 @@ export function Button({
   disabled,
   style,
   fullWidth,
+  textColor,
 }: ButtonProps) {
   const { colors, radius } = useAppTheme();
   const isPrimary = variant === 'primary';
+  const labelColor =
+    textColor ?? (isPrimary ? colors.primaryForeground : variant === 'ghost' ? colors.primary : colors.text);
 
   return (
     <Pressable
@@ -44,11 +49,11 @@ export function Button({
       onPress={onPress}
     >
       {loading ? (
-        <ActivityIndicator color={isPrimary ? colors.primaryForeground : colors.primary} />
+        <ActivityIndicator color={textColor ?? (isPrimary ? colors.primaryForeground : colors.primary)} />
       ) : (
         <Text
           style={{
-            color: isPrimary ? colors.primaryForeground : variant === 'ghost' ? colors.primary : colors.text,
+            color: labelColor,
             fontWeight: '600',
             fontSize: 15,
           }}

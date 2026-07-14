@@ -104,7 +104,7 @@ export function VerseOfDayCard() {
     <View style={styles.inner}>
       {data.theme ? <Badge label={data.theme} themeKey={data.theme} /> : null}
 
-      <Text style={[styles.verseText, hasBg && styles.verseTextOnImage]}>
+      <Text style={[styles.verseText, hasBg ? styles.verseTextOnImage : { color: colors.text }]}>
         "{data.text}"
       </Text>
 
@@ -131,12 +131,14 @@ export function VerseOfDayCard() {
           label="Leer capítulo"
           variant="outline"
           onPress={readChapter}
+          textColor={hasBg ? '#FFFFFF' : colors.text}
           style={[styles.actionBtn, { borderRadius: radius.full }, hasBg && styles.btnOnImage]}
         />
         <Button
           label="Crear imagen"
           variant="outline"
           onPress={() => setImageModalOpen(true)}
+          textColor={hasBg ? '#FFFFFF' : colors.text}
           style={[styles.actionBtn, { borderRadius: radius.full }, hasBg && styles.btnOnImage]}
         />
         <Button
@@ -204,6 +206,7 @@ export function VerseOfDayCard() {
         text={data.text}
         reference={data.reference}
         abbr={abbr}
+        initialPhotoUri={data.backgroundImage ?? null}
         onClose={() => setImageModalOpen(false)}
       />
     </Card>

@@ -223,9 +223,11 @@ export interface VerseImageCreatorProps {
   text: string;
   reference: string;
   abbr: string;
+  /** Fondo con el que se abrió el preview (p. ej. versículo del día) para que la imagen exportada coincida. */
+  initialPhotoUri?: string | null;
 }
 
-export function VerseImageCreator({ visible, onClose, text, reference, abbr }: VerseImageCreatorProps) {
+export function VerseImageCreator({ visible, onClose, text, reference, abbr, initialPhotoUri }: VerseImageCreatorProps) {
   const { colors, radius } = useAppTheme();
   const insets = useSafeAreaInsets();
   const contentPadding = useContentPadding(12);
@@ -326,8 +328,14 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
     setActiveSearch(undefined);
     setPhotosPage(1);
     setHasMorePhotos(false);
-    setBgMode('gradient');
-    setPhotoUri(null);
+    if (initialPhotoUri) {
+      setBgMode('photo');
+      setPhotoUri(initialPhotoUri);
+      setPhotoReady(false);
+    } else {
+      setBgMode('gradient');
+      setPhotoUri(null);
+    }
     setSelectedPhotoId(null);
     setGradientIdx(0);
     setStyleId('editorial');
@@ -349,7 +357,7 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
       }
       loadPhotos(undefined, 1, false, formatId);
     });
-  }, [visible, loadPhotos]);
+  }, [visible, loadPhotos, initialPhotoUri]);
 
   const saveTemplate = async () => {
     try {
@@ -570,10 +578,10 @@ export function VerseImageCreator({ visible, onClose, text, reference, abbr }: V
                 </View>
                 <Text style={[styles.adjustLabel, { color: colors.textMuted }]}>Mover fondo ↑ ↓</Text>
                 <View style={styles.adjustRow}>
-                  <Pressable onPress={() => setBgPosY((v) => Math.max(0, v - 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
+                  <Pressable onPress={() => setBgPosY((v) => Math.min(100, v + 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
                     <Text style={{ color: colors.text }}>↑</Text>
                   </Pressable>
-                  <Pressable onPress={() => setBgPosY((v) => Math.min(100, v + 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
+                  <Pressable onPress={() => setBgPosY((v) => Math.max(0, v - 10))} style={[styles.adjustBtn, { borderColor: colors.border }]}>
                     <Text style={{ color: colors.text }}>↓</Text>
                   </Pressable>
                 </View>

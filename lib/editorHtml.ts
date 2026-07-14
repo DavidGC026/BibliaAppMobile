@@ -202,14 +202,19 @@ export function getEditorHtml(
       touch-action: none;
       pointer-events: none;
     }
+    /* El modo Fondo guarda z-index: -1 inline (para que la nota se vea igual
+       fuera del editor), así que aquí hace falta !important para ganarle al
+       estilo inline y que la imagen pueda captar toques. */
     body.image-selection-mode .note-image-block.is-background,
     body.image-editing .note-image-block.is-background {
-      z-index: 10;
+      z-index: 10 !important;
       pointer-events: auto;
       cursor: grab;
     }
     /* Mientras se arrastra o reordena: sin transición de posición, flotando
-       por encima del texto y con sombra para dar sensación de "levantar". */
+       por encima del texto y con sombra para dar sensación de "levantar".
+       El #editor sube la especificidad para ganar a la regla de selección. */
+    #editor .note-image-block.is-dragging,
     .note-image-block.is-dragging {
       transition: none !important;
       cursor: grabbing;
@@ -235,7 +240,9 @@ export function getEditorHtml(
       display: none;
     }
     body.image-editing #editor {
-      padding-bottom: 220px;
+      /* Altura del panel inferior + margen: deja sitio para desplazar la
+         imagen por encima del panel aunque esté al final de la nota. */
+      padding-bottom: 320px;
     }
     #image-edit-panel {
       position: fixed;
@@ -639,6 +646,9 @@ export function getEditorHtml(
 
       function toggleImageSelectionMode() {
         imageSelectionMode = !imageSelectionMode;
+        // Los listeners de arrastre se registran en createPanel(); crearlo ya
+        // (oculto) para que el primer toque sobre un fondo funcione.
+        if (imageSelectionMode) createPanel();
         document.body.classList.toggle('image-selection-mode', imageSelectionMode);
         var btn = document.getElementById('btn-toggle-image-mode');
         if (btn) {
@@ -806,11 +816,47 @@ export function getEditorHtml(
           pendingDragPos = null;
         }
 
+        // Detección geométrica: el texto que cubre una imagen de fondo roba el
+        // e.target del toque, así que además del hit-test del navegador se
+        // busca por coordenadas qué imagen de fondo hay bajo el dedo.
+        var DRAG_SLOP = 14;
+        function pointInRect(x, y, rect) {
+          return x >= rect.left - DRAG_SLOP && x <= rect.right + DRAG_SLOP &&
+                 y >= rect.top - DRAG_SLOP && y <= rect.bottom + DRAG_SLOP;
+        }
+        function findBackgroundBlockAt(x, y) {
+          // Prioridad: la imagen ya seleccionada (aunque otra la solape).
+          if (activeImageBlock && activeImageBlock.classList.contains('is-background') &&
+              pointInRect(x, y, activeImageBlock.getBoundingClientRect())) {
+            return activeImageBlock;
+          }
+          var blocks = editor.querySelectorAll('.note-image-block.is-background');
+          var found = null;
+          for (var i = 0; i < blocks.length; i++) {
+            if (pointInRect(x, y, blocks[i].getBoundingClientRect())) found = blocks[i];
+          }
+          return found;
+        }
+
         editor.addEventListener('touchstart', function(e) {
           if (!imageSelectionMode && !imageEditActive) return;
+          if (e.touches.length !== 1) return;
           var t = e.target;
           var block = t.closest ? t.closest('.note-image-block') : null;
-          if (block && block.classList.contains('is-background')) {
+          if (block && !block.classList.contains('is-background')) block = null;
+          if (!block) {
+            var x = e.touches[0].clientX;
+            var y = e.touches[0].clientY;
+            if (imageSelectionMode) {
+              block = findBackgroundBlockAt(x, y);
+            } else if (activeImageBlock && activeImageBlock.classList.contains('is-background') &&
+                       pointInRect(x, y, activeImageBlock.getBoundingClientRect())) {
+              // Panel abierto sobre una imagen de fondo: permitir arrastrarla
+              // tocando su área aunque el texto quede por encima.
+              block = activeImageBlock;
+            }
+          }
+          if (block) {
             e.preventDefault();
             // Si se toca una imagen diferente a la activa, seleccionarla primero
             if (activeImageBlock !== block) {

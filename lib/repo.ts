@@ -318,7 +318,13 @@ export async function repoGetNotebookNote(noteId: number): Promise<{ note: Noteb
     try {
       const res = await api.getNotebookNote(noteId);
       await upsertNoteFromServer(res.note);
-      return res;
+      // La copia local puede ser más nueva que la del servidor (dirty aún sin
+      // subir, p. ej. una imagen base64 cuyo push falló). upsertNoteFromServer
+      // no pisa esa copia, así que se relee SQLite para devolver siempre la
+      // versión ganadora; devolver `res.note` directo haría que el editor
+      // cargara la versión vieja y la guardara encima, perdiendo lo local.
+      const merged = await getLocalNote(noteId);
+      return { note: merged ?? res.note };
     } catch {
       // cae a SQLite (p. ej. nota solo local aún)
     }

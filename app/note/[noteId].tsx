@@ -32,7 +32,7 @@ import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
 import { deleteNoteFont, getDownloadedFonts, getNoteFont, saveNoteFont } from '@/lib/fontManager';
-import { countNoteWords, estimateNoteReadMinutes, noteHtmlToPlainText } from '@/lib/notebookCovers';
+import { countNoteWords, noteHtmlToPlainText } from '@/lib/notebookCovers';
 import { exportNoteAsPdf } from '@/lib/noteExport';
 import { shareNote } from '@/lib/share';
 import type { StrongEntry } from '@/lib/types';
@@ -56,11 +56,6 @@ function noteHasText(html: string) {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
 }
 
-function formatSaveTime(date: Date | null) {
-  if (!date) return 'Aún sin guardar';
-  return `Guardado ${date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}`;
-}
-
 export default function NoteEditorScreen() {
   const colors = useThemeColors();
   const navigation = useNavigation();
@@ -74,7 +69,6 @@ export default function NoteEditorScreen() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
-  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const [preview, setPreview] = useState(false);
   const [verseModalOpen, setVerseModalOpen] = useState(false);
   const [referenceModalOpen, setReferenceModalOpen] = useState(false);
@@ -192,7 +186,6 @@ export default function NoteEditorScreen() {
         setContent(note.content);
         initialContentRef.current = note.content;
         initialTitleRef.current = note.title;
-        setLastSavedAt(note.updatedAt ? new Date(note.updatedAt) : null);
         // Restaurar la fuente elegida para esta nota antes de montar el editor
         setActiveFont(await getNoteFont(id));
       })
@@ -289,7 +282,6 @@ export default function NoteEditorScreen() {
         // Se guarda el título tal cual lo escribió el usuario (no 'Sin título')
         // para que la comparación de cambios pendientes sea estable.
         initialTitleRef.current = trimmedTitle;
-        setLastSavedAt(new Date());
         setSaveFlash(true);
         if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current);
         saveFlashTimerRef.current = setTimeout(() => setSaveFlash(false), 2000);
@@ -379,7 +371,11 @@ export default function NoteEditorScreen() {
           const fileName = asset.fileName ?? `note-img-${Date.now()}.jpg`;
           const mimeType = asset.mimeType ?? 'image/jpeg';
           const uploadRes = await api.uploadImage(asset.uri, fileName, mimeType);
-          imageUrl = uploadRes.url;
+          // URL pública absoluta: la relativa (/api/media/:id) no resuelve en el
+          // WebView y además exige sesión, así que el <img> daría 403.
+          if (uploadRes.filename) {
+            imageUrl = api.getPublicUploadUrl(uploadRes.filename);
+          }
         } catch (uploadErr) {
           console.warn('Upload failed, falling back to base64:', uploadErr);
         }
@@ -484,8 +480,7 @@ export default function NoteEditorScreen() {
   };
 
   const words = countNoteWords(content);
-  const readMinutes = estimateNoteReadMinutes(content);
-  const statusText = saving ? 'Guardando...' : saveFlash ? 'Guardado' : formatSaveTime(lastSavedAt);
+  const statusText = saving ? 'Guardando...' : saveFlash ? 'Guardado' : `${words} palabras`;
 
   const openShareOptions = () => {
     Alert.alert('Compartir nota', undefined, [
@@ -553,6 +548,9 @@ export default function NoteEditorScreen() {
       <Stack.Screen
         options={{
           title: isNew ? 'Nueva nota' : 'Editar nota',
+          // Al editar una imagen el panel inferior ocupa espacio; ocultar el
+          // header nativo deja subir la nota y evita que el panel tape la imagen.
+          headerShown: !imageEditMode,
           headerRight: () => (
             <View style={styles.headerActions}>
               {!isNew ? (
@@ -580,37 +578,47 @@ export default function NoteEditorScreen() {
           flex: 1,
           backgroundColor: colors.background,
           paddingBottom: !imageEditMode && keyboardHeight > 0 ? keyboardHeight : insets.bottom,
+          paddingTop: imageEditMode ? insets.top : 0,
         }}
       >
-        <View style={[styles.documentHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <TextInput
-            style={[styles.titleInput, { color: colors.text }]}
-            placeholder="Título"
-            placeholderTextColor={colors.textMuted}
-            value={title}
-            onChangeText={setTitle}
-            editable={!imageEditMode}
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => {
-              webViewRef.current?.injectJavaScript(
-                "(function(){var e=document.getElementById('editor');if(e)e.focus();})();true;",
-              );
-            }}
-          />
-
-          <View style={styles.documentMetaRow}>
-            <View style={styles.statusCluster}>
-              <View style={[styles.statusDot, { backgroundColor: saveFlash ? colors.primary : colors.border }]} />
-              <Text style={{ color: saveFlash ? colors.primary : colors.textMuted, fontSize: 12, fontWeight: saveFlash ? '800' : '700' }}>
-                {statusText}
-              </Text>
-              <Text style={{ color: colors.textMuted, fontSize: 12 }}>
-                {words} palabras · {readMinutes} min
-              </Text>
+        {imageEditMode ? (
+          <View style={[styles.imageEditBanner, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
+            <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} tintColor={colors.primary} size={14} />
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>
+              Editando imagen · toca fuera para terminar
+            </Text>
+          </View>
+        ) : (
+          <View style={[styles.documentHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+            <View style={styles.titleBlock}>
+              <TextInput
+                style={[styles.titleInput, { color: colors.text }]}
+                placeholder="Título de la nota"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={setTitle}
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => {
+                  webViewRef.current?.injectJavaScript(
+                    "(function(){var e=document.getElementById('editor');if(e)e.focus();})();true;",
+                  );
+                }}
+              />
+              <View style={styles.titleMeta}>
+                <View style={[styles.statusDot, { backgroundColor: saveFlash ? colors.primary : colors.border }]} />
+                <Text
+                  style={[styles.statusText, { color: saveFlash ? colors.primary : colors.textMuted }]}
+                  numberOfLines={1}
+                >
+                  {statusText}
+                </Text>
+              </View>
             </View>
             <Pressable
               onPress={togglePreview}
+              hitSlop={6}
+              accessibilityLabel={preview ? 'Editar' : 'Vista previa'}
               style={[styles.previewToggle, { borderColor: preview ? colors.primaryBorder : colors.border, backgroundColor: preview ? colors.primarySoft : colors.cardMuted }]}
             >
               <SymbolView
@@ -618,21 +626,9 @@ export default function NoteEditorScreen() {
                 tintColor={colors.primary}
                 size={15}
               />
-              <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 12 }}>
-                {preview ? 'Editar' : 'Vista previa'}
-              </Text>
             </Pressable>
           </View>
-
-          {imageEditMode ? (
-            <View style={[styles.inlineNotice, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
-              <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} tintColor={colors.primary} size={14} />
-              <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>
-                Editando imagen
-              </Text>
-            </View>
-          ) : null}
-        </View>
+        )}
 
         {/* Content Area — WebView stays mounted so edits survive preview toggle */}
         <View style={styles.contentArea}>
@@ -693,56 +689,42 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', gap: 8, paddingHorizontal: 8, alignItems: 'center' },
   headerIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   saveBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
+  // Fila única y compacta: el título fijo arriba sin robarle altura a la nota.
   documentHeader: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 10,
-    gap: 10,
-  },
-  titleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     paddingHorizontal: 16,
-    paddingTop: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  imageEditBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
   },
   titleInput: {
-    fontSize: 24,
-    fontWeight: '800',
-    paddingVertical: 2,
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.35,
+    lineHeight: 25,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
-  documentMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  statusCluster: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 7, flexWrap: 'wrap' },
-  statusDot: { width: 7, height: 7, borderRadius: 999 },
+  titleBlock: { flex: 1, gap: 2 },
+  titleMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 15 },
+  statusDot: { width: 6, height: 6, borderRadius: 999 },
+  statusText: { fontSize: 11, fontWeight: '500' },
   previewToggle: {
-    paddingVertical: 7,
-    paddingHorizontal: 10,
+    width: 36,
+    height: 36,
     borderWidth: 1,
     borderRadius: 999,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  inlineNotice: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  metaRow: { flex: 1, alignItems: 'flex-end', gap: 2 },
-  editorContainer: {
-    flex: 1,
+    justifyContent: 'center',
   },
   contentArea: {
     flex: 1,
