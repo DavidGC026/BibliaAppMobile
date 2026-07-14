@@ -193,7 +193,34 @@ export function getEditorHtml(
     .note-image-block {
       max-width: 100%;
       box-sizing: border-box;
-      transition: outline 0.15s ease;
+      transition: outline 0.15s ease, transform 0.22s ease;
+    }
+    .note-image-block.is-background {
+      position: absolute !important;
+      z-index: -1;
+      margin: 0 !important;
+      touch-action: none;
+      pointer-events: none;
+    }
+    body.image-selection-mode .note-image-block.is-background,
+    body.image-editing .note-image-block.is-background {
+      z-index: 10;
+      pointer-events: auto;
+      cursor: grab;
+    }
+    /* Mientras se arrastra o reordena: sin transición de posición, flotando
+       por encima del texto y con sombra para dar sensación de "levantar". */
+    .note-image-block.is-dragging {
+      transition: none !important;
+      cursor: grabbing;
+      z-index: 60 !important;
+      opacity: 0.96;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+      will-change: left, top;
+    }
+    body.image-dragging {
+      user-select: none;
+      -webkit-user-select: none;
     }
     .note-image-block img {
       max-width: 100%;
@@ -231,6 +258,18 @@ export function getEditorHtml(
       border-radius: 999px;
       background: ${colors.border};
       margin: 0 auto 10px;
+      position: relative;
+    }
+    #image-edit-panel .panel-grabber[data-drag]::after {
+      content: 'Arrastrando…';
+      display: block;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: ${colors.primary};
+      text-align: center;
+      margin-top: 6px;
+      white-space: nowrap;
     }
     #image-edit-panel .panel-header {
       display: flex;
@@ -447,6 +486,18 @@ export function getEditorHtml(
       transform: scale(1.15);
       box-shadow: 0 0 0 2px ${colors.primarySoft};
     }
+    /* "Auto": vuelve al color de texto del tema (cambia con el tema). */
+    .color-dot.auto {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: ${colors.muted};
+      border-color: ${colors.border};
+      color: ${colors.text};
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1;
+    }
 
     /* Aux actions row */
     .aux-row {
@@ -486,6 +537,11 @@ export function getEditorHtml(
     <div class="toolbar-area" id="toolbar">
       <!-- Row 1: Formatting -->
       <div class="toolbar-row" id="fmt-row">
+        <button class="tb" data-action="undo" style="font-size: 18px;" aria-label="Deshacer">↶</button>
+        <button class="tb" data-action="redo" style="font-size: 18px;" aria-label="Rehacer">↷</button>
+
+        <div class="sep"></div>
+
         <button class="tb" id="btn-font" data-action="openFontModal">
           <span style="font-weight:800;">Tt</span>
         </button>
@@ -548,7 +604,8 @@ export function getEditorHtml(
       <div class="colors-row" id="colors-row"></div>
 
       <!-- Row 3: Aux actions -->
-      <div class="aux-row">
+      <div class="aux-row" style="flex-wrap: wrap;">
+        <button class="aux-btn" id="btn-toggle-image-mode" data-action="toggleImageSelection" style="border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); color: #2563eb;">Fondos 🖼️</button>
         <button class="aux-btn" data-action="insertVerse">Versículo</button>
         <button class="aux-btn" data-action="insertReferences">Referencias</button>
         <button class="aux-btn aux-btn-dict" data-action="insertDictionary">Diccionario</button>
@@ -565,7 +622,8 @@ export function getEditorHtml(
 
       /* ── Color palette state ───────────────────────── */
       var colorPalette = ${colorsJson};
-      var activeColor = '${colors.text}';
+      // 'auto' = sin color explícito: hereda el color del tema (cambia con el tema).
+      var activeColor = 'auto';
       var activeSize = '16px';
       var savedRange = null;
       var scrollTimer = null;
@@ -575,6 +633,22 @@ export function getEditorHtml(
       var activeImageBlock = null;
       var panel = null;
       var imageEditActive = false;
+      var imageSelectionMode = false;
+      var isDragging = false;
+      var didDragMove = false;
+
+      function toggleImageSelectionMode() {
+        imageSelectionMode = !imageSelectionMode;
+        document.body.classList.toggle('image-selection-mode', imageSelectionMode);
+        var btn = document.getElementById('btn-toggle-image-mode');
+        if (btn) {
+          btn.style.background = imageSelectionMode ? '#3b82f6' : 'rgba(59, 130, 246, 0.1)';
+          btn.style.color = imageSelectionMode ? '#ffffff' : '#2563eb';
+        }
+        if (!imageSelectionMode) {
+          hidePanel();
+        }
+      }
 
       function setImageEditMode(active) {
         if (imageEditActive === active) return;
@@ -590,6 +664,22 @@ export function getEditorHtml(
           type: 'imageEditMode',
           active: active
         }));
+      }
+
+      function imageBlockPosition(block) {
+        var blockRect = block.getBoundingClientRect();
+        var editorRect = editor.getBoundingClientRect();
+        return {
+          left: blockRect.left - editorRect.left + editor.scrollLeft,
+          top: blockRect.top - editorRect.top + editor.scrollTop
+        };
+      }
+
+      function clampImagePosition(block, left, top) {
+        return {
+          left: Math.max(0, Math.min(left, Math.max(0, editor.scrollWidth - block.offsetWidth))),
+          top: Math.max(0, Math.min(top, Math.max(0, editor.scrollHeight - block.offsetHeight)))
+        };
       }
 
       function createPanel() {
@@ -614,6 +704,13 @@ export function getEditorHtml(
           '  </div>',
           '</div>',
           '<div class="panel-section">',
+          '  <span class="panel-label">Modo</span>',
+          '  <div class="segmented">',
+          '    <button type="button" id="btn-mode-normal">Normal</button>',
+          '    <button type="button" id="btn-mode-bg">Fondo</button>',
+          '  </div>',
+          '</div>',
+          '<div class="panel-section" id="panel-align-section">',
           '  <span class="panel-label">Alineación</span>',
           '  <div class="segmented">',
           '    <button type="button" id="btn-align-left">Izq.</button>',
@@ -643,8 +740,14 @@ export function getEditorHtml(
           document.getElementById('panel-width-lbl').textContent = w;
           notifyChangeNow();
         });
+        // Un único paso de deshacer al soltar el slider (no en cada tick).
+        slider.addEventListener('change', function() {
+          commitHistory();
+        });
 
         document.getElementById('btn-image-close').addEventListener('click', hidePanel);
+        document.getElementById('btn-mode-normal').addEventListener('click', function() { setMode('normal'); });
+        document.getElementById('btn-mode-bg').addEventListener('click', function() { setMode('bg'); });
         document.getElementById('btn-align-left').addEventListener('click', function() { setAlign('left'); });
         document.getElementById('btn-align-center').addEventListener('click', function() { setAlign('center'); });
         document.getElementById('btn-align-right').addEventListener('click', function() { setAlign('right'); });
@@ -654,9 +757,11 @@ export function getEditorHtml(
           if (!activeImageBlock) return;
           var prev = activeImageBlock.previousElementSibling;
           if (prev) {
-            activeImageBlock.parentNode.insertBefore(activeImageBlock, prev);
+            animateReorder(activeImageBlock, function() {
+              activeImageBlock.parentNode.insertBefore(activeImageBlock, prev);
+            });
             keepImageVisible();
-            notifyChangeNow();
+            recordImageChange();
           }
         });
 
@@ -664,9 +769,11 @@ export function getEditorHtml(
           if (!activeImageBlock) return;
           var next = activeImageBlock.nextElementSibling;
           if (next) {
-            activeImageBlock.parentNode.insertBefore(activeImageBlock, next.nextElementSibling);
+            animateReorder(activeImageBlock, function() {
+              activeImageBlock.parentNode.insertBefore(activeImageBlock, next.nextElementSibling);
+            });
             keepImageVisible();
-            notifyChangeNow();
+            recordImageChange();
           }
         });
 
@@ -674,7 +781,7 @@ export function getEditorHtml(
           if (!activeImageBlock) return;
           activeImageBlock.remove();
           hidePanel();
-          notifyChangeNow();
+          recordImageChange();
         });
 
         panel.addEventListener('mousedown', function(e) {
@@ -683,6 +790,135 @@ export function getEditorHtml(
         panel.addEventListener('touchstart', function(e) {
           e.stopPropagation();
         }, { passive: true });
+
+        // Drag events for background images
+        var dragStart = { x: 0, y: 0 };
+        var blockStart = { left: 0, top: 0 };
+        var pendingDragPos = null;
+        var dragFrame = 0;
+
+        function applyPendingDrag() {
+          dragFrame = 0;
+          if (!pendingDragPos || !activeImageBlock) return;
+          activeImageBlock.style.left = pendingDragPos.left + 'px';
+          activeImageBlock.style.top = pendingDragPos.top + 'px';
+          activeImageBlock.style.margin = '0';
+          pendingDragPos = null;
+        }
+
+        editor.addEventListener('touchstart', function(e) {
+          if (!imageSelectionMode && !imageEditActive) return;
+          var t = e.target;
+          var block = t.closest ? t.closest('.note-image-block') : null;
+          if (block && block.classList.contains('is-background')) {
+            e.preventDefault();
+            // Si se toca una imagen diferente a la activa, seleccionarla primero
+            if (activeImageBlock !== block) {
+              var img = block.querySelector('img');
+              if (img) showImageEditPanel(img, block);
+            }
+            activeImageBlock = block;
+            isDragging = true;
+            didDragMove = false;
+            dragStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            // Leer la posición guardada en style (no offsetLeft/Top que depende del scroll)
+            blockStart = {
+              left: parseFloat(block.style.left),
+              top:  parseFloat(block.style.top)
+            };
+            if (!Number.isFinite(blockStart.left) || !Number.isFinite(blockStart.top)) {
+              blockStart = imageBlockPosition(block);
+            }
+            block.classList.add('is-dragging');
+            block.style.outline = '2px dashed ${colors.primary}';
+            document.body.classList.add('image-dragging');
+            // Indicador visual en el panel
+            var grabberEl = panel ? panel.querySelector('.panel-grabber') : null;
+            if (grabberEl) grabberEl.setAttribute('data-drag', '1');
+          }
+        }, { passive: false });
+
+        editor.addEventListener('touchmove', function(e) {
+          if (!isDragging || !activeImageBlock) return;
+          e.preventDefault();
+          var dx = e.touches[0].clientX - dragStart.x;
+          var dy = e.touches[0].clientY - dragStart.y;
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) didDragMove = true;
+          pendingDragPos = clampImagePosition(activeImageBlock, blockStart.left + dx, blockStart.top + dy);
+          if (!dragFrame) dragFrame = requestAnimationFrame(applyPendingDrag);
+        }, { passive: false });
+
+        function endDrag() {
+          if (!isDragging) return;
+          isDragging = false;
+          if (dragFrame) {
+            cancelAnimationFrame(dragFrame);
+            applyPendingDrag();
+          }
+          if (activeImageBlock) {
+            activeImageBlock.classList.remove('is-dragging');
+            // Restaurar contorno sólido (el dashed era de arrastre activo)
+            activeImageBlock.style.outline = '2px solid ${colors.primary}';
+          }
+          document.body.classList.remove('image-dragging');
+          // Quitar indicador de arrastre del panel
+          var grabberEl = panel ? panel.querySelector('.panel-grabber') : null;
+          if (grabberEl) grabberEl.removeAttribute('data-drag');
+          if (didDragMove) recordImageChange();
+          didDragMove = false;
+        }
+        editor.addEventListener('touchend', endDrag);
+        editor.addEventListener('touchcancel', endDrag);
+      }
+
+      function setMode(mode) {
+        if (!activeImageBlock) return;
+        var isBg = mode === 'bg';
+
+        if (isBg) {
+          var currentPos = imageBlockPosition(activeImageBlock);
+          activeImageBlock.classList.add('is-background');
+          activeImageBlock.style.margin = '0';
+          if (activeImageBlock.style.position !== 'absolute') {
+            activeImageBlock.style.position = 'absolute';
+          }
+          var clamped = clampImagePosition(activeImageBlock, currentPos.left, currentPos.top);
+          activeImageBlock.style.left = clamped.left + 'px';
+          activeImageBlock.style.top = clamped.top + 'px';
+          activeImageBlock.style.zIndex = '-1';
+        } else {
+          activeImageBlock.classList.remove('is-background');
+          activeImageBlock.style.position = '';
+          activeImageBlock.style.left = '';
+          activeImageBlock.style.top = '';
+          activeImageBlock.style.zIndex = '';
+          activeImageBlock.style.margin = '';
+
+          var align = 'center';
+          if (activeImageBlock.style.float === 'left') align = 'left';
+          else if (activeImageBlock.style.float === 'right') align = 'right';
+          else if (activeImageBlock.style.width === '100%') align = 'full';
+          setAlign(align);
+        }
+        updateModeButtons(mode);
+        keepImageVisible();
+        recordImageChange();
+      }
+
+      function updateModeButtons(mode) {
+        var isBg = mode === 'bg';
+        var btnNormal = document.getElementById('btn-mode-normal');
+        var btnBg = document.getElementById('btn-mode-bg');
+        if (btnNormal) btnNormal.classList.toggle('active', !isBg);
+        if (btnBg) btnBg.classList.toggle('active', isBg);
+
+        var alignSection = document.getElementById('panel-align-section');
+        if (alignSection) alignSection.style.display = isBg ? 'none' : 'block';
+
+        var btnUp = document.getElementById('btn-move-up');
+        var btnDown = document.getElementById('btn-move-down');
+        if (btnUp) btnUp.style.display = isBg ? 'none' : '';
+        if (btnDown) btnDown.style.display = isBg ? 'none' : '';
       }
 
       function setAlign(align) {
@@ -721,7 +957,7 @@ export function getEditorHtml(
 
         updateAlignButtons(align);
         keepImageVisible();
-        notifyChangeNow();
+        recordImageChange();
       }
 
       function updateAlignButtons(activeAlign) {
@@ -730,6 +966,27 @@ export function getEditorHtml(
           if (!btn) return;
           btn.classList.toggle('active', a === activeAlign);
         });
+      }
+
+      // Reordenar con deslizamiento (técnica FLIP): mide la posición antes y
+      // después de mover el bloque y anima la diferencia, en vez del salto seco.
+      function animateReorder(block, doMove) {
+        var first = block.getBoundingClientRect();
+        doMove();
+        var last = block.getBoundingClientRect();
+        var dx = first.left - last.left;
+        var dy = first.top - last.top;
+        if (!dx && !dy) return;
+        block.style.transition = 'none';
+        block.style.transform = 'translate(' + dx + 'px, ' + dy + 'px)';
+        requestAnimationFrame(function() {
+          block.style.transition = 'transform 0.22s ease';
+          block.style.transform = '';
+        });
+        setTimeout(function() {
+          block.style.transition = '';
+          block.style.transform = '';
+        }, 260);
       }
 
       function keepImageVisible() {
@@ -769,6 +1026,9 @@ export function getEditorHtml(
         }
         updateAlignButtons(align);
 
+        var mode = block.classList.contains('is-background') ? 'bg' : 'normal';
+        updateModeButtons(mode);
+
         setImageEditMode(true);
         panel.style.display = 'block';
         keepImageVisible();
@@ -793,9 +1053,18 @@ export function getEditorHtml(
         activeImageBlock = null;
       }
 
+      function ensureImageBlocksAtomic() {
+        document.querySelectorAll('.note-image-block').forEach(function(block) {
+          block.setAttribute('contenteditable', 'false');
+          block.querySelectorAll('img').forEach(function(img) {
+            img.setAttribute('draggable', 'false');
+          });
+        });
+      }
+
       function buildImageBlockHtml(url) {
-        return '<div class="note-image-block" style="text-align: center; width: 60%; max-width: 100%; display: block; margin: 12px auto;">' +
-               '  <img src="' + url + '" style="width: 100%; height: auto; border-radius: 8px;" />' +
+        return '<div class="note-image-block" contenteditable="false" style="text-align: center; width: 60%; max-width: 100%; display: block; margin: 12px auto;">' +
+               '  <img src="' + url + '" draggable="false" style="width: 100%; height: auto; border-radius: 8px;" />' +
                '</div><p><br></p>';
       }
 
@@ -1025,6 +1294,21 @@ export function getEditorHtml(
         var action = btn.getAttribute('data-action');
         var val = btn.getAttribute('data-val') || null;
 
+        if (action === 'toggleImageSelection') {
+          toggleImageSelectionMode();
+          return;
+        }
+
+        if (action === 'undo') {
+          performUndo();
+          return;
+        }
+
+        if (action === 'redo') {
+          performRedo();
+          return;
+        }
+
         if (action === 'insertImage') {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openImagePicker' }));
           return;
@@ -1070,6 +1354,7 @@ export function getEditorHtml(
           document.execCommand('formatBlock', false, currentBlock === val ? 'p' : val);
           updateActiveStates();
           notifyChange();
+          commitHistory();
           scrollCaretIntoView();
           return;
         }
@@ -1078,6 +1363,7 @@ export function getEditorHtml(
           toggleInlineFormat(action);
           updateActiveStates();
           notifyChange();
+          commitHistory();
           scrollCaretIntoView();
           return;
         }
@@ -1087,29 +1373,41 @@ export function getEditorHtml(
         document.execCommand(action, false, val);
         updateActiveStates();
         notifyChange();
+        commitHistory();
         scrollCaretIntoView();
       }
 
       function insertHtmlAtSelection(html, shouldFocus) {
         restoreSelection();
         if (shouldFocus !== false) editor.focus();
-        var sel = window.getSelection();
-        var range = null;
-        if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
-          range = sel.getRangeAt(0);
-        } else {
-          range = document.createRange();
-          range.selectNodeContents(editor);
+
+        // Use execCommand to preserve Undo/Redo history natively
+        var success = false;
+        try {
+          success = document.execCommand('insertHTML', false, html);
+        } catch (e) {}
+
+        // Fallback for older WebViews that might fail
+        if (!success) {
+          var sel = window.getSelection();
+          var range = null;
+          if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+            range = sel.getRangeAt(0);
+          } else {
+            range = document.createRange();
+            range.selectNodeContents(editor);
+            range.collapse(false);
+          }
+          var holder = document.createElement('div');
+          holder.innerHTML = html;
+          var frag = document.createDocumentFragment();
+          while (holder.firstChild) frag.appendChild(holder.firstChild);
           range.collapse(false);
+          range.insertNode(frag);
+          range.collapse(false);
+          setCaretRange(range);
         }
-        var holder = document.createElement('div');
-        holder.innerHTML = html;
-        var frag = document.createDocumentFragment();
-        while (holder.firstChild) frag.appendChild(holder.firstChild);
-        range.collapse(false);
-        range.insertNode(frag);
-        range.collapse(false);
-        setCaretRange(range);
+        notifyChange();
       }
 
       function bindToolbarButton(btn, handler) {
@@ -1253,6 +1551,19 @@ export function getEditorHtml(
         var row = document.getElementById('colors-row');
         if (!row) return;
         row.innerHTML = '';
+
+        // Swatch "Auto": restaura el color de texto del tema.
+        var autoDot = document.createElement('div');
+        autoDot.className = 'color-dot auto' + (activeColor === 'auto' ? ' active' : '');
+        autoDot.setAttribute('data-color', 'auto');
+        autoDot.textContent = 'A';
+        bindToolbarButton(autoDot, function() {
+          activeColor = 'auto';
+          applyColor('auto');
+          renderColors();
+        });
+        row.appendChild(autoDot);
+
         colorPalette.forEach(function(c) {
           var dot = document.createElement('div');
           dot.className = 'color-dot' + (c.toLowerCase() === activeColor.toLowerCase() ? ' active' : '');
@@ -1310,8 +1621,47 @@ export function getEditorHtml(
       /* ── Apply color to selection ──────────────────── */
       function applyColor(color) {
         activeColor = color;
-        wrapRangeStyle('color', color);
+        if (color === 'auto') {
+          clearColor();
+        } else {
+          wrapRangeStyle('color', color);
+        }
         notifyChange();
+      }
+
+      /* ── "Auto": quita el color explícito para heredar el del tema ── */
+      function clearColor() {
+        restoreSelection();
+        editor.focus();
+        var sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        var range = sel.getRangeAt(0);
+        var span = document.createElement('span');
+        span.style.color = 'inherit';
+
+        if (range.collapsed) {
+          span.appendChild(document.createTextNode('\\u200B'));
+          range.insertNode(span);
+          range.setStart(span.firstChild, 1);
+          range.setEnd(span.firstChild, 1);
+        } else {
+          try {
+            range.surroundContents(span);
+          } catch (e) {
+            var fragment = range.extractContents();
+            span.appendChild(fragment);
+            range.insertNode(span);
+          }
+          // Limpia colores explícitos anidados para que "heredar" gane.
+          span.querySelectorAll('[style]').forEach(function(el) { el.style.color = ''; });
+          span.style.color = 'inherit';
+          range.selectNodeContents(span);
+          range.collapse(false);
+        }
+
+        sel.removeAllRanges();
+        sel.addRange(range);
+        savedRange = range.cloneRange();
       }
 
       /* ── Apply font size via span wrapping (works on Android WebView) ── */
@@ -1320,12 +1670,19 @@ export function getEditorHtml(
         wrapRangeStyle('fontSize', sizeValue);
         updateActiveStates();
         notifyChange();
+        commitHistory();
         scrollCaretIntoView();
       }
 
       /* ── Wire up toolbar buttons ────────────────────── */
       if (!isReadOnly) {
         document.querySelectorAll('.tb[data-action]').forEach(function(btn) {
+          bindToolbarButton(btn, function() {
+            runToolbarAction(btn);
+          });
+        });
+
+        document.querySelectorAll('.aux-btn[data-action="toggleImageSelection"]').forEach(function(btn) {
           bindToolbarButton(btn, function() {
             runToolbarAction(btn);
           });
@@ -1353,18 +1710,22 @@ export function getEditorHtml(
 
         // Track content changes
         editor.addEventListener('input', function() {
+          scheduleHistory();
           notifyChange();
           scrollCaretIntoView();
         });
         editor.addEventListener('focus', scrollCaretIntoView);
         
         editor.addEventListener('click', function(e) {
+          // No interferir con un gesto de arrastre que acaba de terminar
+          if (isDragging) return;
           var t = e.target;
           if (t && t.tagName === 'IMG') {
             var block = t.closest('.note-image-block');
             if (!block) {
               block = document.createElement('div');
               block.className = 'note-image-block';
+              block.setAttribute('contenteditable', 'false');
               block.style.textAlign = 'center';
               block.style.width = '60%';
               block.style.maxWidth = '100%';
@@ -1373,6 +1734,7 @@ export function getEditorHtml(
               t.parentNode.insertBefore(block, t);
               block.appendChild(t);
             }
+            t.setAttribute('draggable', 'false');
             showImageEditPanel(t, block);
             e.preventDefault();
             e.stopPropagation();
@@ -1402,6 +1764,13 @@ export function getEditorHtml(
           }
         });
 
+        editor.addEventListener('mousedown', function(e) {
+          var t = e.target;
+          if (t && t.tagName === 'IMG') {
+            e.preventDefault();
+          }
+        });
+
         // Track selection changes for active states + save range for toolbar
         document.addEventListener('selectionchange', function() {
           saveSelection();
@@ -1412,6 +1781,7 @@ export function getEditorHtml(
 
         // Render initial colors
         renderColors();
+        ensureImageBlocksAtomic();
 
         // Initial active states
         setTimeout(updateActiveStates, 100);
@@ -1453,6 +1823,69 @@ export function getEditorHtml(
         }, 250);
       }
 
+      /* ── Historial unificado de deshacer/rehacer ──────────────
+         El undo/redo nativo (execCommand('undo')) solo registra lo hecho con
+         execCommand (tecleo, insertHTML). Las ediciones de imagen (tamaño,
+         alineación, modo fondo, arrastrar, reordenar, borrar) mutan el DOM
+         directamente, así que el historial nativo las ignoraba: por eso
+         "no funcionaban" con imágenes. Este historial por instantáneas de
+         innerHTML cubre texto E imágenes por igual.
+         Nota: guarda HTML completo; con imágenes base64 grandes cada paso pesa,
+         por eso se limita la profundidad y se descartan pasos idénticos. */
+      var undoStack = [];
+      var redoStack = [];
+      var HISTORY_LIMIT = 50;
+      var lastSnapshot = editor.innerHTML;
+      var historyTimer = null;
+
+      function commitHistory() {
+        if (historyTimer) { clearTimeout(historyTimer); historyTimer = null; }
+        var html = editor.innerHTML;
+        if (html === lastSnapshot) return;
+        undoStack.push(lastSnapshot);
+        if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+        lastSnapshot = html;
+        redoStack = [];
+      }
+
+      // Tecleo: agrupa la ráfaga en un solo paso tras 350 ms de inactividad.
+      function scheduleHistory() {
+        if (historyTimer) clearTimeout(historyTimer);
+        historyTimer = setTimeout(function() {
+          historyTimer = null;
+          commitHistory();
+        }, 350);
+      }
+
+      // Edición de imagen: sincroniza el host al momento y fija un paso de historial.
+      function recordImageChange() {
+        notifyChangeNow();
+        commitHistory();
+      }
+
+      function applyHistorySnapshot(html) {
+        clearImageEditingChrome();
+        editor.innerHTML = html;
+        lastSnapshot = html;
+        initTableBlocks();
+        ensureImageBlocksAtomic();
+        notifyChangeNow();
+        updateActiveStates();
+      }
+
+      function performUndo() {
+        commitHistory(); // fija cualquier tecleo pendiente antes de retroceder
+        if (!undoStack.length) return;
+        redoStack.push(lastSnapshot);
+        applyHistorySnapshot(undoStack.pop());
+      }
+
+      function performRedo() {
+        if (!redoStack.length) return;
+        undoStack.push(lastSnapshot);
+        applyHistorySnapshot(redoStack.pop());
+      }
+
       /* ── Global handler for React Native injectJavaScript ── */
       window.handleAction = function(jsonStr) {
         try {
@@ -1472,6 +1905,11 @@ export function getEditorHtml(
           }
           if (action.type === 'updateContent') {
             editor.innerHTML = action.value;
+            ensureImageBlocksAtomic();
+            // Contenido nuevo desde el host: el historial arranca de cero.
+            lastSnapshot = editor.innerHTML;
+            undoStack = [];
+            redoStack = [];
             return;
           }
           if (action.type === 'updateColors') {
@@ -1495,7 +1933,7 @@ export function getEditorHtml(
 
           if (action.type === 'insertImage') {
             insertHtmlAtSelection(buildImageBlockHtml(action.value), false);
-            notifyChangeNow();
+            recordImageChange();
             return;
           }
 
@@ -1521,6 +1959,7 @@ export function getEditorHtml(
           }
 
           notifyChange();
+          commitHistory();
         } catch (e) {
           window.ReactNativeWebView.postMessage(JSON.stringify({
             type: 'error',
