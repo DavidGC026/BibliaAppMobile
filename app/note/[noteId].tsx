@@ -22,7 +22,6 @@ import * as api from '@/lib/api';
 
 import { FontSelectorModal } from '@/components/FontSelectorModal';
 import { InsertDictionaryModal } from '@/components/InsertDictionaryModal';
-import { InsertReferenceModal } from '@/components/InsertReferenceModal';
 import { InsertVerseModal } from '@/components/InsertVerseModal';
 import { NoteContent } from '@/components/NoteContent';
 import { useNetwork } from '@/context/NetworkContext';
@@ -71,7 +70,6 @@ export default function NoteEditorScreen() {
   const [saveFlash, setSaveFlash] = useState(false);
   const [preview, setPreview] = useState(false);
   const [verseModalOpen, setVerseModalOpen] = useState(false);
-  const [referenceModalOpen, setReferenceModalOpen] = useState(false);
   const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
   const [fontModalOpen, setFontModalOpen] = useState(false);
   const [imageEditMode, setImageEditMode] = useState(false);
@@ -230,11 +228,6 @@ export default function NoteEditorScreen() {
   const handleInsertDictionary = (entry: StrongEntry) => {
     sendToEditor({ type: 'insertDictionary', value: formatDictionaryInsertion(entry) });
     setDictionaryModalOpen(false);
-  };
-
-  const handleInsertReferences = (html: string) => {
-    sendToEditor({ type: 'insertReferences', value: html });
-    setReferenceModalOpen(false);
   };
 
   const hasUnsavedChanges = useCallback(() => {
@@ -421,8 +414,6 @@ export default function NoteEditorScreen() {
         setFontModalOpen(true);
       } else if (data.type === 'openVerseModal') {
         setVerseModalOpen(true);
-      } else if (data.type === 'openReferenceModal') {
-        setReferenceModalOpen(true);
       } else if (data.type === 'openDictionaryModal') {
         setDictionaryModalOpen(true);
       } else if (data.type === 'openImagePicker') {
@@ -667,12 +658,6 @@ export default function NoteEditorScreen() {
         visible={verseModalOpen}
         onClose={() => setVerseModalOpen(false)}
         onInsert={handleInsertVerse}
-      />
-
-      <InsertReferenceModal
-        visible={referenceModalOpen}
-        onClose={() => setReferenceModalOpen(false)}
-        onInsert={handleInsertReferences}
       />
 
       <InsertDictionaryModal

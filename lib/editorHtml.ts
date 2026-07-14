@@ -617,7 +617,6 @@ export function getEditorHtml(
       <div class="aux-row" style="flex-wrap: wrap;">
         <button class="aux-btn" id="btn-toggle-image-mode" data-action="toggleImageSelection" style="border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); color: #2563eb;">Fondos 🖼️</button>
         <button class="aux-btn" data-action="insertVerse">Versículo</button>
-        <button class="aux-btn" data-action="insertReferences">Referencias</button>
         <button class="aux-btn aux-btn-dict" data-action="insertDictionary">Diccionario</button>
       </div>
     </div>
@@ -1378,11 +1377,6 @@ export function getEditorHtml(
           return;
         }
 
-        if (action === 'insertReferences') {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openReferenceModal' }));
-          return;
-        }
-
         if (action === 'selectAll') {
           editor.focus();
           var allRange = document.createRange();
@@ -1750,12 +1744,6 @@ export function getEditorHtml(
           });
         });
 
-        document.querySelectorAll('.aux-btn[data-action="insertReferences"]').forEach(function(btn) {
-          bindToolbarButton(btn, function() {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openReferenceModal' }));
-          });
-        });
-
         document.querySelectorAll('.aux-btn[data-action="insertDictionary"]').forEach(function(btn) {
           bindToolbarButton(btn, function() {
             window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'openDictionaryModal' }));
@@ -2008,8 +1996,6 @@ export function getEditorHtml(
             editor.style.fontFamily = fontStack(action.value);
           } else if (action.type === 'insertVerse') {
             insertHtmlAtSelection(buildVerseBlockHtml(action.value));
-          } else if (action.type === 'insertReferences') {
-            insertHtmlAtSelection(action.value);
           } else if (action.type === 'insertDictionary') {
             insertHtmlAtSelection(buildDictBlockHtml(action.value));
           }
