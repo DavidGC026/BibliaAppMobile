@@ -127,7 +127,7 @@ export default function ProfileScreen() {
         </Card>
       </View>
 
-      <ThemeSwitch />
+      <ThemeSwitch isAdmin={user?.role === 'admin'} />
       <ReminderSettings />
 
       {androidWidgetAvailable() ? (

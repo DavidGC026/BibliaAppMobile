@@ -2,13 +2,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/components/useColorScheme';
-import { AuthProvider } from '@/context/AuthContext';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NetworkProvider } from '@/context/NetworkContext';
-import { ThemeProvider as AppThemeProvider } from '@/context/ThemeContext';
+import {
+  isDarkTheme,
+  ThemeProvider as AppThemeProvider,
+  useThemeMode,
+} from '@/context/ThemeContext';
 import Colors from '@/constants/Colors';
 import { loadAllDownloadedFonts } from '@/lib/fontManager';
 import { hydrateOfflineDownloads } from '@/lib/offlineDownloadManager';
@@ -55,7 +60,9 @@ export default function RootLayout() {
       <AppThemeProvider>
         <NetworkProvider>
           <AuthProvider>
-            <RootLayoutNav />
+            <AdminThemeGuard>
+              <RootLayoutNav />
+            </AdminThemeGuard>
           </AuthProvider>
         </NetworkProvider>
       </AppThemeProvider>
@@ -63,12 +70,26 @@ export default function RootLayout() {
   );
 }
 
+function AdminThemeGuard({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const { mode, setMode } = useThemeMode();
+
+  useEffect(() => {
+    if (!isLoading && mode === 'dvg' && user?.role !== 'admin') {
+      setMode('system');
+    }
+  }, [isLoading, mode, setMode, user?.role]);
+
+  return children;
+}
+
 function RootLayoutNav() {
   const colorScheme = useColorScheme() ?? 'light';
   const palette = Colors[colorScheme];
+  const usesDarkChrome = isDarkTheme(colorScheme);
   useAppReminders();
 
-  const theme = colorScheme === 'dark'
+  const theme = usesDarkChrome
     ? {
         ...DarkTheme,
         colors: {
@@ -94,6 +115,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={theme}>
+      <StatusBar style={usesDarkChrome ? 'light' : 'dark'} />
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
