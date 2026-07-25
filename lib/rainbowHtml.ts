@@ -409,12 +409,17 @@ export function getRainbowHtml(
         ctx.stroke(paths[key2]);
       }
       progFill.style.width = (i / TRIPLES * 100).toFixed(1) + '%';
+      // El anfitrión mantiene su pantalla de carga encima del mapa hasta que
+      // el lienzo está completo: sin estos avisos vería el iframe montado pero
+      // en negro mientras los arcos se dibujan por trozos.
+      sendToHost({ type: 'render-progress', done: i, total: TRIPLES });
       if (i < TRIPLES) {
         setTimeout(step, 0);
       } else {
         drawStrip(ctx);
         progress.style.display = 'none';
         applyHighlight();
+        sendToHost({ type: 'rendered' });
       }
     }
     step();

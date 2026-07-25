@@ -357,6 +357,14 @@ function runVariant(name, modulePath) {
     check('ninguno queda a resolución inútil', hi.width >= VW && base.width >= VW)
   }
 
+  console.log('\n11b) El lienzo avisa al anfitrión del dibujo')
+  {
+    // La pantalla de carga del anfitrión se queda encima hasta este aviso: si
+    // desaparece, la web vuelve a ensenar el hueco en negro mientras dibuja.
+    check('emite el avance del dibujo', html.includes("type: 'render-progress'"))
+    check('emite el final del dibujo', html.includes("type: 'rendered'"))
+  }
+
   console.log('\n12) El orden de dibujo no se copia a un Array normal')
   {
     const src = fs.readFileSync(modulePath, 'utf8')
