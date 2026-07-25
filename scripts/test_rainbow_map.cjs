@@ -342,7 +342,31 @@ function runVariant(name, modulePath) {
     r.setSelected(-1, false)
   }
 
-  console.log('\n11) Controles fuera del área de gestos')
+  console.log('\n11) Memoria de los lienzos')
+  {
+    // Los bitmaps son lo que más RAM consume del mapa y no dependen del dato,
+    // solo de la ventana: se vigila su presupuesto para que no vuelva a
+    // crecer sin querer.
+    const base = doc.getElementById('base')
+    const hi = doc.getElementById('hi')
+    const mb = (el) => (el.width * el.height * 4) / 1024 / 1024
+    check('el mapa base no pasa de 9,4 Mpx', base.width * base.height <= 9400000 + 1000, `${mb(base).toFixed(1)} MB`)
+    check('el resaltado no pasa de 3 Mpx', hi.width * hi.height <= 3000000 + 1000, `${mb(hi).toFixed(1)} MB`)
+    check('el resaltado nunca supera al base', hi.width <= base.width && hi.height <= base.height)
+    check('los dos juntos por debajo de 50 MB', mb(base) + mb(hi) < 50, `${(mb(base) + mb(hi)).toFixed(1)} MB`)
+    check('ninguno queda a resolución inútil', hi.width >= VW && base.width >= VW)
+  }
+
+  console.log('\n12) El orden de dibujo no se copia a un Array normal')
+  {
+    const src = fs.readFileSync(modulePath, 'utf8')
+    check(
+      'se ordena el propio Uint32Array',
+      /order\.sort\(/.test(src) && !/Array\.prototype\.slice\.call\(order\)/.test(src),
+    )
+  }
+
+  console.log('\n13) Controles fuera del área de gestos')
   {
     const zoom = doc.getElementById('zoom')
     const legend = doc.getElementById('legend')

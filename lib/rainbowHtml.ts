@@ -220,10 +220,12 @@ export function getRainbowHtml(
     counts[arcs[k3]] += arcs[k3 + 2];
     counts[arcs[k3 + 1]] += arcs[k3 + 2];
   }
-  // Orden de dibujo: arcos largos primero para que los cortos queden encima
+  // Orden de dibujo: arcos largos primero para que los cortos queden encima.
+  // Se ordena el propio Uint32Array —su sort acepta comparador— en vez de
+  // copiarlo a un Array normal: la mitad de bytes por elemento y sin la copia
+  // intermedia, que con más de cien mil arcos son varios MB.
   var order = new Uint32Array(TRIPLES);
   for (t = 0; t < TRIPLES; t++) order[t] = t;
-  order = Array.prototype.slice.call(order);
   order.sort(function (x, y) {
     return Math.abs(arcs[y * 3 + 1] - arcs[y * 3]) - Math.abs(arcs[x * 3 + 1] - arcs[x * 3]);
   });
@@ -238,6 +240,8 @@ export function getRainbowHtml(
   }
 
   // ---- Geometría / lienzo ----
+  // Presupuesto de píxeles de la capa de resaltado: 3 Mpx ≈ 12 MB de bitmap.
+  var HI_MAX_PX = 3000000;
   var M = 14, STRIP_H = 12, LABEL_H = 20;
   var CSS_W = 0, CSS_H = 0, VW = 0, VH = 0, BASE_Y = 0, MAXH = 0, STEP = 1;
   var RES = 1, RES2 = 1;
@@ -265,7 +269,14 @@ export function getRainbowHtml(
     // con topes de ancho (8192 px) y de área total (~9.4 Mpx) por memoria.
     RES = Math.min(dpr * 2, 8192 / CSS_W, Math.sqrt(9400000 / (CSS_W * CSS_H)));
     if (RES < 0.5) RES = 0.5;
-    RES2 = Math.min(RES, Math.max(1, dpr));
+    // La capa de resaltado dibuja un velo, la franja y los arcos de un solo
+    // capítulo: no necesita la resolución del mapa completo. Con el tope
+    // anterior (dpr) llegaba a pesar lo mismo que la base —36 MB en un móvil
+    // de dpr 3—, así que se le pone su propio presupuesto de área (3 Mpx =
+    // 12 MB), que nunca la deja por encima de la base ni por debajo de 1.
+    RES2 = Math.min(RES, Math.max(1, dpr), Math.sqrt(HI_MAX_PX / (CSS_W * CSS_H)));
+    if (RES2 > RES) RES2 = RES;
+    if (RES2 < 0.5) RES2 = 0.5;
     world.style.width = CSS_W + 'px';
     world.style.height = CSS_H + 'px';
     base.style.width = hi.style.width = CSS_W + 'px';
