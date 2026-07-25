@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.bibliaapp.mobile",
-      "versionCode": 37,
+      "versionCode": 38,
       "adaptiveIcon": {
         "backgroundColor": "#9A6700",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

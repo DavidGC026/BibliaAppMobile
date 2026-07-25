@@ -48,7 +48,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "prebuild:android": "expo prebuild --platform android",
-    "build:android:release": "cd android && ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk ../releases/BibliaAPP-3.3-release.apk"
+    "check:native": "node scripts/check_native_config.cjs",
+    "build:android:release": "npm run check:native && cd android && ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk ../releases/BibliaAPP-3.3-release.apk"
   },
   "private": true
 }
