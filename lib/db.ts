@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS bibles (
   bible_id INTEGER PRIMARY KEY NOT NULL,
   abbr TEXT NOT NULL,
   name TEXT NOT NULL,
+  capabilities_json TEXT,
   downloaded INTEGER NOT NULL DEFAULT 0,
   downloaded_at TEXT
 );
@@ -54,6 +55,14 @@ CREATE TABLE IF NOT EXISTS notes (
   updated_at TEXT NOT NULL,
   dirty INTEGER NOT NULL DEFAULT 0,
   deleted INTEGER NOT NULL DEFAULT 0
+);
+
+-- Imágenes de nota ya subidas, por hash de sus bytes: evita volver a subir la
+-- misma foto cada vez que se guarda la nota. Ver lib/noteImageSync.ts.
+CREATE TABLE IF NOT EXISTS note_image_uploads (
+  hash TEXT PRIMARY KEY NOT NULL,
+  url TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS highlights (
@@ -122,6 +131,11 @@ let dbReady: Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function initSchema(db: SQLite.SQLiteDatabase) {
   await db.execAsync(SCHEMA);
+  try {
+    await db.execAsync('ALTER TABLE bibles ADD COLUMN capabilities_json TEXT;');
+  } catch {
+    // La columna ya existe en instalaciones nuevas o previamente migradas.
+  }
 }
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {

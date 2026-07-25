@@ -4,6 +4,7 @@ import {
   cacheBibleCatalog,
   cacheBooks,
   cacheChapterVerses,
+  canCacheBible,
   deleteDownloadedBible,
   downloadBible,
   getDownloadedSize,
@@ -63,6 +64,7 @@ import {
   type StudyDownloadInfo,
   type StudyDownloadProgress,
 } from '@/lib/offline/studyStore';
+import { uploadEmbeddedNoteImages } from '@/lib/noteImageSync';
 import { syncAll } from '@/lib/sync';
 import { nowIso } from '@/lib/db';
 import type { BibleVersion, Book, CrossReference, HighlightItem, Notebook, NotebookNote, StrongEntry, Verse } from '@/lib/types';
@@ -103,7 +105,7 @@ export async function initOffline() {
   await getDb();
 }
 
-export async function repoListBibles(): Promise<{ bibles: BibleVersion[] }> {
+export async function repoListBibles(): Promise<{ bibles: BibleVersion[]; defaultBibleId?: number | null }> {
   if (getIsOnline()) {
     try {
       const res = await api.listBibles();
@@ -139,7 +141,9 @@ export async function repoGetVerses(bibleId: number, bookId: number, chapter: nu
   }
   if (getIsOnline()) {
     const res = await api.getVerses(bibleId, bookId, chapter);
-    await cacheChapterVerses(bibleId, bookId, chapter, res.verses);
+    if (await canCacheBible(bibleId)) {
+      await cacheChapterVerses(bibleId, bookId, chapter, res.verses);
+    }
     return res;
   }
   const verses = await getLocalVerses(bibleId, bookId, chapter);
@@ -380,6 +384,9 @@ export async function repoDeleteNotebook(id: number) {
 
 export async function repoCreateNotebookNote(notebookId: number, title: string, content: string) {
   const finalTitle = title.trim() || 'Sin título';
+  // Las imágenes insertadas sin conexión viajan en base64 dentro del HTML: se
+  // suben y se dejan como URL para no guardar megas en la base de datos.
+  content = await uploadEmbeddedNoteImages(content);
   const note = await createLocalNote(notebookId, finalTitle, content);
   if (useRemote() && notebookId > 0) {
     try {
@@ -395,6 +402,7 @@ export async function repoCreateNotebookNote(notebookId: number, title: string, 
 
 export async function repoUpdateNotebookNote(noteId: number, title: string, content: string, tags?: string[]) {
   const finalTitle = title.trim() || 'Sin título';
+  content = await uploadEmbeddedNoteImages(content);
   await updateLocalNote(noteId, finalTitle, content, tags ? JSON.stringify(tags) : undefined);
   if (useRemote() && noteId > 0) {
     try {

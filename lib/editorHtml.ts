@@ -1882,15 +1882,33 @@ export function getEditorHtml(
       var undoStack = [];
       var redoStack = [];
       var HISTORY_LIMIT = 50;
+      // Una imagen recién insertada viaja en base64 dentro del HTML, así que
+      // cada instantánea puede pesar cientos de KB: limitar solo el número de
+      // pasos dejaba el historial crecer hasta tumbar el WebView. Se descartan
+      // los pasos más antiguos cuando se supera este peso.
+      var HISTORY_BYTES_LIMIT = 4 * 1024 * 1024;
       var lastSnapshot = editor.innerHTML;
       var historyTimer = null;
+
+      function trimHistory() {
+        while (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+        var bytes = 0;
+        for (var i = undoStack.length - 1; i >= 0; i--) {
+          bytes += undoStack[i].length;
+          if (bytes > HISTORY_BYTES_LIMIT) {
+            // Conservar los pasos recientes que caben; soltar el resto.
+            undoStack.splice(0, i + 1);
+            break;
+          }
+        }
+      }
 
       function commitHistory() {
         if (historyTimer) { clearTimeout(historyTimer); historyTimer = null; }
         var html = editor.innerHTML;
         if (html === lastSnapshot) return;
         undoStack.push(lastSnapshot);
-        if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+        trimHistory();
         lastSnapshot = html;
         redoStack = [];
       }
