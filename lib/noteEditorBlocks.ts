@@ -52,7 +52,8 @@ export function getNoteBlockCss(colors: NoteBlockThemeColors, isReadOnly: boolea
     }
     .biblia-block-handle {
       display: none;
-      align-items: center;
+      flex-direction: column;
+      align-items: stretch;
       gap: 6px;
       padding: 6px 8px;
       margin: -2px -2px 0;
@@ -64,6 +65,22 @@ export function getNoteBlockCss(colors: NoteBlockThemeColors, isReadOnly: boolea
     }
     .biblia-content-block.is-selected .biblia-block-handle {
       display: flex;
+    }
+    .biblia-block-handle-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    /* Acciones propias del tipo de bloque (p. ej. filas y columnas de tabla):
+       en su propia fila para no apretar las genéricas en pantallas de móvil. */
+    .biblia-block-actions-extra {
+      justify-content: flex-start;
+      border-top: 1px solid ${colors.border};
+      padding-top: 6px;
+    }
+    .biblia-block-actions-extra .biblia-block-btn {
+      background: ${colors.primarySoft};
+      color: ${colors.primary};
     }
     .biblia-block-label {
       font-size: 11px;
@@ -108,19 +125,43 @@ export function getNoteBlockCss(colors: NoteBlockThemeColors, isReadOnly: boolea
 export function getNoteBlockScript(isReadOnly: boolean): string {
   return `
       /* ── Constructores de bloque ───────────────────── */
-      function buildBlockHandleHtml(icon, label) {
-        return '<div class="biblia-block-handle" contenteditable="false">' +
-          '<span class="biblia-block-label">' + icon + ' ' + label + '</span>' +
-          '<div class="biblia-block-actions">' +
-          '<button type="button" class="biblia-block-btn" data-block-action="up" contenteditable="false">↑</button>' +
-          '<button type="button" class="biblia-block-btn" data-block-action="down" contenteditable="false">↓</button>' +
-          '<button type="button" class="biblia-block-btn" data-block-action="copy" contenteditable="false">Copiar</button>' +
-          '<button type="button" class="biblia-block-btn" data-block-action="cut" contenteditable="false">Cortar</button>' +
-          '<button type="button" class="biblia-block-btn" data-block-action="delete" contenteditable="false">Eliminar</button>' +
-          '</div></div>';
+      function blockActionButtonHtml(action, label) {
+        return '<button type="button" class="biblia-block-btn" data-block-action="' + action +
+          '" contenteditable="false">' + label + '</button>';
       }
 
-      var BLOCK_ACTION_COUNT = 5;
+      /* La barra tiene dos filas: las acciones comunes a todo bloque y, si el
+         tipo aporta las suyas (type.actions), una segunda con ellas. Añadir
+         acciones a un tipo no obliga a tocar esta función. */
+      function buildBlockHandleHtml(icon, label, extraActions) {
+        var common = GENERIC_BLOCK_ACTIONS.map(function(a) {
+          return blockActionButtonHtml(a.action, a.label);
+        }).join('');
+        var extra = '';
+        if (extraActions && extraActions.length) {
+          extra = '<div class="biblia-block-actions biblia-block-actions-extra">' +
+            extraActions.map(function(a) {
+              return blockActionButtonHtml(a.action, a.label);
+            }).join('') + '</div>';
+        }
+        return '<div class="biblia-block-handle" contenteditable="false">' +
+          '<div class="biblia-block-handle-row">' +
+          '<span class="biblia-block-label">' + icon + ' ' + label + '</span>' +
+          '<div class="biblia-block-actions">' + common + '</div>' +
+          '</div>' + extra + '</div>';
+      }
+
+      var GENERIC_BLOCK_ACTIONS = [
+        { action: 'up', label: '↑' },
+        { action: 'down', label: '↓' },
+        { action: 'copy', label: 'Copiar' },
+        { action: 'cut', label: 'Cortar' },
+        { action: 'delete', label: 'Eliminar' }
+      ];
+
+      function expectedBlockActionCount(type) {
+        return GENERIC_BLOCK_ACTIONS.length + (type && type.actions ? type.actions.length : 0);
+      }
 
       function verseLabelFromBlockquote(bq) {
         if (!bq) return 'Versículo';
@@ -143,7 +184,7 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         tmp.innerHTML = '<blockquote class="biblia-verse-quote" contenteditable="false">' + innerHtml + '</blockquote>';
         var bq = tmp.querySelector('blockquote');
         return '<div class="biblia-content-block biblia-verse-block">' +
-          buildBlockHandleHtml('📖', verseLabelFromBlockquote(bq)) +
+          buildBlockHandleHtml('📖', verseLabelFromBlockquote(bq), null) +
           bq.outerHTML + '</div><p><br></p>';
       }
 
@@ -156,7 +197,7 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
           aside.setAttribute('contenteditable', 'false');
         }
         return '<div class="biblia-content-block biblia-dict-block">' +
-          buildBlockHandleHtml('📚', dictLabelFromAside(aside)) +
+          buildBlockHandleHtml('📚', dictLabelFromAside(aside), null) +
           (aside ? aside.outerHTML : asideHtml) + '</div><p><br></p>';
       }
 
@@ -239,6 +280,9 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
           ? ''
           : `
       var selectedContentBlock = null;
+      // Ultimo elemento tocado dentro del bloque: permite que una accion del
+      // tipo actue donde esta el dedo (insertar la fila junto a esa celda).
+      var lastBlockTapTarget = null;
 
       function clearContentBlockSelection() {
         if (selectedContentBlock) selectedContentBlock.classList.remove('is-selected');
@@ -292,6 +336,11 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
          principal (y queda un envoltorio invisible que atrapa el caret). Ese
          HTML roto se guardaba en la nota, así que el bloque quedaba inservible
          para siempre. Aquí se rehace lo que falte. */
+      function isCurrentBlockHandle(handle, type) {
+        if (!handle.querySelector('.biblia-block-handle-row')) return false;
+        return handle.querySelectorAll('[data-block-action]').length >= expectedBlockActionCount(type);
+      }
+
       function contentBlockHandles(block) {
         var out = [];
         for (var i = 0; i < block.children.length; i++) {
@@ -351,13 +400,16 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
           changed = true;
         }
         var handle = handles[0] || null;
-        if (handle && handle.querySelectorAll('[data-block-action]').length < BLOCK_ACTION_COUNT) {
+        // Barra incompleta (borrado a trozos) o de una version anterior del
+        // editor: se rehace, y asi las notas antiguas estrenan las acciones
+        // nuevas del tipo sin migracion.
+        if (handle && !isCurrentBlockHandle(handle, type)) {
           handle.remove();
           handle = null;
           changed = true;
         }
         if (!handle) {
-          block.insertAdjacentHTML('afterbegin', buildBlockHandleHtml(type.icon, type.label(main)));
+          block.insertAdjacentHTML('afterbegin', buildBlockHandleHtml(type.icon, type.label(main), type.actions));
           changed = true;
         } else if (block.firstElementChild !== handle) {
           block.insertBefore(handle, block.firstChild);
@@ -377,7 +429,7 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
             var block = document.createElement('div');
             block.className = 'biblia-content-block ' + type.blockClass;
             if (type.prepare) type.prepare(main);
-            block.innerHTML = buildBlockHandleHtml(type.icon, type.label(main));
+            block.innerHTML = buildBlockHandleHtml(type.icon, type.label(main), type.actions);
             main.parentNode.insertBefore(block, main);
             block.appendChild(main);
             changed = true;
@@ -515,13 +567,44 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         scrollCaretIntoView();
       }
 
+      // La etiqueta describe el contenido ("Tabla 3×4", la referencia del
+      // versiculo), asi que hay que rehacerla cuando el bloque cambia.
+      function refreshContentBlockLabel(block) {
+        if (!block || !block.parentNode) return;
+        var main = blockMainNode(block);
+        var type = main ? (contentBlockTypeFor(block) || contentBlockTypeForMain(main)) : null;
+        var label = block.querySelector('.biblia-block-label');
+        if (!type || !label) return;
+        label.textContent = type.icon + ' ' + type.label(main);
+      }
+
       function handleContentBlockAction(block, action) {
         if (!block) return;
-        if (action === 'up') moveContentBlock(block, 'up');
-        else if (action === 'down') moveContentBlock(block, 'down');
-        else if (action === 'copy') copyContentBlock(block);
-        else if (action === 'cut') cutContentBlock(block);
-        else if (action === 'delete') removeContentBlock(block);
+        if (action === 'up') return moveContentBlock(block, 'up');
+        if (action === 'down') return moveContentBlock(block, 'down');
+        if (action === 'copy') return copyContentBlock(block);
+        if (action === 'cut') return cutContentBlock(block);
+        if (action === 'delete') return removeContentBlock(block);
+        runContentBlockTypeAction(block, action);
+      }
+
+      /* Acciones propias del tipo (filas y columnas de una tabla, p. ej.): las
+         resuelve el modulo que define el tipo; aqui solo se despacha y se deja
+         el documento consistente. */
+      function runContentBlockTypeAction(block, action) {
+        var main = blockMainNode(block);
+        if (!main) return;
+        var type = contentBlockTypeFor(block) || contentBlockTypeForMain(main);
+        if (!type || typeof type.runAction !== 'function') return;
+        if (!type.runAction(main, action, { target: lastBlockTapTarget })) return;
+        refreshContentBlockLabel(block);
+        // Se conserva la selección (y con ella la celda de referencia) para
+        // poder pulsar varias veces seguidas.
+        if (selectedContentBlock !== block) selectContentBlock(block);
+        normalizeContentBlocks();
+        notifyChange();
+        if (typeof commitHistory === 'function') commitHistory();
+        scrollCaretIntoView();
       }
 
       /* ── Selección por toque ───────────────────────── */
@@ -531,6 +614,7 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         if (!block) return false;
         // La barra gestiona sus propios botones.
         if (target.closest('.biblia-block-handle')) return false;
+        lastBlockTapTarget = target;
 
         // En una tabla, el segundo toque sobre la celda suelta la selección
         // para poder escribir dentro.
@@ -673,7 +757,10 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
             e.preventDefault();
             return;
           }
-          if (!e.target.closest('.biblia-content-block')) clearContentBlockSelection();
+          if (!e.target.closest('.biblia-content-block')) {
+            clearContentBlockSelection();
+            lastBlockTapTarget = null;
+          }
         });
 
         editor.addEventListener('keydown', handleContentBlockKeydown);

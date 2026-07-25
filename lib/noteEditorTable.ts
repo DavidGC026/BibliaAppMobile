@@ -327,9 +327,81 @@ export function getNoteTableScript(isReadOnly: boolean): string {
         return buildBlockHandleHtml('⊞', label);
       }
 
+      /* ── Filas y columnas de una tabla ya insertada ──
+         Se respetan los mismos límites que el selector de inserción (hasta 10
+         columnas y 20 filas) y no se deja la tabla sin ninguna fila ni columna:
+         para eso está «Eliminar» en la barra del bloque. */
+      var TABLE_MAX_COLS = 10;
+      var TABLE_MAX_ROWS = 20;
+
+      function tableColumnCount(table) {
+        var cols = 0;
+        for (var r = 0; r < table.rows.length; r++) {
+          cols = Math.max(cols, table.rows[r].cells.length);
+        }
+        return cols;
+      }
+
+      function isHeaderRow(row) {
+        return !!(row.parentNode && row.parentNode.tagName === 'THEAD');
+      }
+
+      function newTableCell(row) {
+        var head = isHeaderRow(row);
+        var cell = document.createElement(head ? 'th' : 'td');
+        cell.innerHTML = head ? 'Col' : '&nbsp;';
+        return cell;
+      }
+
+      /* Celda de referencia: la última que tocó el usuario, para que la fila o
+         columna nueva aparezca junto a ella y no siempre al final. */
+      function tableCellFromContext(table, context) {
+        var target = context && context.target;
+        if (!target || !target.closest) return null;
+        var cell = target.closest('td, th');
+        return cell && table.contains(cell) ? cell : null;
+      }
+
+      function addTableRow(table, cell) {
+        if (table.rows.length >= TABLE_MAX_ROWS) return false;
+        var cols = tableColumnCount(table) || 1;
+        var at = cell ? Math.min(cell.parentNode.rowIndex + 1, table.rows.length) : table.rows.length;
+        var row = table.insertRow(at);
+        for (var i = 0; i < cols; i++) row.appendChild(newTableCell(row));
+        return true;
+      }
+
+      function removeTableRow(table, cell) {
+        if (table.rows.length <= 1) return false;
+        var at = cell ? cell.parentNode.rowIndex : table.rows.length - 1;
+        table.deleteRow(at);
+        return true;
+      }
+
+      function addTableColumn(table, cell) {
+        if (tableColumnCount(table) >= TABLE_MAX_COLS) return false;
+        var at = cell ? cell.cellIndex + 1 : tableColumnCount(table);
+        for (var r = 0; r < table.rows.length; r++) {
+          var row = table.rows[r];
+          row.insertBefore(newTableCell(row), row.cells[at] || null);
+        }
+        return true;
+      }
+
+      function removeTableColumn(table, cell) {
+        if (tableColumnCount(table) <= 1) return false;
+        var at = cell ? cell.cellIndex : tableColumnCount(table) - 1;
+        for (var r = 0; r < table.rows.length; r++) {
+          var row = table.rows[r];
+          if (row.cells[at]) row.deleteCell(at);
+        }
+        return true;
+      }
+
       // Descriptor que consume note-editor-blocks: la tabla es un bloque de
-      // contenido más, pero solo este módulo sabe cómo etiquetarla y qué
-      // tablas quedan fuera (la vista compacta de solo lectura).
+      // contenido más, pero solo este módulo sabe cómo etiquetarla, qué tablas
+      // quedan fuera (la vista compacta de solo lectura) y qué acciones
+      // propias ofrece en la barra del bloque.
       function tableContentBlockType() {
         return {
           blockClass: 'biblia-table-block',
@@ -342,6 +414,22 @@ export function getNoteTableScript(isReadOnly: boolean): string {
           },
           prepare: function(main) {
             if (!main.classList.contains('biblia-note-table')) main.classList.add('biblia-note-table');
+          },
+          actions: [
+            { action: 'table-row-add', label: '+ Fila' },
+            { action: 'table-row-del', label: '− Fila' },
+            { action: 'table-col-add', label: '+ Col' },
+            { action: 'table-col-del', label: '− Col' }
+          ],
+          // Devuelve true si cambió la tabla (el módulo de bloques se encarga
+          // entonces de la etiqueta, el historial y avisar al host).
+          runAction: function(table, action, context) {
+            var cell = tableCellFromContext(table, context);
+            if (action === 'table-row-add') return addTableRow(table, cell);
+            if (action === 'table-row-del') return removeTableRow(table, cell);
+            if (action === 'table-col-add') return addTableColumn(table, cell);
+            if (action === 'table-col-del') return removeTableColumn(table, cell);
+            return false;
           }
         };
       }
