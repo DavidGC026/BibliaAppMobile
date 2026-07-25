@@ -19,12 +19,25 @@ export interface RainbowTheme {
   border: string;
 }
 
+export interface RainbowOptions {
+  /**
+   * Muestra el botón «Conexiones», que solo avisa al anfitrión por
+   * `postMessage`. Se deja apagado si nadie escucha, para no ofrecer un botón
+   * que no lleva a ninguna parte.
+   */
+  connectionsButton?: boolean;
+}
+
 /**
  * Genera el HTML del mapa arcoíris. El canvas se renderiza UNA sola vez en
  * alta resolución; el zoom y el desplazamiento se hacen con transformaciones
  * CSS (GPU), por lo que el pellizco es fluido y nunca vuelve a dibujar arcos.
  */
-export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): string {
+export function getRainbowHtml(
+  theme: RainbowTheme,
+  payload: RainbowPayload,
+  options: RainbowOptions = {},
+): string {
   const data = JSON.stringify(payload);
   const th = JSON.stringify(theme);
   return `<!DOCTYPE html>
@@ -51,20 +64,52 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
     border: 1px solid ${theme.border}; border-radius: 8px;
     font-size: 13px; padding: 0 4px;
   }
+  /* Zoom y leyenda flotan sobre el lienzo: la barra queda para navegar */
   .zbtn {
-    width: 38px; height: 34px; flex: 0 0 auto;
+    width: 34px; height: 32px; flex: 0 0 auto;
     background: ${theme.background}; color: ${theme.text};
     border: 1px solid ${theme.border}; border-radius: 8px;
-    font-size: 18px; line-height: 1; padding: 0;
+    font-size: 17px; line-height: 1; padding: 0;
   }
-  #zoomLbl { flex: 0 0 auto; min-width: 34px; text-align: center; font-size: 12px; color: ${theme.textMuted}; }
+  .nbtn {
+    width: 30px; height: 28px; flex: 0 0 auto;
+    background: ${theme.background}; color: ${theme.text};
+    border: 1px solid ${theme.border}; border-radius: 8px;
+    font-size: 16px; line-height: 1; padding: 0;
+  }
+  .cbtn {
+    flex: 0 0 auto; height: 28px;
+    background: ${theme.background}; color: ${theme.text};
+    border: 1px solid ${theme.border}; border-radius: 8px;
+    font-size: 12px; font-weight: 600; padding: 0 10px;
+  }
+  #zoom {
+    position: absolute; top: 8px; right: 8px;
+    display: flex; flex-direction: column; gap: 4px; align-items: stretch;
+  }
+  #zoomLbl {
+    text-align: center; font-size: 10px; color: ${theme.textMuted};
+    background: ${theme.background}; border: 1px solid ${theme.border};
+    border-radius: 6px; padding: 2px 0;
+  }
+  #detail { display: none; }
+  body.sel #detail { display: flex; }
+  body.sel #discover { display: none; }
+  #hint { flex: 1; min-width: 0; font-size: 12px; color: ${theme.textMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #infoText { flex: 1; min-width: 0; font-size: 12px; color: ${theme.textMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #legend { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; font-size: 10px; color: ${theme.textMuted}; }
+  #legend {
+    position: absolute; top: 8px; left: 8px;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 10px; color: ${theme.textMuted};
+    background: ${theme.background}; border: 1px solid ${theme.border};
+    border-radius: 8px; padding: 3px 6px;
+  }
   #legend .grad {
     width: 54px; height: 6px; border-radius: 3px;
     background: linear-gradient(to right, hsl(0,80%,55%), hsl(60,80%,55%), hsl(120,80%,45%), hsl(180,80%,50%), hsl(240,80%,60%), hsl(300,80%,60%));
   }
-  #viewport { flex: 1 1 auto; position: relative; overflow: hidden; touch-action: none; }
+  #stage { flex: 1 1 auto; position: relative; overflow: hidden; }
+  #viewport { position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; touch-action: none; }
   #world { position: absolute; top: 0; left: 0; transform-origin: 0 0; will-change: transform; }
   #world canvas { position: absolute; top: 0; left: 0; }
   #progress {
@@ -80,21 +125,34 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   <div class="row">
     <select id="selBook"></select>
     <select id="selChap"></select>
-    <button class="zbtn" id="zout">−</button>
-    <span id="zoomLbl">1×</span>
-    <button class="zbtn" id="zin">+</button>
   </div>
-  <div class="row">
-    <span id="infoText">Pellizca para hacer zoom · toca un capítulo</span>
-    <span id="legend"><span>cerca</span><span class="grad"></span><span>lejos</span></span>
+  <div class="row" id="discover">
+    <span id="hint">Toca un capítulo para resaltar sus conexiones</span>
+  </div>
+  <div class="row" id="detail">
+    <button class="nbtn" id="prev" aria-label="Capítulo anterior">‹</button>
+    <span id="infoText"></span>
+    <button class="nbtn" id="next" aria-label="Capítulo siguiente">›</button>${
+      options.connectionsButton ? '\n    <button class="cbtn" id="conns">Conexiones ›</button>' : ''
+    }
+    <button class="nbtn" id="clear" aria-label="Quitar la selección">✕</button>
   </div>
 </div>
-<div id="viewport">
-  <div id="world">
-    <canvas id="base"></canvas>
-    <canvas id="hi"></canvas>
+<div id="stage">
+  <div id="viewport">
+    <div id="world">
+      <canvas id="base"></canvas>
+      <canvas id="hi"></canvas>
+    </div>
+    <div id="progress"><span id="progTxt">Dibujando conexiones…</span><div class="track"><div class="fill" id="progFill"></div></div></div>
   </div>
-  <div id="progress"><span id="progTxt">Dibujando 344.800 conexiones…</span><div class="track"><div class="fill" id="progFill"></div></div></div>
+  <span id="legend"><span>cerca</span><span class="grad"></span><span>lejos</span></span>
+  <div id="zoom">
+    <button class="zbtn" id="zin">+</button>
+    <span id="zoomLbl">Todo</span>
+    <button class="zbtn" id="zout">−</button>
+    <button class="zbtn" id="zfit" aria-label="Ver toda la Biblia">⤢</button>
+  </div>
 </div>
 <script>
 (function () {
@@ -112,8 +170,15 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   var selBook = document.getElementById('selBook');
   var selChap = document.getElementById('selChap');
   var zoomLbl = document.getElementById('zoomLbl');
+  var prevBtn = document.getElementById('prev');
+  var nextBtn = document.getElementById('next');
   var progress = document.getElementById('progress');
   var progFill = document.getElementById('progFill');
+
+  // Miles con punto: el número real de arcos, no una cifra fija
+  function nfmt(n) { return String(n).replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.'); }
+  document.getElementById('progTxt').textContent =
+    'Dibujando ' + nfmt(TRIPLES) + ' conexiones\\u2026';
 
   // ---- Datos derivados (una sola vez) ----
   var counts = new Float64Array(N);
@@ -143,7 +208,9 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   var M = 14, STRIP_H = 12, LABEL_H = 20;
   var CSS_W = 0, CSS_H = 0, VW = 0, VH = 0, BASE_Y = 0, MAXH = 0, STEP = 1;
   var RES = 1, RES2 = 1;
-  var MAXS = 8;
+  // MINS es el zoom al que cabe todo el mapa: en un móvil es < 1, así que sin
+  // él nunca se podía ver la Biblia completa de un vistazo.
+  var MINS = 1, MAXS = 8;
   var s = 1, tx = 0, ty = 0;
   var selected = -1;
 
@@ -156,6 +223,7 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
     // pantallas estrechas se dibuja mas ancho para que tenga detalle.
     CSS_W = VW >= 900 ? VW : Math.max(VW * 2.5, 1600);
     CSS_H = VH;
+    MINS = VW > 0 && CSS_W > 0 ? Math.min(1, VW / CSS_W) : 1;
     STEP = (CSS_W - 2 * M) / (N - 1);
     BASE_Y = CSS_H - STRIP_H - LABEL_H - 6;
     MAXH = BASE_Y - 24;
@@ -177,21 +245,35 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
 
   // ---- Transformación (zoom/pan sin re-render) ----
   var raf = 0;
+  function atFit() { return s <= MINS * 1.001; }
   function apply() {
     raf = 0;
     world.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0) scale(' + s + ')';
-    var z = s >= 9.95 ? Math.round(s) : Math.round(s * 10) / 10;
-    zoomLbl.textContent = z + '\\u00d7';
+    if (atFit()) {
+      zoomLbl.textContent = 'Todo';
+    } else {
+      var z = s >= 9.95 ? Math.round(s) : Math.round(s * 10) / 10;
+      zoomLbl.textContent = z + '\\u00d7';
+    }
   }
   function schedule() { if (!raf) raf = requestAnimationFrame(apply); }
+  // Si el mapa cabe en la pantalla se centra en horizontal y se ancla abajo,
+  // donde están la franja de libros y las etiquetas.
   function clampPan() {
-    var minX = Math.min(0, VW - CSS_W * s);
-    if (tx < minX) tx = minX; if (tx > 0) tx = 0;
-    var minY = Math.min(0, VH - CSS_H * s);
-    if (ty < minY) ty = minY; if (ty > 0) ty = 0;
+    var w = CSS_W * s, h = CSS_H * s;
+    if (w <= VW) {
+      tx = (VW - w) / 2;
+    } else {
+      if (tx < VW - w) tx = VW - w; if (tx > 0) tx = 0;
+    }
+    if (h <= VH) {
+      ty = VH - h;
+    } else {
+      if (ty < VH - h) ty = VH - h; if (ty > 0) ty = 0;
+    }
   }
   function setScale(ns, cx, cy) {
-    if (ns < 1) ns = 1; if (ns > MAXS) ns = MAXS;
+    if (ns < MINS) ns = MINS; if (ns > MAXS) ns = MAXS;
     tx = cx - (cx - tx) * (ns / s);
     ty = cy - (cy - ty) * (ns / s);
     s = ns;
@@ -349,12 +431,15 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   function setSelected(i, fromSelect) {
     selected = i;
     if (i < 0) {
-      infoText.textContent = 'Pellizca para hacer zoom · toca un cap\\u00edtulo';
+      document.body.classList.remove('sel');
     } else {
+      document.body.classList.add('sel');
       var b = P.bookIdx[i];
       if (+selBook.value !== b) { selBook.value = b; fillChapters(b); }
       selChap.value = i;
       infoText.innerHTML = '<b>' + P.labels[i] + '</b> \\u00b7 ' + Math.round(counts[i]) + ' conexiones';
+      prevBtn.disabled = i <= 0;
+      nextBtn.disabled = i >= N - 1;
       if (fromSelect) centerOn(i);
     }
     applyHighlight();
@@ -379,6 +464,19 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   // Los botones anclan el zoom al borde inferior para no perder la línea base
   document.getElementById('zin').addEventListener('click', function () { setScale(s * 1.6, VW / 2, VH); });
   document.getElementById('zout').addEventListener('click', function () { setScale(s / 1.6, VW / 2, VH); });
+  document.getElementById('zfit').addEventListener('click', function () { setScale(MINS, VW / 2, VH); });
+
+  // Paso de capítulo en capítulo: con arcos de ~1 px es la única forma de
+  // ajustar la selección sin depender de la precisión del dedo.
+  prevBtn.addEventListener('click', function () {
+    if (selected > 0) setSelected(selected - 1, true);
+  });
+  nextBtn.addEventListener('click', function () {
+    if (selected >= 0 && selected < N - 1) setSelected(selected + 1, true);
+  });
+  // Salida explícita: volver a tocar el capítulo también suelta, pero solo
+  // pasados 300 ms, porque antes de eso el gesto es un doble toque.
+  document.getElementById('clear').addEventListener('click', function () { setSelected(-1, false); });
 
   // ---- Gestos: 1 dedo desplaza, 2 dedos pellizcan, toque selecciona ----
   var pan0 = null, pinch0 = null, tap = null, lastTap = null;
@@ -395,16 +493,23 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   function handleTap(cx, cy) {
     var now = Date.now();
     if (lastTap && now - lastTap.t < 300 && Math.abs(cx - lastTap.x) < 30 && Math.abs(cy - lastTap.y) < 30) {
-      // Doble toque: alterna entre 1x y 3x en ese punto
+      // Doble toque: alterna entre el encuadre completo y 3x en ese punto
       lastTap = null;
-      setScale(s > 1.05 ? 1 : 3, cx, cy);
+      setScale(atFit() ? 3 : MINS, cx, cy);
       return;
     }
     lastTap = { x: cx, y: cy, t: now };
     var wx = (cx - tx) / s;
     var idx = Math.round((wx - M) / STEP);
     if (idx < 0) idx = 0; if (idx > N - 1) idx = N - 1;
-    setSelected(idx === selected ? -1 : idx, false);
+    if (idx === selected) {
+      setSelected(-1, false);
+      return;
+    }
+    // Alejado, cada capítulo mide poco más de un pixel: se acerca al toque
+    // para que se vea qué quedó elegido y se pueda corregir con ‹ ›.
+    setSelected(idx, false);
+    if (s < 2) centerOn(idx);
   }
 
   viewport.addEventListener('touchstart', function (e) {
@@ -432,7 +537,7 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
       var p0 = local(e.touches[0]), p1 = local(e.touches[1]);
       var nd = dist2(e.touches[0], e.touches[1]);
       var ns = pinch0.s * nd / Math.max(1, pinch0.d);
-      if (ns < 1) ns = 1; if (ns > MAXS) ns = MAXS;
+      if (ns < MINS) ns = MINS; if (ns > MAXS) ns = MAXS;
       var mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2;
       var f = ns / pinch0.s;
       tx = mx - (pinch0.mx - pinch0.tx) * f;
@@ -495,7 +600,8 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
     rto = setTimeout(function () {
       var keep = selected;
       layout();
-      s = 1; tx = 0; ty = 0;
+      s = MINS; tx = 0; ty = 0;
+      clampPan();
       apply();
       render();
       if (keep >= 0) setSelected(keep, true);
@@ -503,6 +609,8 @@ export function getRainbowHtml(theme: RainbowTheme, payload: RainbowPayload): st
   });
 
   layout();
+  s = MINS;
+  clampPan();
   apply();
   render();
 })();
