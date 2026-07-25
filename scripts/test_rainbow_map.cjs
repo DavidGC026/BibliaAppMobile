@@ -53,6 +53,12 @@ function check(name, cond, extra) {
 
 const N_BOOKS = 66
 const N_CHAPTERS = 1189
+// [capítulo, arcos extra] — centros de citación con ventaja decreciente
+const HUBS = [
+  [542, 60],
+  [117, 45],
+  [918, 30],
+]
 
 function buildPayload() {
   const labels = []
@@ -79,6 +85,14 @@ function buildPayload() {
     for (let k = 1; k <= 3; k++) {
       const b = (a * 7 + k * 91) % N_CHAPTERS
       if (b !== a) arcs.push(a, b, (k % 4) + 1)
+    }
+  }
+  // El reparto anterior es casi uniforme, así que se plantan tres capítulos
+  // muy citados con ventaja decreciente: son los que debe destacar el ranking.
+  for (const [hub, extra] of HUBS) {
+    for (let k = 0; k < extra; k++) {
+      const b = (hub + 13 + k * 17) % N_CHAPTERS
+      if (b !== hub) arcs.push(hub, b, 5)
     }
   }
   return { labels, bookIdx, bookNames, chap, arcs }
@@ -295,7 +309,40 @@ function runVariant(name, modulePath) {
     check('sin anfitrión, no se ofrece un botón muerto', !plain.includes('id="conns"'))
   }
 
-  console.log('\n10) Controles fuera del área de gestos')
+  console.log('\n10) Atajos a los capítulos más conectados')
+  {
+    const chips = [...doc.querySelectorAll('#chips .chip')]
+    const counts = r.counts()
+    const ranking = counts
+      .map((n, i) => [n, i])
+      .sort((a, b) => b[0] - a[0] || a[1] - b[1])
+      .slice(0, 20)
+    check('hay 20 atajos', chips.length === 20, `chips=${chips.length}`)
+    check(
+      'son los 20 capítulos más citados, en orden',
+      chips.every((c, k) => c.textContent === PAYLOAD.labels[ranking[k][1]]),
+      chips.slice(0, 3).map((c) => c.textContent).join(' | '),
+    )
+    check(
+      'el primero tiene más conexiones que el último',
+      counts[ranking[0][1]] > counts[ranking[19][1]],
+      `${counts[ranking[0][1]]} vs ${counts[ranking[19][1]]}`,
+    )
+    check(
+      'los tres primeros son los capítulos más citados del dato',
+      chips.slice(0, 3).map((c) => c.textContent).join('|') ===
+        HUBS.map(([h]) => PAYLOAD.labels[h]).join('|'),
+      chips.slice(0, 3).map((c) => c.textContent).join('|'),
+    )
+    r.setSelected(-1, false)
+    chips[3].click()
+    check('tocar un atajo selecciona ese capítulo', r.state().selected === ranking[3][1])
+    check('y lo acerca para poder verlo', r.state().s >= 2.5 - 1e-9, `s=${r.state().s}`)
+    check('los atajos se ocultan al haber selección', doc.body.classList.contains('sel'))
+    r.setSelected(-1, false)
+  }
+
+  console.log('\n11) Controles fuera del área de gestos')
   {
     const zoom = doc.getElementById('zoom')
     const legend = doc.getElementById('legend')

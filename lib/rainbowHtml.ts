@@ -95,7 +95,21 @@ export function getRainbowHtml(
   #detail { display: none; }
   body.sel #detail { display: flex; }
   body.sel #discover { display: none; }
-  #hint { flex: 1; min-width: 0; font-size: 12px; color: ${theme.textMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #hint { flex: 0 0 auto; font-size: 11px; color: ${theme.textMuted}; }
+  /* Los capítulos más citados: la puerta de entrada para quien no sabe qué buscar */
+  #chips {
+    flex: 1; min-width: 0; display: flex; gap: 5px;
+    overflow-x: auto; overflow-y: hidden;
+    touch-action: pan-x; scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; height: 26px;
+    background: ${theme.background}; color: ${theme.text};
+    border: 1px solid ${theme.border}; border-radius: 999px;
+    font-size: 11px; padding: 0 10px; white-space: nowrap;
+  }
   #infoText { flex: 1; min-width: 0; font-size: 12px; color: ${theme.textMuted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #legend {
     position: absolute; top: 8px; left: 8px;
@@ -127,7 +141,8 @@ export function getRainbowHtml(
     <select id="selChap"></select>
   </div>
   <div class="row" id="discover">
-    <span id="hint">Toca un capítulo para resaltar sus conexiones</span>
+    <span id="hint">Más conectados</span>
+    <div id="chips"></div>
   </div>
   <div class="row" id="detail">
     <button class="nbtn" id="prev" aria-label="Capítulo anterior">‹</button>
@@ -460,6 +475,24 @@ export function getRainbowHtml(
   selChap.addEventListener('change', function () {
     setSelected(+selChap.value, true);
   });
+
+  // Atajos a los capítulos más citados de toda la Biblia. Salen de los mismos
+  // totales que muestra la etiqueta, así que no hacen falta datos nuevos, y
+  // dan un punto de partida a quien no sabe qué buscar.
+  var TOP_CHIPS = 20;
+  var chipsBox = document.getElementById('chips');
+  var ranking = [];
+  for (var r0 = 0; r0 < N; r0++) ranking.push(r0);
+  ranking.sort(function (x, y) { return (counts[y] - counts[x]) || (x - y); });
+  for (var c0 = 0; c0 < Math.min(TOP_CHIPS, ranking.length); c0++) {
+    (function (idx) {
+      var chip = document.createElement('button');
+      chip.className = 'chip';
+      chip.textContent = P.labels[idx];
+      chip.addEventListener('click', function () { setSelected(idx, true); });
+      chipsBox.appendChild(chip);
+    })(ranking[c0]);
+  }
 
   // Los botones anclan el zoom al borde inferior para no perder la línea base
   document.getElementById('zin').addEventListener('click', function () { setScale(s * 1.6, VW / 2, VH); });
