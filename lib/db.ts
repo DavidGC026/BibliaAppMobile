@@ -120,6 +120,9 @@ CREATE TABLE IF NOT EXISTS cross_references (
 );
 
 CREATE INDEX IF NOT EXISTS idx_crossrefs_origen ON cross_references(vid_origen);
+-- Las referencias se guardan en un solo sentido, así que buscar «quién cita a
+-- este capítulo» recorre la tabla por destino.
+CREATE INDEX IF NOT EXISTS idx_crossrefs_destino ON cross_references(vid_destino);
 CREATE INDEX IF NOT EXISTS idx_verses_lookup ON verses(bible_id, book_id, chapter);
 CREATE INDEX IF NOT EXISTS idx_notes_notebook ON notes(notebook_id);
 CREATE INDEX IF NOT EXISTS idx_highlights_chapter ON highlights(bible_id, book_id, chapter);

@@ -55,12 +55,14 @@ import {
   downloadCrossReferences,
   downloadDictionary,
   getChapterArcs,
+  getChapterConnections,
   getCrossRefsDownloadInfo,
   getDictionaryDownloadInfo,
   getLocalCrossReferences,
   getLocalDictionaryEntry,
   isDictionaryDownloaded,
   searchLocalDictionary,
+  type ChapterConnection,
   type StudyDownloadInfo,
   type StudyDownloadProgress,
 } from '@/lib/offline/studyStore';
@@ -77,11 +79,12 @@ export {
   downloadCrossReferences,
   downloadDictionary,
   getChapterArcs,
+  getChapterConnections,
   getCrossRefsDownloadInfo,
   getDictionaryDownloadInfo,
   isDictionaryDownloaded,
 };
-export type { DownloadProgress, StudyDownloadInfo, StudyDownloadProgress };
+export type { ChapterConnection, DownloadProgress, StudyDownloadInfo, StudyDownloadProgress };
 
 export type RecentNotebookNote = NotebookNote & {
   notebookName: string;

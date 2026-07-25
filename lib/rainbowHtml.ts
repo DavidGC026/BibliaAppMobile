@@ -190,6 +190,24 @@ export function getRainbowHtml(
   var progress = document.getElementById('progress');
   var progFill = document.getElementById('progFill');
 
+  // El mapa solo informa de índices; qué capítulo es cada uno y qué hacer con
+  // él lo sabe el anfitrión, que es el que tiene el catálogo de libros.
+  function sendToHost(msg) {
+    try {
+      if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(msg));
+        return;
+      }
+    } catch (e) {
+      // sin puente: el mapa sigue funcionando solo
+    }
+    try {
+      if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
+    } catch (e) {
+      // idem
+    }
+  }
+
   // Miles con punto: el número real de arcos, no una cifra fija
   function nfmt(n) { return String(n).replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.'); }
   document.getElementById('progTxt').textContent =
@@ -510,6 +528,13 @@ export function getRainbowHtml(
   // Salida explícita: volver a tocar el capítulo también suelta, pero solo
   // pasados 300 ms, porque antes de eso el gesto es un doble toque.
   document.getElementById('clear').addEventListener('click', function () { setSelected(-1, false); });
+
+  var connsBtn = document.getElementById('conns');
+  if (connsBtn) {
+    connsBtn.addEventListener('click', function () {
+      if (selected >= 0) sendToHost({ type: 'connections', index: selected });
+    });
+  }
 
   // ---- Gestos: 1 dedo desplaza, 2 dedos pellizcan, toque selecciona ----
   var pan0 = null, pinch0 = null, tap = null, lastTap = null;
