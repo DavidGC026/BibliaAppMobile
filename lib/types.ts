@@ -6,12 +6,47 @@ export interface User {
   role: string;
   allowedSections: string | string[] | null;
   streakCount: number;
+  createdAt?: string | null;
+  /** Fecha en que aceptó términos, privacidad y normas; null = pendiente */
+  legalAcceptedAt?: string | null;
+}
+
+export interface ManagedUser {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  allowedSections: string | string[] | null;
+  createdAt: string;
+}
+
+export interface AdminSection {
+  id: string;
+  label: string;
+}
+
+export interface AdminSectionGroup {
+  id: string;
+  label: string;
+  sections: AdminSection[];
 }
 
 export interface BibleVersion {
   bibleId: number;
   abbr: string;
   name: string;
+  license?: string | null;
+  copyright?: string | null;
+  attribution?: string | null;
+  sourceUrl?: string | null;
+  catalogScope?: 'public' | 'internal';
+  canRead?: boolean;
+  canDownload?: boolean;
+  canCopy?: boolean;
+  canShare?: boolean;
+  canCreateImages?: boolean;
+  canUseAudio?: boolean;
+  cacheMaxAgeDays?: number | null;
 }
 
 export interface Book {
