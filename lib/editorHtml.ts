@@ -511,6 +511,125 @@ export function getEditorHtml(
       line-height: 1;
     }
 
+    /* Rueda cromática: botón que abre el selector libre de color */
+    .color-dot.wheel {
+      background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+      border-color: ${colors.border};
+    }
+
+    #cw-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.45);
+    }
+    #cw-overlay.open { display: flex; }
+    #cw-panel {
+      width: 280px;
+      box-sizing: border-box;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid ${colors.border};
+      background: ${colors.card};
+      color: ${colors.text};
+      font-family: system-ui, sans-serif;
+    }
+    #cw-title {
+      margin: 0 0 12px;
+      font-size: 14px;
+      font-weight: 700;
+      text-align: center;
+    }
+    #cw-wheel-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      margin: 0 auto;
+      touch-action: none;
+    }
+    #cw-canvas {
+      display: block;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+    }
+    #cw-marker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    #cw-light {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 14px;
+      margin: 14px 0 0;
+      border-radius: 7px;
+      outline: none;
+    }
+    #cw-light::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 1px solid rgba(0, 0, 0, 0.25);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+    #cw-preview-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    #cw-preview {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid ${colors.border};
+      flex-shrink: 0;
+    }
+    #cw-hex {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: ${colors.textMuted};
+    }
+    #cw-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .cw-btn {
+      flex: 1;
+      padding: 10px 0;
+      border-radius: 10px;
+      border: 1px solid ${colors.border};
+      background: ${colors.background};
+      color: ${colors.text};
+      font-weight: 700;
+      font-size: 13px;
+      font-family: system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .cw-btn.primary {
+      background: ${colors.primary};
+      border-color: ${colors.primary};
+      color: #ffffff;
+    }
+    .cw-btn:active { opacity: 0.7; }
+
     /* Aux actions row */
     .aux-row {
       display: flex;
@@ -620,6 +739,25 @@ export function getEditorHtml(
         <button class="aux-btn" id="btn-toggle-image-mode" data-action="toggleImageSelection" style="border-color: #3b82f6; background: rgba(59, 130, 246, 0.1); color: #2563eb;">Fondos 🖼️</button>
         <button class="aux-btn" data-action="insertVerse">Versículo</button>
         <button class="aux-btn aux-btn-dict" data-action="insertDictionary">Diccionario</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cw-overlay">
+    <div id="cw-panel">
+      <p id="cw-title">Elige un color</p>
+      <div id="cw-wheel-wrap">
+        <canvas id="cw-canvas" width="440" height="440"></canvas>
+        <div id="cw-marker"></div>
+      </div>
+      <input id="cw-light" type="range" min="0" max="100" value="100" aria-label="Brillo" />
+      <div id="cw-preview-row">
+        <div id="cw-preview"></div>
+        <span id="cw-hex"></span>
+      </div>
+      <div id="cw-actions">
+        <button class="cw-btn" id="cw-cancel">Cancelar</button>
+        <button class="cw-btn primary" id="cw-apply">Aplicar</button>
       </div>
     </div>
   </div>
@@ -1622,6 +1760,191 @@ export function getEditorHtml(
           });
           row.appendChild(dot);
         });
+
+        // Rueda cromática: color libre fuera de la paleta de favoritos.
+        var isCustomActive = activeColor !== 'auto' && !colorPalette.some(function(c) {
+          return c.toLowerCase() === activeColor.toLowerCase();
+        });
+        var wheelDot = document.createElement('div');
+        wheelDot.className = 'color-dot wheel' + (isCustomActive ? ' active' : '');
+        wheelDot.setAttribute('aria-label', 'Selector de color personalizado');
+        bindToolbarButton(wheelDot, openColorWheel);
+        row.appendChild(wheelDot);
+      }
+
+      /* ── Rueda cromática (selector libre de color) ──
+         Disco matiz/saturación dibujado en canvas + slider de brillo (HSV).
+         La selección del editor queda guardada en savedRange al tocar el
+         botón; applyColor la restaura al aplicar. */
+      var cwHue = 0;
+      var cwSat = 0;
+      var cwVal = 1;
+      var cwInited = false;
+
+      function hsvToRgb(h, s, v) {
+        var c = v * s;
+        var hp = h / 60;
+        var x = c * (1 - Math.abs(hp % 2 - 1));
+        var r = 0, g = 0, b = 0;
+        if (hp < 1) { r = c; g = x; }
+        else if (hp < 2) { r = x; g = c; }
+        else if (hp < 3) { g = c; b = x; }
+        else if (hp < 4) { g = x; b = c; }
+        else if (hp < 5) { r = x; b = c; }
+        else { r = c; b = x; }
+        var m = v - c;
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+      }
+
+      function rgbToHsv(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        var max = Math.max(r, g, b);
+        var min = Math.min(r, g, b);
+        var d = max - min;
+        var h = 0;
+        if (d) {
+          if (max === r) h = 60 * (((g - b) / d) % 6);
+          else if (max === g) h = 60 * ((b - r) / d + 2);
+          else h = 60 * ((r - g) / d + 4);
+        }
+        if (h < 0) h += 360;
+        return [h, max ? d / max : 0, max];
+      }
+
+      function rgbToHex(r, g, b) {
+        function part(n) {
+          var s = n.toString(16);
+          return s.length === 1 ? '0' + s : s;
+        }
+        return '#' + part(r) + part(g) + part(b);
+      }
+
+      function cwCurrentHex() {
+        var rgb = hsvToRgb(cwHue, cwSat, cwVal);
+        return rgbToHex(rgb[0], rgb[1], rgb[2]);
+      }
+
+      function cwDrawWheel() {
+        var canvas = document.getElementById('cw-canvas');
+        var ctx = canvas.getContext('2d');
+        var size = canvas.width;
+        var R = size / 2;
+        var img = ctx.createImageData(size, size);
+        var d = img.data;
+        for (var y = 0; y < size; y++) {
+          for (var x = 0; x < size; x++) {
+            var dx = x - R;
+            var dy = y - R;
+            var dist = Math.sqrt(dx * dx + dy * dy);
+            var idx = (y * size + x) * 4;
+            if (dist > R) { d[idx + 3] = 0; continue; }
+            var rgb = hsvToRgb((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, Math.min(1, dist / R), 1);
+            d[idx] = rgb[0];
+            d[idx + 1] = rgb[1];
+            d[idx + 2] = rgb[2];
+            // Borde antialiasado del disco.
+            d[idx + 3] = dist > R - 2 ? Math.max(0, Math.round(255 * (R - dist) / 2)) : 255;
+          }
+        }
+        ctx.putImageData(img, 0, 0);
+      }
+
+      function cwUpdateUI() {
+        var wrap = document.getElementById('cw-wheel-wrap');
+        var marker = document.getElementById('cw-marker');
+        var R = wrap.clientWidth / 2;
+        var rad = cwHue * Math.PI / 180;
+        marker.style.left = (R + Math.cos(rad) * cwSat * R) + 'px';
+        marker.style.top = (R + Math.sin(rad) * cwSat * R) + 'px';
+        var hex = cwCurrentHex();
+        marker.style.backgroundColor = hex;
+        document.getElementById('cw-preview').style.backgroundColor = hex;
+        document.getElementById('cw-hex').textContent = hex.toUpperCase();
+        var full = hsvToRgb(cwHue, cwSat, 1);
+        document.getElementById('cw-light').style.background =
+          'linear-gradient(to right, #000000, ' + rgbToHex(full[0], full[1], full[2]) + ')';
+      }
+
+      function cwPointFromEvent(e) {
+        var rect = document.getElementById('cw-canvas').getBoundingClientRect();
+        var t = e.touches ? e.touches[0] : e;
+        var R = rect.width / 2;
+        var dx = t.clientX - rect.left - R;
+        var dy = t.clientY - rect.top - R;
+        cwHue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+        cwSat = Math.min(1, Math.sqrt(dx * dx + dy * dy) / R);
+        cwUpdateUI();
+      }
+
+      function cwInit() {
+        if (cwInited) return;
+        cwInited = true;
+        cwDrawWheel();
+        var canvas = document.getElementById('cw-canvas');
+        var dragging = false;
+        canvas.addEventListener('touchstart', function(e) {
+          e.preventDefault();
+          dragging = true;
+          cwPointFromEvent(e);
+        }, { passive: false });
+        canvas.addEventListener('touchmove', function(e) {
+          if (!dragging) return;
+          e.preventDefault();
+          cwPointFromEvent(e);
+        }, { passive: false });
+        canvas.addEventListener('touchend', function() { dragging = false; });
+        canvas.addEventListener('mousedown', function(e) {
+          e.preventDefault();
+          dragging = true;
+          cwPointFromEvent(e);
+        });
+        document.addEventListener('mousemove', function(e) {
+          if (dragging) cwPointFromEvent(e);
+        });
+        document.addEventListener('mouseup', function() { dragging = false; });
+        document.getElementById('cw-light').addEventListener('input', function(e) {
+          cwVal = Number(e.target.value) / 100;
+          cwUpdateUI();
+        });
+        document.getElementById('cw-cancel').addEventListener('click', function(e) {
+          e.preventDefault();
+          closeColorWheel();
+        });
+        document.getElementById('cw-overlay').addEventListener('click', function(e) {
+          if (e.target === this) closeColorWheel();
+        });
+        document.getElementById('cw-apply').addEventListener('click', function(e) {
+          e.preventDefault();
+          var hex = cwCurrentHex();
+          activeColor = hex;
+          applyColor(hex);
+          renderColors();
+          closeColorWheel();
+        });
+      }
+
+      function openColorWheel() {
+        cwInit();
+        // Arranca desde el color activo si es un hex conocido.
+        var m = /^#([0-9a-f]{6})$/i.exec(activeColor);
+        if (m) {
+          var hsv = rgbToHsv(
+            parseInt(m[1].slice(0, 2), 16),
+            parseInt(m[1].slice(2, 4), 16),
+            parseInt(m[1].slice(4, 6), 16)
+          );
+          cwHue = hsv[0];
+          cwSat = hsv[1];
+          cwVal = hsv[2];
+        }
+        document.getElementById('cw-light').value = String(Math.round(cwVal * 100));
+        // Abrir antes de posicionar el marcador: con display:none no hay layout.
+        document.getElementById('cw-overlay').classList.add('open');
+        cwUpdateUI();
+      }
+
+      function closeColorWheel() {
+        document.getElementById('cw-overlay').classList.remove('open');
       }
 
       /* ── Active state management for toggle buttons ── */
