@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 
 import { useThemeColors } from '@/hooks/useThemeColors';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import { repoGetCrossReferences, repoGetVerses, repoListBibles, repoListBooks } from '@/lib/repo';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
@@ -37,10 +39,16 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    repoListBibles().then(({ bibles: list }) => setBibles(list)).catch(() => {});
+    repoListBibles().then(({ bibles: list, defaultBibleId }) => {
+      setBibles(list);
+      if (!list.some((bible) => bible.bibleId === bibleId)) {
+        setBibleId(defaultBibleId ?? list[0]?.bibleId ?? 0);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
+    if (!bibleId) return;
     repoListBooks(bibleId).then(({ books: list }) => {
       setBooks(list);
       if (!list.some((b) => b.bookId === bookId)) setBookId(list[0]?.bookId ?? 1);
@@ -83,12 +91,17 @@ export function ReferencesExplorer({ onOpenReference }: ReferencesExplorerProps)
           { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <Text style={{ fontSize: 22 }}>🌈</Text>
+        <Image
+          source={require('@/assets/images/references-map-hero.png')}
+          style={styles.rainbowImage}
+          resizeMode="cover"
+          accessibilityLabel="Arcos de referencias bíblicas"
+        />
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>Mapa de referencias</Text>
           <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>Toda la Biblia en un vistazo</Text>
         </View>
-        <Text style={{ color: colors.textMuted, fontSize: 20 }}>›</Text>
+        <AppIcon name="chevron-right" color={colors.textMuted} size={18} />
       </Pressable>
       <View style={[styles.filters, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.pickerWrap, { borderColor: colors.border }]}>
@@ -191,6 +204,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
+  rainbowImage: { width: 64, height: 48, borderRadius: 10 },
   filters: { margin: 12, marginBottom: 0, padding: 12, borderWidth: 1, borderRadius: 14, gap: 8 },
   pickerWrap: { borderWidth: 1, borderRadius: 10, overflow: 'hidden' },
   numRow: { flexDirection: 'row', gap: 10 },
