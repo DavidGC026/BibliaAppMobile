@@ -5,23 +5,23 @@
   "dependencies": {
     "@react-native-community/netinfo": "12.0.1",
     "@react-native-picker/picker": "^2.11.4",
-    "expo": "~56.0.12",
+    "expo": "~56.0.16",
     "expo-clipboard": "~56.0.4",
     "expo-constants": "~56.0.18",
     "expo-device": "^56.0.4",
     "expo-file-system": "~56.0.8",
     "expo-font": "~56.0.7",
-    "expo-image-picker": "~56.0.18",
+    "expo-image-picker": "~56.0.21",
     "expo-linear-gradient": "~56.0.4",
-    "expo-linking": "~56.0.14",
+    "expo-linking": "~56.0.15",
     "expo-media-library": "~56.0.9",
-    "expo-notifications": "^56.0.18",
+    "expo-notifications": "~56.0.21",
     "expo-print": "~56.0.4",
-    "expo-router": "~56.2.11",
+    "expo-router": "~56.2.15",
     "expo-screen-orientation": "~56.0.5",
     "expo-secure-store": "^56.0.4",
-    "expo-sharing": "~56.0.18",
-    "expo-splash-screen": "~56.0.10",
+    "expo-sharing": "~56.0.22",
+    "expo-splash-screen": "~56.0.13",
     "expo-sqlite": "~56.0.5",
     "expo-status-bar": "~56.0.4",
     "expo-symbols": "~56.0.6",
@@ -33,6 +33,7 @@
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
+    "react-native-svg": "15.15.4",
     "react-native-view-shot": "5.1.0",
     "react-native-web": "~0.21.0",
     "react-native-webview": "13.16.1",
@@ -40,6 +41,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "react-native-svg-transformer": "^1.5.0",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -49,7 +51,7 @@
     "web": "expo start --web",
     "prebuild:android": "expo prebuild --platform android",
     "check:native": "node scripts/check_native_config.cjs",
-    "build:android:release": "npm run check:native && cd android && ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk ../releases/BibliaAPP-3.3-release.apk"
+    "build:android:release": "npm run check:native && cd android && APP_VARIANT=internal EXPO_PUBLIC_APP_VARIANT=internal ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk \"../releases/BibliaAPP-$(node -p \"require('../app.json').expo.version\")-release.apk\""
   },
   "private": true
 }
