@@ -162,6 +162,26 @@ export default {
     danger: '#FDA4AF',
     shadow: '#000000',
   },
+  ubg: {
+    text: '#F0FDFA',
+    textMuted: '#9CC8C8',
+    background: '#061417',
+    card: '#0C2428',
+    cardMuted: '#091D21',
+    border: 'rgba(45, 212, 191, 0.24)',
+    input: 'rgba(56, 189, 248, 0.18)',
+    muted: '#12363B',
+    accent: '#123E4D',
+    tint: '#38BDF8',
+    tabIconDefault: '#66949A',
+    tabIconSelected: '#2DD4BF',
+    primary: '#10B981',
+    primaryForeground: '#03231F',
+    primarySoft: '#0B3B35',
+    primaryBorder: 'rgba(56, 189, 248, 0.36)',
+    danger: '#FB7185',
+    shadow: '#000000',
+  },
 };
 
 export type AppColors = typeof import('./Colors').default.light;

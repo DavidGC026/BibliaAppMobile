@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { SymbolView } from 'expo-symbols';
 
 import { DevotionalsPanel } from '@/components/notes/DevotionalsPanel';
 import { NotebooksPanel } from '@/components/notes/NotebooksPanel';
@@ -10,6 +9,7 @@ import { ReadingPlansPanel } from '@/components/ReadingPlansPanel';
 import { SyncStatusBadge } from '@/components/SyncStatusBadge';
 import { GuestPrompt } from '@/components/GuestPrompt';
 import { SegmentTabs } from '@/components/ui/SegmentTabs';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
@@ -50,7 +50,7 @@ export default function NotesScreen() {
       <View style={styles.headerShell}>
         <View style={[styles.topHeader, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <View style={[styles.headerIcon, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
-            <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={20} />
+            <AppIcon name="notes" color={colors.primary} size={20} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>

@@ -350,6 +350,10 @@ export function BibleReader({
 
   const handleCopySelection = async () => {
     if (!bookId || !selectedBook) return;
+    if (currentBible?.canCopy === false) {
+      Alert.alert('Acción no disponible', 'La licencia de esta versión no permite copiar el texto.');
+      return;
+    }
     const share = buildSelectionShareText({
       selectedVerses,
       verses,
@@ -366,6 +370,10 @@ export function BibleReader({
 
   const handleShareSelection = async () => {
     if (!bookId || !selectedBook) return;
+    if (currentBible?.canShare === false) {
+      Alert.alert('Acción no disponible', 'La licencia de esta versión no permite compartir el texto.');
+      return;
+    }
     const share = buildSelectionShareText({
       selectedVerses,
       verses,
@@ -589,16 +597,24 @@ export function BibleReader({
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
-            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={handleShareSelection}>
+            <Pressable
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: currentBible?.canShare === false ? 0.4 : 1 }]}
+              onPress={handleShareSelection}
+              disabled={currentBible?.canShare === false}
+            >
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Compartir</Text>
             </Pressable>
-            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={handleCopySelection}>
+            <Pressable
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: currentBible?.canCopy === false ? 0.4 : 1 }]}
+              onPress={handleCopySelection}
+              disabled={currentBible?.canCopy === false}
+            >
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Copiar</Text>
             </Pressable>
             <Pressable
-              style={[styles.toolBtn, { borderColor: colors.primary, opacity: imageCreatorData ? 1 : 0.4 }]}
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: imageCreatorData && currentBible?.canCreateImages !== false ? 1 : 0.4 }]}
               onPress={() => imageCreatorData && setImageCreatorOpen(true)}
-              disabled={!imageCreatorData}
+              disabled={!imageCreatorData || currentBible?.canCreateImages === false}
             >
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Imagen</Text>
             </Pressable>

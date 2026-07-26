@@ -1,7 +1,7 @@
 import { Stack, router } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { ChapterConnectionsSheet } from '@/components/ChapterConnectionsSheet';
@@ -224,6 +224,12 @@ export default function RainbowScreen() {
     <View style={[styles.center, { backgroundColor: colors.background }]}>
       {phase === 'needsDownload' ? (
         <>
+          <Image
+            source={require('@/assets/images/references-map-hero.png')}
+            style={styles.heroImage}
+            resizeMode="cover"
+            accessibilityLabel="Mapa visual de referencias cruzadas de la Biblia"
+          />
           <Text style={[styles.title, { color: colors.text }]}>Mapa de referencias</Text>
           <Text style={[styles.msg, { color: colors.textMuted }]}>
             Cada arco conecta dos capítulos de la Biblia que se citan entre sí: 344.000 conexiones
@@ -254,6 +260,7 @@ export default function RainbowScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28, gap: 16 },
+  heroImage: { width: '100%', maxWidth: 420, aspectRatio: 1.5, borderRadius: 20 },
   title: { fontSize: 20, fontWeight: '800' },
   msg: { fontSize: 14, lineHeight: 20, textAlign: 'center' },
 });

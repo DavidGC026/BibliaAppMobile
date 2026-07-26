@@ -29,7 +29,12 @@ export function BibleSearch({ onOpenVerse }: { onOpenVerse?: (bookId: number, ch
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.listBibles().then(({ bibles: list }) => setBibles(list)).catch(() => {});
+    api.listBibles().then(({ bibles: list, defaultBibleId }) => {
+      setBibles(list);
+      if (!list.some((bible) => bible.bibleId === bibleId)) {
+        setBibleId(defaultBibleId ?? list[0]?.bibleId ?? 0);
+      }
+    }).catch(() => {});
   }, []);
 
   const search = async () => {

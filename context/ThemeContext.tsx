@@ -10,7 +10,8 @@ export type ResolvedScheme =
   | 'midnight'
   | 'forest'
   | 'lavender'
-  | 'dvg';
+  | 'dvg'
+  | 'ubg';
 export type ThemeMode = 'system' | ResolvedScheme;
 
 const THEME_KEY = 'bibliaapp_theme_mode';
@@ -24,6 +25,7 @@ const MODES: ThemeMode[] = [
   'forest',
   'lavender',
   'dvg',
+  'ubg',
 ];
 
 const DARK_SCHEMES: ReadonlySet<ResolvedScheme> = new Set([
@@ -32,6 +34,7 @@ const DARK_SCHEMES: ReadonlySet<ResolvedScheme> = new Set([
   'midnight',
   'forest',
   'dvg',
+  'ubg',
 ]);
 
 export function isDarkTheme(scheme: ResolvedScheme): boolean {
