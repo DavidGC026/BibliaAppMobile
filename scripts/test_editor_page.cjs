@@ -90,6 +90,16 @@ function send(window, action) {
   window.handleAction(JSON.stringify(action))
 }
 
+function dispatchPointer(window, target, type, { pointerId = 1, clientX = 0, clientY = 0 }) {
+  const event = new window.Event(type, { bubbles: true, cancelable: true })
+  Object.defineProperties(event, {
+    pointerId: { value: pointerId },
+    clientX: { value: clientX },
+    clientY: { value: clientY },
+  })
+  target.dispatchEvent(event)
+}
+
 function tabLabels(document) {
   return Array.from(document.querySelectorAll('.ribbon-tab')).map((tab) => tab.textContent)
 }
@@ -332,6 +342,40 @@ check(
   imageEditor.window.getComputedStyle(imageEditor.document.querySelector('.note-image-block')).zIndex,
 )
 check('al finalizar se cierra la pestaña contextual', !imageEditor.document.querySelector('.ribbon-tab.is-contextual'))
+
+const flowEditor = mount(
+  '<div class="note-image-block" style="width: 60%; text-align: center">' +
+    '<img src="/uploads/normal.webp" alt="Normal" /></div>' +
+    '<p>Primer párrafo</p><p>Último párrafo</p>',
+)
+const flowHost = flowEditor.document.getElementById('editor')
+const flowImage = flowEditor.document.querySelector('.note-image-block')
+flowHost.getBoundingClientRect = () => ({ top: 0, bottom: 400, left: 0, right: 320, width: 320, height: 400 })
+flowImage.getBoundingClientRect = () => ({ top: 20, bottom: 100, left: 20, right: 220, width: 200, height: 80 })
+Object.defineProperties(flowHost, {
+  clientHeight: { value: 400, configurable: true },
+  scrollHeight: { value: 900, configurable: true },
+})
+flowHost.scrollTop = 0
+const lastParagraphIndex = 2
+let lastParagraphStart = 0
+for (let index = 0; index < lastParagraphIndex; index++) {
+  lastParagraphStart += flowEditor.window.__noteEditor.state.doc.child(index).nodeSize
+}
+const lastParagraph = flowEditor.window.__noteEditor.state.doc.child(lastParagraphIndex)
+flowEditor.window.__noteEditor.view.posAtCoords = () => ({
+  pos: lastParagraphStart + lastParagraph.nodeSize - 1,
+  inside: lastParagraphStart,
+})
+dispatchPointer(flowEditor.window, flowImage, 'pointerdown', { clientX: 100, clientY: 60 })
+check('seleccionar una imagen superior no manda la nota al final', flowHost.scrollTop === 0, String(flowHost.scrollTop))
+dispatchPointer(flowEditor.window, flowImage, 'pointermove', { clientX: 100, clientY: 200 })
+dispatchPointer(flowEditor.window, flowImage, 'pointerup', { clientX: 100, clientY: 200 })
+check(
+  'una imagen normal se puede arrastrar para reordenarla',
+  flowEditor.window.__noteEditor.state.doc.child(2).type.name === 'imageBlock',
+  flowEditor.window.__noteEditor.state.doc.toString(),
+)
 
 console.log('\n  La vista de solo lectura\n')
 

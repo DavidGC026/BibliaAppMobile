@@ -163,6 +163,7 @@ export function getNoteDocumentCss(
       max-width: 100%;
       box-sizing: border-box;
       transition: outline 0.15s ease, transform 0.22s ease;
+      touch-action: none;
     }
     .note-image-block.is-background {
       position: absolute !important;
@@ -204,7 +205,7 @@ export function getNoteDocumentCss(
       z-index: 60 !important;
       opacity: 0.96;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-      will-change: left, top;
+      will-change: left, top, transform;
     }
     body.image-dragging {
       user-select: none;

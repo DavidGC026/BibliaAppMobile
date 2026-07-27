@@ -19,7 +19,7 @@ export function selectedImage(editor: Editor): { pos: number; attrs: Record<stri
 }
 
 export function setImageWidth(editor: Editor, percent: number) {
-  editor.chain().focus().updateAttributes('imageBlock', { width: percent + '%' }).run()
+  editor.chain().updateAttributes('imageBlock', { width: percent + '%' }).run()
 }
 
 export function imageWidthPercent(attrs: Record<string, any>): number {
@@ -34,7 +34,7 @@ export function setImageAlign(editor: Editor, align: ImageAlign) {
       : align === 'center'
         ? { align: 'center', float: null }
         : { align, float: align }
-  editor.chain().focus().updateAttributes('imageBlock', attrs).run()
+  editor.chain().updateAttributes('imageBlock', attrs).run()
 }
 
 export function imageAlign(attrs: Record<string, any>): ImageAlign {
@@ -48,13 +48,13 @@ export function imageAlign(attrs: Record<string, any>): ImageAlign {
 export function setImageBackground(editor: Editor, background: boolean) {
   editor
     .chain()
-    .focus()
     .updateAttributes('imageBlock', background ? { background: true, float: null } : { background: false, left: null, top: null })
     .run()
 }
 
 const DRAG_EDGE_SIZE = 64
 const DRAG_MAX_SCROLL_STEP = 18
+const DRAG_START_THRESHOLD = 6
 
 /**
  * Velocidad vertical al acercar el puntero a un borde visible del editor.
@@ -85,19 +85,63 @@ type ImageDrag = {
   startScrollTop: number
   left: number
   top: number
+  background: boolean
   moved: boolean
   scrollFrame: number | null
 }
 
+function selectImageElement(editor: Editor, element: HTMLElement): { pos: number; attrs: Record<string, any> } | null {
+  try {
+    const pos = editor.view.posAtDOM(element, 0)
+    const node = editor.state.doc.nodeAt(pos)
+    if (!node || node.type.name !== 'imageBlock') return null
+    if (!(editor.state.selection instanceof NodeSelection) || editor.state.selection.from !== pos) {
+      editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, pos)))
+    }
+    return { pos, attrs: node.attrs }
+  } catch {
+    return null
+  }
+}
+
+function topLevelInsertionIndex(editor: Editor, pos: number): number {
+  const { doc } = editor.state
+  const resolved = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)))
+  const index = resolved.index(0)
+  if (index >= doc.childCount) return doc.childCount
+
+  let start = 0
+  for (let i = 0; i < index; i++) start += doc.child(i).nodeSize
+  return pos >= start + doc.child(index).nodeSize / 2 ? index + 1 : index
+}
+
+function moveSelectedImageTo(editor: Editor, insertionIndex: number): boolean {
+  const image = selectedImage(editor)
+  if (!image || editor.state.selection.$anchor.depth !== 0) return false
+  const currentIndex = editor.state.selection.$anchor.index()
+  if (insertionIndex === currentIndex || insertionIndex === currentIndex + 1) return false
+
+  const { doc } = editor.state
+  const node = doc.child(currentIndex)
+  let insertionPos = 0
+  for (let i = 0; i < insertionIndex; i++) insertionPos += doc.child(i).nodeSize
+
+  const tr = editor.state.tr.delete(image.pos, image.pos + node.nodeSize)
+  const mappedPos = tr.mapping.map(insertionPos)
+  tr.insert(mappedPos, node)
+  tr.setSelection(NodeSelection.create(tr.doc, mappedPos))
+  editor.view.dispatch(tr)
+  return true
+}
+
 /**
- * Arrastre de una imagen de fondo dentro del documento.
+ * Arrastre de imágenes dentro del documento.
  *
- * Solo actúa sobre la imagen seleccionada y en modo fondo; el resto de gestos
- * los sigue tratando el editor (arrastrar el nodo, desplazar la nota). La
- * posición se escribe una sola vez al soltar: durante el gesto se mueve el
- * elemento del DOM, para no meter una transacción por cada píxel.
+ * Las normales se levantan visualmente y cambian de posición en el flujo al
+ * soltarlas. Las de fondo conservan movimiento libre. En ambos casos el borde
+ * visible desplaza #editor y la transacción se escribe solo al final.
  */
-export function bindBackgroundImageDrag(editor: Editor) {
+export function bindImageDrag(editor: Editor) {
   const dom = editor.view.dom as HTMLElement
   const scrollHost = dom.closest('#editor') as HTMLElement | null
   let drag: ImageDrag | null = null
@@ -105,6 +149,10 @@ export function bindBackgroundImageDrag(editor: Editor) {
   const placeImage = (current: ImageDrag) => {
     const dx = current.lastX - current.startX + (current.scrollHost.scrollLeft - current.startScrollLeft)
     const dy = current.lastY - current.startY + (current.scrollHost.scrollTop - current.startScrollTop)
+    if (!current.background) {
+      current.el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`
+      return
+    }
     const maxLeft = Math.max(0, current.scrollHost.scrollWidth - current.el.offsetWidth)
     const maxTop = Math.max(0, current.scrollHost.scrollHeight - current.el.offsetHeight)
     current.el.style.left = Math.max(0, Math.min(current.left + dx, maxLeft)) + 'px'
@@ -135,10 +183,10 @@ export function bindBackgroundImageDrag(editor: Editor) {
 
   dom.addEventListener('pointerdown', (event) => {
     if (!scrollHost) return
-    const image = selectedImage(editor)
-    if (!image || !image.attrs.background) return
-    const target = (event.target as HTMLElement | null)?.closest('.note-image-block.is-background')
+    const target = (event.target as HTMLElement | null)?.closest('.note-image-block')
     if (!(target instanceof HTMLElement)) return
+    const image = selectImageElement(editor, target)
+    if (!image) return
 
     const hostRect = scrollHost.getBoundingClientRect()
     const rect = target.getBoundingClientRect()
@@ -156,6 +204,7 @@ export function bindBackgroundImageDrag(editor: Editor) {
       startScrollTop: scrollHost.scrollTop,
       left: Number.isFinite(left) ? left : rect.left - hostRect.left + scrollHost.scrollLeft,
       top: Number.isFinite(top) ? top : rect.top - hostRect.top + scrollHost.scrollTop,
+      background: !!image.attrs.background,
       moved: false,
       scrollFrame: null,
     }
@@ -163,7 +212,7 @@ export function bindBackgroundImageDrag(editor: Editor) {
     document.body.classList.add('image-dragging')
     target.setPointerCapture?.(event.pointerId)
     event.preventDefault()
-  })
+  }, { capture: true })
 
   dom.addEventListener('pointermove', (event) => {
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -171,7 +220,11 @@ export function bindBackgroundImageDrag(editor: Editor) {
     drag.lastY = event.clientY
     const dx = drag.lastX - drag.startX
     const dy = drag.lastY - drag.startY
-    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true
+    if (Math.abs(dx) > DRAG_START_THRESHOLD || Math.abs(dy) > DRAG_START_THRESHOLD) drag.moved = true
+    if (!drag.moved) {
+      event.preventDefault()
+      return
+    }
     placeImage(drag)
     scheduleAutoScroll(drag)
     event.preventDefault()
@@ -179,18 +232,41 @@ export function bindBackgroundImageDrag(editor: Editor) {
 
   const finish = (event: PointerEvent) => {
     if (!drag || drag.pointerId !== event.pointerId) return
-    const { el, moved, scrollFrame } = drag
+    const { el, moved, scrollFrame, background, lastX, lastY } = drag
+    const backgroundLeft = el.style.left
+    const backgroundTop = el.style.top
     drag = null
     if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame)
     el.classList.remove('is-dragging')
     document.body.classList.remove('image-dragging')
+    if (!background) el.style.transform = ''
     try {
       el.releasePointerCapture?.(event.pointerId)
     } catch {
       // El WebView puede haber liberado la captura al cancelar el gesto.
     }
     if (!moved) return
-    editor.chain().focus().updateAttributes('imageBlock', { left: el.style.left, top: el.style.top }).run()
+    if (background) {
+      const image = selectedImage(editor)
+      if (!image) return
+      const node = editor.state.doc.nodeAt(image.pos)
+      if (!node) return
+      editor.view.dispatch(
+        editor.state.tr.setNodeMarkup(image.pos, undefined, {
+          ...node.attrs,
+          left: backgroundLeft,
+          top: backgroundTop,
+        }),
+      )
+      return
+    }
+
+    // El bloque arrastrado no debe tapar el punto de caída al consultarlo.
+    const previousPointerEvents = el.style.pointerEvents
+    el.style.pointerEvents = 'none'
+    const hit = editor.view.posAtCoords({ left: lastX, top: lastY })
+    el.style.pointerEvents = previousPointerEvents
+    if (hit) moveSelectedImageTo(editor, topLevelInsertionIndex(editor, hit.pos))
   }
 
   dom.addEventListener('pointerup', finish)

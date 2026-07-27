@@ -3,9 +3,10 @@ import { buildNoteExtensions } from '../extensions'
 import { Ribbon } from './ribbon'
 import { ribbonTabs } from './tabs'
 import { ColorWheel } from './colorWheel'
-import { bindBackgroundImageDrag } from './imageCommands'
+import { bindImageDrag } from './imageCommands'
 import type { RibbonContext } from './ribbonTypes'
 import { setBackgroundMode } from './backgroundMode'
+import { TextSelection } from '@tiptap/pm/state'
 
 /**
  * Arranque del editor dentro del WebView y puente con React Native.
@@ -105,7 +106,7 @@ export function startNoteEditor() {
 
   const ribbon = new Ribbon(ribbonRoot, ribbonTabs, context)
   ribbon.render()
-  bindBackgroundImageDrag(editor)
+  bindImageDrag(editor)
   window.__noteEditor = editor
 
   /**
@@ -136,6 +137,10 @@ export function startNoteEditor() {
   // El documento se desplaza dentro de su caja, no la página: el teclado ya
   // encoge el WebView desde React Native.
   const keepCaretVisible = () => {
+    // Una imagen es un nodo, no un caret. Intentar «ver el cursor» durante su
+    // selección restaura a veces la posición de texto anterior (normalmente el
+    // final de la nota) y rompe el origen del arrastre.
+    if (!(editor.state.selection instanceof TextSelection)) return
     window.requestAnimationFrame(() => {
       // Desplazar exige que el documento ya esté maquetado; justo tras montar,
       // o si el nodo aún no tiene caja, ProseMirror lanza al medir.
