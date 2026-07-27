@@ -13,6 +13,12 @@ export function isBackgroundMode(): boolean {
   return document.body.classList.contains(MODE_CLASS)
 }
 
-export function toggleBackgroundMode(): void {
-  document.body.classList.toggle(MODE_CLASS)
+export function setBackgroundMode(enabled: boolean): void {
+  document.body.classList.toggle(MODE_CLASS, enabled)
+}
+
+export function toggleBackgroundMode(): boolean {
+  const enabled = !isBackgroundMode()
+  setBackgroundMode(enabled)
+  return enabled
 }

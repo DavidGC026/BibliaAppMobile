@@ -53,6 +53,42 @@ export function setImageBackground(editor: Editor, background: boolean) {
     .run()
 }
 
+const DRAG_EDGE_SIZE = 64
+const DRAG_MAX_SCROLL_STEP = 18
+
+/**
+ * Velocidad vertical al acercar el puntero a un borde visible del editor.
+ * Es pura para poder comprobar la progresión sin depender de la maqueta DOM.
+ */
+export function imageDragScrollStep(pointerY: number, top: number, bottom: number): number {
+  if (bottom <= top) return 0
+  if (pointerY < top + DRAG_EDGE_SIZE) {
+    const pressure = Math.min(1, Math.max(0, (top + DRAG_EDGE_SIZE - pointerY) / DRAG_EDGE_SIZE))
+    return -Math.max(1, Math.ceil(DRAG_MAX_SCROLL_STEP * pressure))
+  }
+  if (pointerY > bottom - DRAG_EDGE_SIZE) {
+    const pressure = Math.min(1, Math.max(0, (pointerY - (bottom - DRAG_EDGE_SIZE)) / DRAG_EDGE_SIZE))
+    return Math.max(1, Math.ceil(DRAG_MAX_SCROLL_STEP * pressure))
+  }
+  return 0
+}
+
+type ImageDrag = {
+  pointerId: number
+  el: HTMLElement
+  scrollHost: HTMLElement
+  startX: number
+  startY: number
+  lastX: number
+  lastY: number
+  startScrollLeft: number
+  startScrollTop: number
+  left: number
+  top: number
+  moved: boolean
+  scrollFrame: number | null
+}
+
 /**
  * Arrastre de una imagen de fondo dentro del documento.
  *
@@ -63,50 +99,96 @@ export function setImageBackground(editor: Editor, background: boolean) {
  */
 export function bindBackgroundImageDrag(editor: Editor) {
   const dom = editor.view.dom as HTMLElement
-  let drag: { pointerId: number; el: HTMLElement; startX: number; startY: number; left: number; top: number; moved: boolean } | null =
-    null
+  const scrollHost = dom.closest('#editor') as HTMLElement | null
+  let drag: ImageDrag | null = null
+
+  const placeImage = (current: ImageDrag) => {
+    const dx = current.lastX - current.startX + (current.scrollHost.scrollLeft - current.startScrollLeft)
+    const dy = current.lastY - current.startY + (current.scrollHost.scrollTop - current.startScrollTop)
+    const maxLeft = Math.max(0, current.scrollHost.scrollWidth - current.el.offsetWidth)
+    const maxTop = Math.max(0, current.scrollHost.scrollHeight - current.el.offsetHeight)
+    current.el.style.left = Math.max(0, Math.min(current.left + dx, maxLeft)) + 'px'
+    current.el.style.top = Math.max(0, Math.min(current.top + dy, maxTop)) + 'px'
+  }
+
+  const autoScroll = () => {
+    if (!drag) return
+    const current = drag
+    current.scrollFrame = null
+    const rect = current.scrollHost.getBoundingClientRect()
+    const step = imageDragScrollStep(current.lastY, rect.top, rect.bottom)
+    if (step === 0) return
+
+    const before = current.scrollHost.scrollTop
+    const maxScroll = Math.max(0, current.scrollHost.scrollHeight - current.scrollHost.clientHeight)
+    current.scrollHost.scrollTop = Math.max(0, Math.min(before + step, maxScroll))
+    if (current.scrollHost.scrollTop !== before) {
+      current.moved = true
+      placeImage(current)
+      current.scrollFrame = window.requestAnimationFrame(autoScroll)
+    }
+  }
+
+  const scheduleAutoScroll = (current: ImageDrag) => {
+    if (current.scrollFrame === null) current.scrollFrame = window.requestAnimationFrame(autoScroll)
+  }
 
   dom.addEventListener('pointerdown', (event) => {
+    if (!scrollHost) return
     const image = selectedImage(editor)
     if (!image || !image.attrs.background) return
     const target = (event.target as HTMLElement | null)?.closest('.note-image-block.is-background')
     if (!(target instanceof HTMLElement)) return
 
-    const hostRect = dom.getBoundingClientRect()
+    const hostRect = scrollHost.getBoundingClientRect()
     const rect = target.getBoundingClientRect()
     const left = Number.parseFloat(String(image.attrs.left ?? ''))
     const top = Number.parseFloat(String(image.attrs.top ?? ''))
     drag = {
       pointerId: event.pointerId,
       el: target,
+      scrollHost,
       startX: event.clientX,
       startY: event.clientY,
-      left: Number.isFinite(left) ? left : rect.left - hostRect.left + dom.scrollLeft,
-      top: Number.isFinite(top) ? top : rect.top - hostRect.top + dom.scrollTop,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      startScrollLeft: scrollHost.scrollLeft,
+      startScrollTop: scrollHost.scrollTop,
+      left: Number.isFinite(left) ? left : rect.left - hostRect.left + scrollHost.scrollLeft,
+      top: Number.isFinite(top) ? top : rect.top - hostRect.top + scrollHost.scrollTop,
       moved: false,
+      scrollFrame: null,
     }
     target.classList.add('is-dragging')
-    target.setPointerCapture(event.pointerId)
+    document.body.classList.add('image-dragging')
+    target.setPointerCapture?.(event.pointerId)
     event.preventDefault()
   })
 
   dom.addEventListener('pointermove', (event) => {
     if (!drag || drag.pointerId !== event.pointerId) return
-    const dx = event.clientX - drag.startX
-    const dy = event.clientY - drag.startY
+    drag.lastX = event.clientX
+    drag.lastY = event.clientY
+    const dx = drag.lastX - drag.startX
+    const dy = drag.lastY - drag.startY
     if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true
-    const maxLeft = Math.max(0, dom.scrollWidth - drag.el.offsetWidth)
-    const maxTop = Math.max(0, dom.scrollHeight - drag.el.offsetHeight)
-    drag.el.style.left = Math.max(0, Math.min(drag.left + dx, maxLeft)) + 'px'
-    drag.el.style.top = Math.max(0, Math.min(drag.top + dy, maxTop)) + 'px'
+    placeImage(drag)
+    scheduleAutoScroll(drag)
     event.preventDefault()
   })
 
   const finish = (event: PointerEvent) => {
     if (!drag || drag.pointerId !== event.pointerId) return
-    const { el, moved } = drag
+    const { el, moved, scrollFrame } = drag
     drag = null
+    if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame)
     el.classList.remove('is-dragging')
+    document.body.classList.remove('image-dragging')
+    try {
+      el.releasePointerCapture?.(event.pointerId)
+    } catch {
+      // El WebView puede haber liberado la captura al cancelar el gesto.
+    }
     if (!moved) return
     editor.chain().focus().updateAttributes('imageBlock', { left: el.style.left, top: el.style.top }).run()
   }

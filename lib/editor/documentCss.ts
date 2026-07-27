@@ -56,6 +56,7 @@ export function getNoteDocumentCss(
       overflow-wrap: break-word;
       position: relative;
       z-index: 1;
+      isolation: isolate;
     }
 
     #editor h1 { font-size: 1.55em; font-weight: 800; margin: 0.6em 0 0.3em; }
@@ -165,7 +166,10 @@ export function getNoteDocumentCss(
     }
     .note-image-block.is-background {
       position: absolute !important;
-      z-index: -1;
+      /* El HTML conserva z-index:-1 por compatibilidad con clientes
+         anteriores. Dentro del editor se normaliza a una capa local 0 para
+         que nunca caiga detrás del fondo opaco del WebView. */
+      z-index: 0 !important;
       margin: 0 !important;
       touch-action: none;
       pointer-events: none;
@@ -178,6 +182,17 @@ export function getNoteDocumentCss(
       z-index: 10 !important;
       pointer-events: auto;
       cursor: grab;
+      opacity: 0.94;
+      outline: 2px dashed ${colors.primary};
+      outline-offset: 2px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+    }
+    /* Texto y bloques normales ocupan la capa 1. La imagen de fondo queda en
+       0 durante lectura/escritura y sube a 10 solo al editar fondos. */
+    #editor > :not(.note-image-block),
+    #editor .ProseMirror > :not(.note-image-block) {
+      position: relative;
+      z-index: 1;
     }
     /* Mientras se arrastra o reordena: sin transición de posición, flotando
        por encima del texto y con sombra para dar sensación de "levantar".

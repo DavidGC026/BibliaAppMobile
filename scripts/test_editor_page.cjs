@@ -26,6 +26,7 @@ const jiti = require('jiti')(__filename, {
   alias: { '@': path.resolve(__dirname, '..') },
 })
 const { getEditorHtml } = jiti(path.resolve(__dirname, '../lib/editorHtml.ts'))
+const { imageDragScrollStep } = jiti(path.resolve(__dirname, '../lib/tiptap/editor/imageCommands.ts'))
 
 const COLORS = {
   text: '#111111',
@@ -290,6 +291,47 @@ check(
   opened.some((message) => message.type === 'openVerseModal'),
   JSON.stringify(opened),
 )
+
+console.log('\n  Imágenes de fondo\n')
+
+check('arrastrar junto al borde superior desplaza hacia arriba', imageDragScrollStep(4, 0, 400) < 0)
+check('arrastrar en el centro no desplaza la nota', imageDragScrollStep(200, 0, 400) === 0)
+check('arrastrar junto al borde inferior desplaza hacia abajo', imageDragScrollStep(396, 0, 400) > 0)
+
+const imageEditor = mount(
+  '<p>Texto por encima</p>' +
+    '<div class="note-image-block" style="width: 60%; text-align: center">' +
+    '<img src="/uploads/fondo.webp" alt="Fondo" /></div>' +
+    '<p>Texto por debajo</p>',
+)
+selectTopLevelNode(imageEditor.window, 1)
+const sendBehind = Array.from(imageEditor.document.querySelectorAll('.ribbon-btn')).find(
+  (button) => button.textContent === 'Detrás del texto',
+)
+sendBehind.dispatchEvent(new imageEditor.window.Event('click'))
+check(
+  'convertir una imagen en fondo activa su modo de colocación',
+  imageEditor.document.body.classList.contains('image-selection-mode'),
+)
+check(
+  'la imagen se eleva mientras se coloca',
+  imageEditor.window.getComputedStyle(imageEditor.document.querySelector('.note-image-block')).zIndex === '10',
+  imageEditor.window.getComputedStyle(imageEditor.document.querySelector('.note-image-block')).zIndex,
+)
+const finishBackground = Array.from(imageEditor.document.querySelectorAll('.ribbon-btn')).find(
+  (button) => button.textContent === 'Finalizar fondo',
+)
+finishBackground.dispatchEvent(new imageEditor.window.Event('click'))
+check(
+  'Finalizar fondo apaga el modo temporal',
+  !imageEditor.document.body.classList.contains('image-selection-mode'),
+)
+check(
+  'y devuelve la imagen detrás del texto sin cambiar de vista',
+  imageEditor.window.getComputedStyle(imageEditor.document.querySelector('.note-image-block')).zIndex === '0',
+  imageEditor.window.getComputedStyle(imageEditor.document.querySelector('.note-image-block')).zIndex,
+)
+check('al finalizar se cierra la pestaña contextual', !imageEditor.document.querySelector('.ribbon-tab.is-contextual'))
 
 console.log('\n  La vista de solo lectura\n')
 

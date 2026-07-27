@@ -5,6 +5,7 @@ import { ribbonTabs } from './tabs'
 import { ColorWheel } from './colorWheel'
 import { bindBackgroundImageDrag } from './imageCommands'
 import type { RibbonContext } from './ribbonTypes'
+import { setBackgroundMode } from './backgroundMode'
 
 /**
  * Arranque del editor dentro del WebView y puente con React Native.
@@ -159,6 +160,7 @@ export function startNoteEditor() {
         return
       }
       if (action.type === 'updateContent') {
+        setBackgroundMode(false)
         editor.commands.setContent(action.value ?? '', { emitUpdate: false })
         return
       }

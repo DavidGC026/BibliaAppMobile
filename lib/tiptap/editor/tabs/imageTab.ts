@@ -8,6 +8,7 @@ import {
   setImageBackground,
   setImageWidth,
 } from '../imageCommands'
+import { isBackgroundMode, setBackgroundMode, toggleBackgroundMode } from '../backgroundMode'
 
 /**
  * Pestaña contextual de una imagen.
@@ -27,6 +28,7 @@ export const imageTab: RibbonTab = {
     const width = image ? imageWidthPercent(image.attrs) : 60
     const align = image ? imageAlign(image.attrs) : 'center'
     const background = !!image?.attrs.background
+    const editingBackgrounds = isBackgroundMode()
 
     return [
       {
@@ -83,8 +85,31 @@ export const imageTab: RibbonTab = {
               : 'Enviar la imagen detrás del texto',
             wide: true,
             active: () => background,
-            run: ({ editor }) => setImageBackground(editor, !background),
+            run: ({ editor }) => {
+              const next = !background
+              setImageBackground(editor, next)
+              // Al convertirla en fondo no debe desaparecer bajo el texto:
+              // entra directamente al modo temporal en que se puede colocar.
+              if (next) setBackgroundMode(true)
+            },
           },
+          ...(background
+            ? [
+                {
+                  label: editingBackgrounds ? 'Finalizar fondo' : 'Editar fondo',
+                  icon: 'layers' as const,
+                  hint: editingBackgrounds
+                    ? 'Terminar de colocar la imagen y devolverla detrás del texto'
+                    : 'Elevar la imagen para poder arrastrarla',
+                  wide: true,
+                  active: () => editingBackgrounds,
+                  run: (ribbonContext: typeof ctx) => {
+                    const enabled = toggleBackgroundMode()
+                    if (!enabled) ribbonContext.clearSelection()
+                  },
+                },
+              ]
+            : []),
         ],
       },
       {

@@ -42,7 +42,7 @@ export const insertTab: RibbonTab = {
           // modo las eleva un momento para poder seleccionarlas y moverlas.
           label: 'Modo fondos',
           icon: 'layers',
-          hint: 'Poder seleccionar las imágenes que están detrás del texto',
+          hint: 'Elevar temporalmente las imágenes de fondo para seleccionarlas y moverlas',
           wide: true,
           active: () => isBackgroundMode(),
           run: () => toggleBackgroundMode(),
