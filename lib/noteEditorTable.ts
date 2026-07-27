@@ -11,7 +11,7 @@ export interface NoteTableThemeColors {
   primarySoft: string
 }
 
-export function getNoteTableCss(colors: NoteTableThemeColors, isReadOnly: boolean): string {
+export function getNoteTableCss(colors: NoteTableThemeColors): string {
   return `
     table.biblia-note-table {
       border-collapse: collapse;
@@ -34,9 +34,7 @@ export function getNoteTableCss(colors: NoteTableThemeColors, isReadOnly: boolea
       font-weight: 700;
     }
 
-    ${
-      isReadOnly
-        ? `
+
     .biblia-table-widget { margin: 12px 0; }
     .biblia-table-compact {
       border: 1px solid ${colors.border};
@@ -147,106 +145,11 @@ export function getNoteTableCss(colors: NoteTableThemeColors, isReadOnly: boolea
     .biblia-table-overlay-body table {
       margin: 0;
     }
-    `
-        : `
-    .table-picker-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 9999;
-      background: rgba(0, 0, 0, 0.45);
-      display: none;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .table-picker-overlay.open { display: flex; }
-    .table-picker-card {
-      width: min(100%, 320px);
-      background: ${colors.card};
-      border: 1px solid ${colors.border};
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
-    }
-    .table-picker-title {
-      font-size: 15px;
-      font-weight: 800;
-      color: ${colors.text};
-      margin-bottom: 12px;
-    }
-    .table-picker-field {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 10px;
-      font-size: 13px;
-      color: ${colors.text};
-    }
-    .table-picker-field input[type="number"] {
-      width: 72px;
-      height: 36px;
-      border: 1px solid ${colors.border};
-      border-radius: 8px;
-      background: ${colors.background};
-      color: ${colors.text};
-      text-align: center;
-      font-size: 14px;
-      font-weight: 700;
-    }
-    .table-picker-check {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: ${colors.textMuted};
-      margin: 8px 0 12px;
-    }
-    .table-picker-preview {
-      display: grid;
-      gap: 3px;
-      margin-bottom: 14px;
-      padding: 10px;
-      border-radius: 10px;
-      background: ${colors.background};
-      border: 1px dashed ${colors.border};
-      min-height: 72px;
-    }
-    .table-picker-cell {
-      background: ${colors.accent};
-      border-radius: 4px;
-      min-height: 14px;
-    }
-    .table-picker-cell.head { background: ${colors.primarySoft}; }
-    .table-picker-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-    }
-    .table-picker-btn {
-      border: none;
-      border-radius: 10px;
-      padding: 9px 14px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .table-picker-btn.cancel {
-      background: ${colors.accent};
-      color: ${colors.text};
-    }
-    .table-picker-btn.insert {
-      background: ${colors.primary};
-      color: #fff;
-    }
-    `
-    }
   `
 }
 
-export function getNoteTablePickerHtml(isReadOnly: boolean): string {
-  if (isReadOnly) {
-    return `<div id="biblia-table-overlay" class="biblia-table-overlay" aria-hidden="true">
+export function getNoteTableOverlayHtml(): string {
+  return `<div id="biblia-table-overlay" class="biblia-table-overlay" aria-hidden="true">
       <div class="biblia-table-overlay-card">
         <div class="biblia-table-overlay-head">
           <span id="biblia-table-overlay-title">Tabla</span>
@@ -255,189 +158,10 @@ export function getNoteTablePickerHtml(isReadOnly: boolean): string {
         <div class="biblia-table-overlay-body" id="biblia-table-overlay-body"></div>
       </div>
     </div>`
-  }
-
-  return `<div id="table-picker" class="table-picker-overlay" aria-hidden="true">
-    <div class="table-picker-card">
-      <div class="table-picker-title">Insertar tabla</div>
-      <label class="table-picker-field">
-        <span>Columnas</span>
-        <input type="number" id="tp-cols" min="1" max="10" value="3" inputmode="numeric">
-      </label>
-      <label class="table-picker-field">
-        <span>Filas</span>
-        <input type="number" id="tp-rows" min="1" max="20" value="3" inputmode="numeric">
-      </label>
-      <label class="table-picker-check">
-        <input type="checkbox" id="tp-header" checked>
-        <span>Primera fila como encabezado</span>
-      </label>
-      <div class="table-picker-preview" id="tp-preview"></div>
-      <div class="table-picker-actions">
-        <button type="button" class="table-picker-btn cancel" id="tp-cancel">Cancelar</button>
-        <button type="button" class="table-picker-btn insert" id="tp-insert">Insertar</button>
-      </div>
-    </div>
-  </div>`
 }
 
-export function getNoteTableScript(isReadOnly: boolean): string {
+export function getNoteTableScript(): string {
   return `
-      function clampTableNum(value, min, max, fallback) {
-        var n = parseInt(value, 10);
-        if (isNaN(n)) return fallback;
-        return Math.max(min, Math.min(max, n));
-      }
-
-      function buildTableInnerHtml(cols, rows, withHeader) {
-        cols = clampTableNum(cols, 1, 10, 3);
-        rows = clampTableNum(rows, 1, 20, 3);
-        var html = '<table class="biblia-note-table">';
-        var r, c;
-        if (withHeader) {
-          html += '<thead><tr>';
-          for (c = 0; c < cols; c++) html += '<th>Col ' + (c + 1) + '</th>';
-          html += '</tr></thead><tbody>';
-          for (r = 1; r < rows; r++) {
-            html += '<tr>';
-            for (c = 0; c < cols; c++) html += '<td>&nbsp;</td>';
-            html += '</tr>';
-          }
-          html += '</tbody>';
-        } else {
-          html += '<tbody>';
-          for (r = 0; r < rows; r++) {
-            html += '<tr>';
-            for (c = 0; c < cols; c++) html += '<td>&nbsp;</td>';
-            html += '</tr>';
-          }
-          html += '</tbody>';
-        }
-        html += '</table>';
-        return html;
-      }
-
-      function tableBlockLabel(table) {
-        var rows = table.rows.length;
-        var cols = rows > 0 ? table.rows[0].cells.length : 0;
-        return 'Tabla ' + cols + '×' + rows;
-      }
-
-      /* ── Filas y columnas de una tabla ya insertada ──
-         Se respetan los mismos límites que el selector de inserción (hasta 10
-         columnas y 20 filas) y no se deja la tabla sin ninguna fila ni columna:
-         para eso está «Eliminar» en la pestaña contextual. */
-      var TABLE_MAX_COLS = 10;
-      var TABLE_MAX_ROWS = 20;
-
-      function tableColumnCount(table) {
-        var cols = 0;
-        for (var r = 0; r < table.rows.length; r++) {
-          cols = Math.max(cols, table.rows[r].cells.length);
-        }
-        return cols;
-      }
-
-      function isHeaderRow(row) {
-        return !!(row.parentNode && row.parentNode.tagName === 'THEAD');
-      }
-
-      function newTableCell(row) {
-        var head = isHeaderRow(row);
-        var cell = document.createElement(head ? 'th' : 'td');
-        cell.innerHTML = head ? 'Col' : '&nbsp;';
-        return cell;
-      }
-
-      /* Celda de referencia: la última que tocó el usuario, para que la fila o
-         columna nueva aparezca junto a ella y no siempre al final. */
-      function tableCellFromContext(table, context) {
-        var target = context && context.target;
-        if (!target || !target.closest) return null;
-        var cell = target.closest('td, th');
-        return cell && table.contains(cell) ? cell : null;
-      }
-
-      function addTableRow(table, cell) {
-        if (table.rows.length >= TABLE_MAX_ROWS) return false;
-        var cols = tableColumnCount(table) || 1;
-        var at = cell ? Math.min(cell.parentNode.rowIndex + 1, table.rows.length) : table.rows.length;
-        var row = table.insertRow(at);
-        for (var i = 0; i < cols; i++) row.appendChild(newTableCell(row));
-        return true;
-      }
-
-      function removeTableRow(table, cell) {
-        if (table.rows.length <= 1) return false;
-        var at = cell ? cell.parentNode.rowIndex : table.rows.length - 1;
-        table.deleteRow(at);
-        return true;
-      }
-
-      function addTableColumn(table, cell) {
-        if (tableColumnCount(table) >= TABLE_MAX_COLS) return false;
-        var at = cell ? cell.cellIndex + 1 : tableColumnCount(table);
-        for (var r = 0; r < table.rows.length; r++) {
-          var row = table.rows[r];
-          row.insertBefore(newTableCell(row), row.cells[at] || null);
-        }
-        return true;
-      }
-
-      function removeTableColumn(table, cell) {
-        if (tableColumnCount(table) <= 1) return false;
-        var at = cell ? cell.cellIndex : tableColumnCount(table) - 1;
-        for (var r = 0; r < table.rows.length; r++) {
-          var row = table.rows[r];
-          if (row.cells[at]) row.deleteCell(at);
-        }
-        return true;
-      }
-
-      // Descriptor que consume note-editor-blocks: la tabla es un bloque de
-      // contenido más, pero solo este módulo sabe cómo etiquetarla, qué tablas
-      // quedan fuera (la vista compacta de solo lectura) y qué acciones
-      // propias ofrece en la barra del bloque.
-      function tableContentBlockType() {
-        return {
-          blockClass: 'biblia-table-block',
-          mainSelector: 'table',
-          mainTag: 'TABLE',
-          icon: '⊞',
-          label: tableBlockLabel,
-          eligible: function(el) {
-            return !el.closest('.biblia-table-widget') && !el.closest('.biblia-table-compact-preview');
-          },
-          prepare: function(main) {
-            if (!main.classList.contains('biblia-note-table')) main.classList.add('biblia-note-table');
-          },
-          actions: [
-            { action: 'table-row-add', label: '+ Fila' },
-            { action: 'table-row-del', label: '− Fila' },
-            { action: 'table-col-add', label: '+ Col' },
-            { action: 'table-col-del', label: '− Col' }
-          ],
-          // Devuelve true si cambió la tabla (el módulo de bloques se encarga
-          // entonces de la etiqueta, el historial y avisar al host).
-          runAction: function(table, action, context) {
-            var cell = tableCellFromContext(table, context);
-            if (action === 'table-row-add') return addTableRow(table, cell);
-            if (action === 'table-row-del') return removeTableRow(table, cell);
-            if (action === 'table-col-add') return addTableColumn(table, cell);
-            if (action === 'table-col-del') return removeTableColumn(table, cell);
-            return false;
-          }
-        };
-      }
-
-      function buildTableHtml(cols, rows, withHeader) {
-        var tableHtml = buildTableInnerHtml(cols, rows, withHeader);
-        return '<div class="biblia-content-block biblia-table-block">' + tableHtml + '</div><p><br></p>';
-      }
-
-      ${
-        isReadOnly
-          ? `
       function tableSizeLabel(table) {
         var rows = table.rows.length;
         var cols = rows > 0 ? table.rows[0].cells.length : 0;
@@ -538,80 +262,6 @@ export function getNoteTableScript(isReadOnly: boolean): string {
             window.parent.postMessage(payload, '*');
           }
         }, 80);
-      }
-      `
-          : `
-      function renderTablePickerPreview() {
-        var preview = document.getElementById('tp-preview');
-        var colsInput = document.getElementById('tp-cols');
-        var rowsInput = document.getElementById('tp-rows');
-        var headerInput = document.getElementById('tp-header');
-        if (!preview || !colsInput || !rowsInput || !headerInput) return;
-
-        var cols = clampTableNum(colsInput.value, 1, 10, 3);
-        var rows = clampTableNum(rowsInput.value, 1, 20, 3);
-        var withHeader = !!headerInput.checked;
-        colsInput.value = String(cols);
-        rowsInput.value = String(rows);
-
-        preview.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
-        preview.innerHTML = '';
-        var total = rows * cols;
-        for (var i = 0; i < total; i++) {
-          var cell = document.createElement('div');
-          cell.className = 'table-picker-cell' + (withHeader && i < cols ? ' head' : '');
-          preview.appendChild(cell);
-        }
-      }
-
-      function closeTablePicker() {
-        var picker = document.getElementById('table-picker');
-        if (picker) {
-          picker.classList.remove('open');
-          picker.setAttribute('aria-hidden', 'true');
-        }
-      }
-
-      function openTablePicker() {
-        var picker = document.getElementById('table-picker');
-        if (!picker) return;
-        renderTablePickerPreview();
-        picker.classList.add('open');
-        picker.setAttribute('aria-hidden', 'false');
-      }
-
-      function confirmTablePicker() {
-        var colsInput = document.getElementById('tp-cols');
-        var rowsInput = document.getElementById('tp-rows');
-        var headerInput = document.getElementById('tp-header');
-        if (!colsInput || !rowsInput || !headerInput) return;
-        insertHtmlAtSelection(buildTableHtml(colsInput.value, rowsInput.value, headerInput.checked));
-        // insertHTML puede anidar o partir el bloque recién insertado.
-        normalizeContentBlocks();
-        notifyChange();
-        scrollCaretIntoView();
-        closeTablePicker();
-      }
-
-      function initTablePicker() {
-        var picker = document.getElementById('table-picker');
-        if (!picker) return;
-        ['tp-cols', 'tp-rows'].forEach(function(id) {
-          var el = document.getElementById(id);
-          if (el) el.addEventListener('input', renderTablePickerPreview);
-        });
-        var headerInput = document.getElementById('tp-header');
-        if (headerInput) headerInput.addEventListener('change', renderTablePickerPreview);
-        var cancelBtn = document.getElementById('tp-cancel');
-        if (cancelBtn) cancelBtn.addEventListener('click', closeTablePicker);
-        var insertBtn = document.getElementById('tp-insert');
-        if (insertBtn) insertBtn.addEventListener('click', confirmTablePicker);
-        picker.addEventListener('click', function(e) {
-          if (e.target === picker) closeTablePicker();
-        });
-      }
-
-      `
       }
   `
 }

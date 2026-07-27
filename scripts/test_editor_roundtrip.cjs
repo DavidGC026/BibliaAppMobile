@@ -8,10 +8,10 @@
  *   1. El HTML real de una nota entra al esquema y sale sin perder nada, y la
  *      interfaz que la web guarda dentro del contenido (la barra de botones de
  *      los bloques) se queda fuera.
- *   2. El HTML limpio que produce Tiptap lo entiende el codigo que ya existe:
- *      se ejecuta `normalizeContentBlocks()` del editor de bloques del movil
- *      sobre la salida y se comprueba que reconstruye los envoltorios sin
- *      volver a meter interfaz.
+ *   2. El HTML limpio que produce Tiptap lo entiende la web, que abre las mismas
+ *      notas con su editor de bloques de siempre: se ejecuta su
+ *      `normalizeContentBlocks()` sobre la salida y se comprueba que reconstruye
+ *      los envoltorios.
  *
  * ponytail: espejo de desktop/src/lib/tiptap/__roundtrip__.ts
  */
@@ -43,8 +43,23 @@ const jiti = require('jiti')(__filename, {
 const { getSchema } = jiti('@tiptap/core')
 const { DOMParser, DOMSerializer } = jiti('@tiptap/pm/model')
 const { buildNoteExtensions } = jiti(path.resolve(__dirname, '../lib/tiptap/extensions.ts'))
-const blocks = jiti(path.resolve(__dirname, '../lib/noteEditorBlocks.ts'))
-const table = jiti(path.resolve(__dirname, '../lib/noteEditorTable.ts'))
+
+/*
+ * Espejo de la web: es el cliente que sigue montando los bloques con
+ * `normalizeContentBlocks` y guardando su barra de botones dentro del
+ * contenido. Vive fuera del repositorio del movil, asi que si no esta (clon
+ * suelto) esta parte se salta en vez de fallar.
+ */
+function loadWebBlocks() {
+  try {
+    return {
+      blocks: jiti(path.resolve(__dirname, '../../lib/note-editor-blocks.ts')),
+      table: jiti(path.resolve(__dirname, '../../lib/note-editor-table.ts')),
+    }
+  } catch {
+    return null
+  }
+}
 
 const schema = getSchema(buildNoteExtensions())
 const parser = DOMParser.fromSchema(schema)
@@ -189,20 +204,19 @@ for (const testCase of cases) {
 console.log(`\n  ${passed} correctos, ${failed} fallidos\n`)
 
 // ---------------------------------------------------------------------------
-// Parte 2: lo que produce Tiptap lo entiende el editor de bloques del movil.
+// Parte 2: interoperabilidad. Lo que guarda Tiptap tiene que entenderlo la web,
+// que abre las mismas notas con el editor de bloques de siempre.
 // ---------------------------------------------------------------------------
 
-console.log('  El editor de bloques entiende lo que guarda Tiptap\n')
+const web = loadWebBlocks()
+if (!web) {
+  console.log('  (Interoperabilidad con la web: omitida, no esta el repositorio web al lado)\n')
+  process.exit(failed === 0 ? 0 : 1)
+}
 
-const HANDLE_SELECTORS = [
-  '.biblia-block-handle',
-  '[data-block-action]',
-  '.biblia-block-btn',
-  '.biblia-block-actions',
-  '.biblia-block-label',
-]
+console.log('  La web reconstruye lo que guarda Tiptap\n')
 
-function normalizeWithMobileBlocks(html) {
+function normalizeWithWebBlocks(html) {
   const win = new JSDOM('<div id="editor" contenteditable="true"></div>', {
     pretendToBeVisual: true,
     runScripts: 'outside-only',
@@ -212,8 +226,8 @@ function normalizeWithMobileBlocks(html) {
     var editor = document.getElementById('editor');
     function notifyChange() {}
     function scrollCaretIntoView() {}
-    ${blocks.getNoteBlockScript(false)}
-    ${table.getNoteTableScript(false)}
+    ${web.blocks.getNoteBlockScript(false)}
+    ${web.table.getNoteTableScript(false)}
     normalizeContentBlocks();
   })();`)
   return win.document.getElementById('editor')
@@ -241,7 +255,7 @@ const interop = [
     expect: ['div.note-image-block', 'img[src]'],
   },
   {
-    name: 'Nota de la web con barra guardada: la barra no vuelve',
+    name: 'Nota de la web con barra guardada: sigue siendo un versiculo',
     html:
       '<div class="biblia-content-block biblia-verse-block">' +
       HANDLE +
@@ -254,9 +268,11 @@ let interopPassed = 0
 let interopFailed = 0
 
 for (const testCase of interop) {
-  const host = normalizeWithMobileBlocks(roundTrip(testCase.html))
+  const host = normalizeWithWebBlocks(roundTrip(testCase.html))
   const missing = testCase.expect.filter((sel) => !host.querySelector(sel))
-  const leaked = HANDLE_SELECTORS.filter((sel) => host.querySelector(sel))
+  // La web si dibuja su barra dentro del bloque: lo que importa aqui es que
+  // reconozca el bloque, no que renuncie a su propia interfaz.
+  const leaked = []
   if (missing.length === 0 && leaked.length === 0) {
     interopPassed++
     console.log(`  OK    ${testCase.name}`)
