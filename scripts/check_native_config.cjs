@@ -10,11 +10,13 @@
  * puede quedarse atrás respecto a app.json / app.config.ts sin que nada avise,
  * y el resultado es un APK que dice una cosa y un bundle que dice otra.
  *
- * Ya ha pasado dos veces:
+ * Ya ha pasado tres veces:
  *  - versionCode: app.json en 37 y build.gradle en 38, subido a mano.
  *  - esquema/paquete: el bundle se creía la variante interna y el manifiesto
  *    registraba la pública, lo que congelaba el OAuth de Google tras elegir
  *    cuenta.
+ *  - wrapper de gradle: un prebuild lo devolvió a 9.3.1 y el build ni arrancó
+ *    (`JvmVendorSpec IBM_SEMERU`), con el ajuste a 8.14.3 perdido sin avisar.
  *
  * Versión y versionCode son errores (rompen las subidas a Play). El paquete y
  * el esquema salen como avisos, porque dependen de la variante con la que se
@@ -28,6 +30,13 @@ const APP_JSON = path.join(ROOT, 'app.json')
 const APP_CONFIG = path.join(ROOT, 'app.config.ts')
 const GRADLE = path.join(ROOT, 'android/app/build.gradle')
 const MANIFEST = path.join(ROOT, 'android/app/src/main/AndroidManifest.xml')
+const WRAPPER = path.join(ROOT, 'android/gradle/wrapper/gradle-wrapper.properties')
+const GRADLE_PROPS = path.join(ROOT, 'android/gradle.properties')
+
+// Gradle 9.x no arranca con este proyecto: el resolutor de toolchains pide
+// vendors que el JDK no expone. android/ no está en el repo, así que cada
+// prebuild devuelve la versión por omisión de Expo y hay que volver a fijarla.
+const GRADLE_OK = '8.14.3'
 
 const errors = []
 const warnings = []
@@ -81,6 +90,32 @@ if (nativeVersionName !== null && app.version !== nativeVersionName) {
     `versión desfasada: app.json dice ${app.version} y android/ dice ${nativeVersionName}`,
     'el nombre de versión que ve el usuario sale del nativo',
   )
+}
+
+// — Wrapper de gradle: el build ni arranca si vuelve a 9.x —
+
+let wrapperVersion = null
+if (fs.existsSync(WRAPPER)) {
+  const wrapper = fs.readFileSync(WRAPPER, 'utf8')
+  const m = wrapper.match(/gradle-([\d.]+)-bin\.zip/)
+  wrapperVersion = m ? m[1] : null
+  if (wrapperVersion && wrapperVersion !== GRADLE_OK) {
+    fail(
+      `gradle ${wrapperVersion} en el wrapper; este proyecto compila con ${GRADLE_OK}`,
+      `con 9.x el build falla al configurar («JvmVendorSpec IBM_SEMERU»). Arréglalo con: ` +
+        `sed -i 's/gradle-${wrapperVersion}-bin/gradle-${GRADLE_OK}-bin/' android/gradle/wrapper/gradle-wrapper.properties`,
+    )
+  }
+}
+
+if (fs.existsSync(GRADLE_PROPS)) {
+  const props = fs.readFileSync(GRADLE_PROPS, 'utf8')
+  if (!/org\.gradle\.jvm\.toolchain\.foojay\.enabled\s*=\s*false/.test(props)) {
+    fail(
+      'falta org.gradle.jvm.toolchain.foojay.enabled=false en android/gradle.properties',
+      'sin eso el resolutor de toolchains busca un JDK por vendor y rompe la configuración del build',
+    )
+  }
 }
 
 // — Paquete y esquema: dependen de la variante —
@@ -139,6 +174,7 @@ console.log(`  versión          app.json ${app.version}  ·  android/ ${nativeV
 console.log(`  versionCode      app.json ${app.android?.versionCode}  ·  android/ ${nativeVersionCode}`)
 console.log(`  paquete          esperado ${expected?.package ?? '(sin app.config.ts)'}  ·  android/ ${nativeApplicationId}`)
 console.log(`  variante         ${variant ?? '(sin APP_VARIANT: app.config.ts usa internal)'}`)
+console.log(`  gradle           wrapper ${wrapperVersion ?? '(sin wrapper)'}  ·  compatible ${GRADLE_OK}`)
 
 if (warnings.length) {
   console.log('\nAvisos:')
