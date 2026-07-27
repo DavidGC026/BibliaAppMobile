@@ -211,6 +211,51 @@ export function getNoteDocumentCss(
       user-select: none;
       -webkit-user-select: none;
     }
+    /* Destino del arrastre normal: la línea marca el hueco real en el flujo y
+       la etiqueta explica si la imagen quedará arriba o debajo del bloque. */
+    .image-drop-indicator {
+      position: fixed;
+      display: none;
+      height: 3px;
+      border-radius: 999px;
+      background: ${colors.primary};
+      box-shadow: 0 0 0 1px ${colors.background}, 0 3px 10px rgba(0, 0, 0, 0.24);
+      pointer-events: none;
+      transform: translateY(-50%);
+      z-index: 100;
+    }
+    .image-drop-indicator.is-visible { display: block; }
+    .image-drop-indicator::before,
+    .image-drop-indicator::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: ${colors.primary};
+      transform: translateY(-50%);
+    }
+    .image-drop-indicator::before { left: -2px; }
+    .image-drop-indicator::after { right: -2px; }
+    .image-drop-indicator span {
+      position: absolute;
+      right: 4px;
+      bottom: 7px;
+      max-width: calc(100% - 8px);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      padding: 3px 8px;
+      border: 1px solid ${colors.primaryBorder};
+      border-radius: 999px;
+      background: ${colors.background};
+      color: ${colors.primary};
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.16);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
     .note-image-block img {
       max-width: 100%;
       height: auto;

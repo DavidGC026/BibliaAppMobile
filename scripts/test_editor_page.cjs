@@ -346,36 +346,38 @@ check('al finalizar se cierra la pestaña contextual', !imageEditor.document.que
 const flowEditor = mount(
   '<div class="note-image-block" style="width: 60%; text-align: center">' +
     '<img src="/uploads/normal.webp" alt="Normal" /></div>' +
-    '<p>Primer párrafo</p><p>Último párrafo</p>',
+    '<p>Primer párrafo</p>' + VERSE,
 )
 const flowHost = flowEditor.document.getElementById('editor')
 const flowImage = flowEditor.document.querySelector('.note-image-block')
+const flowParagraph = flowEditor.document.querySelector('.ProseMirror > p')
+const flowVerse = flowEditor.document.querySelector('.ProseMirror > .biblia-verse-quote')
 flowHost.getBoundingClientRect = () => ({ top: 0, bottom: 400, left: 0, right: 320, width: 320, height: 400 })
 flowImage.getBoundingClientRect = () => ({ top: 20, bottom: 100, left: 20, right: 220, width: 200, height: 80 })
+flowParagraph.getBoundingClientRect = () => ({ top: 120, bottom: 160, left: 20, right: 300, width: 280, height: 40 })
+flowVerse.getBoundingClientRect = () => ({ top: 180, bottom: 220, left: 20, right: 300, width: 280, height: 40 })
 Object.defineProperties(flowHost, {
   clientHeight: { value: 400, configurable: true },
   scrollHeight: { value: 900, configurable: true },
 })
 flowHost.scrollTop = 0
-const lastParagraphIndex = 2
-let lastParagraphStart = 0
-for (let index = 0; index < lastParagraphIndex; index++) {
-  lastParagraphStart += flowEditor.window.__noteEditor.state.doc.child(index).nodeSize
-}
-const lastParagraph = flowEditor.window.__noteEditor.state.doc.child(lastParagraphIndex)
-flowEditor.window.__noteEditor.view.posAtCoords = () => ({
-  pos: lastParagraphStart + lastParagraph.nodeSize - 1,
-  inside: lastParagraphStart,
-})
 dispatchPointer(flowEditor.window, flowImage, 'pointerdown', { clientX: 100, clientY: 60 })
 check('seleccionar una imagen superior no manda la nota al final', flowHost.scrollTop === 0, String(flowHost.scrollTop))
-dispatchPointer(flowEditor.window, flowImage, 'pointermove', { clientX: 100, clientY: 200 })
-dispatchPointer(flowEditor.window, flowImage, 'pointerup', { clientX: 100, clientY: 200 })
+dispatchPointer(flowEditor.window, flowImage, 'pointermove', { clientX: 100, clientY: 205 })
+const dropIndicator = flowEditor.document.querySelector('.image-drop-indicator')
+check(
+  'el arrastre normal marca dónde se insertará la imagen',
+  dropIndicator.classList.contains('is-visible') && dropIndicator.textContent === 'Colocar debajo de versículo',
+  dropIndicator.textContent,
+)
+check('el indicador apunta al hueco posterior al último bloque', dropIndicator.dataset.insertionIndex === '3')
+dispatchPointer(flowEditor.window, flowImage, 'pointerup', { clientX: 100, clientY: 205 })
 check(
   'una imagen normal se puede arrastrar para reordenarla',
   flowEditor.window.__noteEditor.state.doc.child(2).type.name === 'imageBlock',
   flowEditor.window.__noteEditor.state.doc.toString(),
 )
+check('al soltar desaparece el indicador de inserción', !dropIndicator.classList.contains('is-visible'))
 
 console.log('\n  La vista de solo lectura\n')
 

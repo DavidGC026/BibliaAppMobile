@@ -87,7 +87,14 @@ type ImageDrag = {
   top: number
   background: boolean
   moved: boolean
+  insertionIndex: number | null
   scrollFrame: number | null
+}
+
+type ImageDropTarget = {
+  insertionIndex: number
+  boundaryY: number
+  label: string
 }
 
 function selectImageElement(editor: Editor, element: HTMLElement): { pos: number; attrs: Record<string, any> } | null {
@@ -104,15 +111,57 @@ function selectImageElement(editor: Editor, element: HTMLElement): { pos: number
   }
 }
 
-function topLevelInsertionIndex(editor: Editor, pos: number): number {
-  const { doc } = editor.state
-  const resolved = doc.resolve(Math.max(0, Math.min(pos, doc.content.size)))
-  const index = resolved.index(0)
-  if (index >= doc.childCount) return doc.childCount
+function blockDropName(type: string): string {
+  if (type === 'verseBlock') return 'versículo'
+  if (type === 'dictBlock') return 'definición'
+  if (type === 'imageBlock') return 'imagen'
+  if (type === 'table') return 'tabla'
+  if (type === 'heading') return 'título'
+  if (type === 'bulletList' || type === 'orderedList') return 'lista'
+  if (type === 'blockquote') return 'cita'
+  return 'texto'
+}
 
-  let start = 0
-  for (let i = 0; i < index; i++) start += doc.child(i).nodeSize
-  return pos >= start + doc.child(index).nodeSize / 2 ? index + 1 : index
+/**
+ * Resuelve la caída con la geometría de los bloques, no con el caret que
+ * devuelve posAtCoords. En Android ese caret puede seguir perteneciendo a la
+ * imagen capturada aunque visualmente ya esté encima de otro bloque.
+ */
+function imageDropTarget(editor: Editor, dragged: HTMLElement, pointerY: number): ImageDropTarget | null {
+  const { doc } = editor.state
+  let pos = 0
+  let closest: (ImageDropTarget & { distance: number; centerDistance: number }) | null = null
+
+  for (let index = 0; index < doc.childCount; index++) {
+    const node = doc.child(index)
+    const nodeDom = editor.view.nodeDOM(pos)
+    pos += node.nodeSize
+    if (!(nodeDom instanceof HTMLElement) || nodeDom === dragged) continue
+    // Una imagen absoluta no representa un hueco del flujo de la nota.
+    if (node.type.name === 'imageBlock' && node.attrs.background) continue
+
+    const rect = nodeDom.getBoundingClientRect()
+    if (!Number.isFinite(rect.top) || !Number.isFinite(rect.bottom)) continue
+    const middle = rect.top + (rect.bottom - rect.top) / 2
+    const after = pointerY >= middle
+    const distance = pointerY < rect.top ? rect.top - pointerY : pointerY > rect.bottom ? pointerY - rect.bottom : 0
+    const candidate = {
+      insertionIndex: index + (after ? 1 : 0),
+      boundaryY: after ? rect.bottom : rect.top,
+      label: `Colocar ${after ? 'debajo' : 'arriba'} de ${blockDropName(node.type.name)}`,
+      distance,
+      centerDistance: Math.abs(pointerY - middle),
+    }
+    if (
+      !closest ||
+      candidate.distance < closest.distance ||
+      (candidate.distance === closest.distance && candidate.centerDistance < closest.centerDistance)
+    ) {
+      closest = candidate
+    }
+  }
+
+  return closest
 }
 
 function moveSelectedImageTo(editor: Editor, insertionIndex: number): boolean {
@@ -145,6 +194,40 @@ export function bindImageDrag(editor: Editor) {
   const dom = editor.view.dom as HTMLElement
   const scrollHost = dom.closest('#editor') as HTMLElement | null
   let drag: ImageDrag | null = null
+  const dropMarker = document.createElement('div')
+  dropMarker.className = 'image-drop-indicator'
+  dropMarker.setAttribute('aria-hidden', 'true')
+  const dropLabel = document.createElement('span')
+  dropMarker.appendChild(dropLabel)
+  document.body.appendChild(dropMarker)
+
+  const hideDropMarker = () => {
+    dropMarker.classList.remove('is-visible')
+    dropMarker.removeAttribute('data-insertion-index')
+  }
+
+  const updateDropMarker = (current: ImageDrag) => {
+    if (current.background) {
+      current.insertionIndex = null
+      hideDropMarker()
+      return
+    }
+    const target = imageDropTarget(editor, current.el, current.lastY)
+    current.insertionIndex = target?.insertionIndex ?? null
+    if (!target) {
+      hideDropMarker()
+      return
+    }
+
+    const hostRect = current.scrollHost.getBoundingClientRect()
+    const inset = 12
+    dropMarker.style.left = `${hostRect.left + inset}px`
+    dropMarker.style.width = `${Math.max(0, hostRect.width - inset * 2)}px`
+    dropMarker.style.top = `${Math.max(hostRect.top + 3, Math.min(target.boundaryY, hostRect.bottom - 3))}px`
+    dropMarker.dataset.insertionIndex = String(target.insertionIndex)
+    dropLabel.textContent = target.label
+    dropMarker.classList.add('is-visible')
+  }
 
   const placeImage = (current: ImageDrag) => {
     const dx = current.lastX - current.startX + (current.scrollHost.scrollLeft - current.startScrollLeft)
@@ -173,6 +256,7 @@ export function bindImageDrag(editor: Editor) {
     if (current.scrollHost.scrollTop !== before) {
       current.moved = true
       placeImage(current)
+      updateDropMarker(current)
       current.scrollFrame = window.requestAnimationFrame(autoScroll)
     }
   }
@@ -206,6 +290,7 @@ export function bindImageDrag(editor: Editor) {
       top: Number.isFinite(top) ? top : rect.top - hostRect.top + scrollHost.scrollTop,
       background: !!image.attrs.background,
       moved: false,
+      insertionIndex: null,
       scrollFrame: null,
     }
     target.classList.add('is-dragging')
@@ -226,19 +311,21 @@ export function bindImageDrag(editor: Editor) {
       return
     }
     placeImage(drag)
+    updateDropMarker(drag)
     scheduleAutoScroll(drag)
     event.preventDefault()
   })
 
   const finish = (event: PointerEvent) => {
     if (!drag || drag.pointerId !== event.pointerId) return
-    const { el, moved, scrollFrame, background, lastX, lastY } = drag
+    const { el, moved, scrollFrame, background, insertionIndex } = drag
     const backgroundLeft = el.style.left
     const backgroundTop = el.style.top
     drag = null
     if (scrollFrame !== null) window.cancelAnimationFrame(scrollFrame)
     el.classList.remove('is-dragging')
     document.body.classList.remove('image-dragging')
+    hideDropMarker()
     if (!background) el.style.transform = ''
     try {
       el.releasePointerCapture?.(event.pointerId)
@@ -261,12 +348,7 @@ export function bindImageDrag(editor: Editor) {
       return
     }
 
-    // El bloque arrastrado no debe tapar el punto de caída al consultarlo.
-    const previousPointerEvents = el.style.pointerEvents
-    el.style.pointerEvents = 'none'
-    const hit = editor.view.posAtCoords({ left: lastX, top: lastY })
-    el.style.pointerEvents = previousPointerEvents
-    if (hit) moveSelectedImageTo(editor, topLevelInsertionIndex(editor, hit.pos))
+    if (insertionIndex !== null) moveSelectedImageTo(editor, insertionIndex)
   }
 
   dom.addEventListener('pointerup', finish)
