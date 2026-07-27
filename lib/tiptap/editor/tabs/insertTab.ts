@@ -1,5 +1,6 @@
 import type { RibbonTab } from '../ribbonTypes'
 import { openTablePicker } from '../tablePicker'
+import { isBackgroundMode, toggleBackgroundMode } from '../backgroundMode'
 
 /**
  * Pestaña Insertar: solo mete contenido nuevo.
@@ -27,6 +28,20 @@ export const insertTab: RibbonTab = {
           hint: 'Insertar una entrada Strong',
           wide: true,
           run: ({ post }) => post({ type: 'openDictionaryModal' }),
+        },
+      ],
+    },
+    {
+      label: 'Fondos',
+      items: [
+        {
+          // Una imagen de fondo esta detras del texto y no capta toques: este
+          // modo las eleva un momento para poder seleccionarlas y moverlas.
+          label: 'Modo fondos',
+          hint: 'Poder seleccionar las imágenes que están detrás del texto',
+          wide: true,
+          active: () => isBackgroundMode(),
+          run: () => toggleBackgroundMode(),
         },
       ],
     },

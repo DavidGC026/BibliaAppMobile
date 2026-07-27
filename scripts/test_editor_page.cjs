@@ -228,6 +228,17 @@ const verseButton = Array.from(bridge.document.querySelectorAll('.ribbon-btn')).
   (button) => button.textContent === 'Versículo',
 )
 verseButton.dispatchEvent(new bridge.window.Event('click'))
+const backgroundButton = Array.from(bridge.document.querySelectorAll('.ribbon-btn')).find(
+  (button) => button.textContent === 'Modo fondos',
+)
+backgroundButton.dispatchEvent(new bridge.window.Event('click'))
+check(
+  'el modo fondos eleva las imágenes de detrás del texto',
+  bridge.document.body.classList.contains('image-selection-mode'),
+)
+backgroundButton.dispatchEvent(new bridge.window.Event('click'))
+check('y se puede volver a apagar', !bridge.document.body.classList.contains('image-selection-mode'))
+
 check(
   'Insertar → Versículo se lo pide a React Native',
   opened.some((message) => message.type === 'openVerseModal'),
