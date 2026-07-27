@@ -28,7 +28,7 @@ import {
 import { NoteEditorTour } from '@/components/notes/NoteEditorTour';
 import { useNetwork } from '@/context/NetworkContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { useKeyboardMetrics } from '@/hooks/useKeyboardHeight';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
@@ -88,13 +88,15 @@ export default function NoteEditorScreen() {
   // Tutorial de primera vez: se ofrece solo, y luego queda en el menú.
   const [tourOpen, setTourOpen] = useState(false);
 
-  // Edge-to-edge (Expo SDK 56): empujar el editor sobre el teclado manualmente.
-  const keyboard = useKeyboardMetrics();
-  const keyboardHeight = keyboard.height;
+  // Edge-to-edge (Expo SDK 56): la ventana no encoge con el teclado, así que
+  // esta pantalla lo aparta a mano. El alto sale del inset IME del sistema, no
+  // de los eventos de teclado de React Native: ver `useKeyboardInset`.
+  const keyboardHeight = useKeyboardInset();
 
   const insets = useSafeAreaInsets();
 
   const webViewRef = useRef<WebView>(null);
+  const screenRef = useRef<View>(null);
   const contentAreaRef = useRef<View>(null);
   const initialContentRef = useRef<string>('');
   const initialTitleRef = useRef('');
@@ -117,26 +119,31 @@ export default function NoteEditorScreen() {
   };
 
   /**
-   * Mide cuánto del WebView tapa de verdad el teclado y se lo dice a la página.
+   * Comprueba que el relleno de abajo llegó de verdad a la maqueta, y le pasa a
+   * la página lo que falte.
    *
-   * El relleno de abajo de esta pantalla ya aparta el WebView, pero esa cuenta
-   * se queda corta de vez en cuando: con edge-to-edge el alto que anuncia el
-   * teclado no siempre incluye la barra de navegación, y entre que llega el
-   * aviso y se maqueta puede haber unos puntos de diferencia. El resultado era
-   * la cinta a medio tapar. En vez de afinar la cuenta se mide el resultado:
-   * dónde acaba el WebView frente al borde superior del teclado. Lo que sobre
-   * lo descuenta la propia página, así que el error se corrige solo.
+   * No vuelve a estimar dónde está el teclado —de eso ya se encarga el inset
+   * IME—, sino que mide el resultado: la distancia entre el fondo del WebView y
+   * el fondo de la pantalla es el relleno tal y como quedó. Si es menor que el
+   * teclado, esa diferencia es lo que sigue tapado, y la propia página lo
+   * descuenta con `--kb-cover`.
+   *
+   * Normalmente da cero. Sirve para el hueco entre que cambia el estado y se
+   * maqueta, y para cualquier caso en que algo de por medio se coma el relleno.
    */
   const reportKeyboardOverlap = useCallback(() => {
     const area = contentAreaRef.current;
-    if (!area) return;
-    area.measureInWindow((_x, y, _width, height) => {
-      const covered =
-        keyboard.topY === null ? 0 : Math.max(0, Math.round(y + height - keyboard.topY));
-      sendToEditor({ type: 'setKeyboardInset', value: keyboard.height, covered });
+    const screen = screenRef.current;
+    if (!area || !screen) return;
+    screen.measureInWindow((_sx, screenY, _sw, screenHeight) => {
+      area.measureInWindow((_x, y, _width, height) => {
+        const appliedPadding = screenY + screenHeight - (y + height);
+        const covered = Math.max(0, Math.round(keyboardHeight - appliedPadding));
+        sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight, covered });
+      });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyboard.height, keyboard.topY]);
+  }, [keyboardHeight]);
 
   // Scroll caret when keyboard opens; blur editor on Android when it closes (back button).
   useEffect(() => {
@@ -612,12 +619,14 @@ export default function NoteEditorScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       <View
+        ref={screenRef}
         style={{
           flex: 1,
           backgroundColor: colors.background,
           paddingTop: insets.top,
           paddingBottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom,
         }}
+        onLayout={reportKeyboardOverlap}
       >
         <NoteEditorHeader
           title={title}

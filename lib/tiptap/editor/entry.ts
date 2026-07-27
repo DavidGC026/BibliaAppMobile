@@ -107,6 +107,31 @@ export function startNoteEditor() {
   bindBackgroundImageDrag(editor)
   window.__noteEditor = editor
 
+  /**
+   * Fija el alto de la página al alto que de verdad se ve.
+   *
+   * `height: 100%` mide contra el viewport de maqueta, y al abrirse el teclado
+   * Chromium encoge solo el viewport visual: la maqueta se queda con el alto de
+   * antes y lo que va pegado al fondo —la cinta— acaba debajo del teclado.
+   * `visualViewport` es lo único que sabe cuánto se ve de verdad.
+   *
+   * Si el motor sí redimensiona la maqueta, los dos altos coinciden y esto no
+   * cambia nada.
+   */
+  const applyViewportHeight = () => {
+    const viewport = window.visualViewport
+    const height = Math.round(viewport ? viewport.height : window.innerHeight)
+    if (height > 0) {
+      document.documentElement.style.setProperty('--app-height', `${height}px`)
+    }
+  }
+  applyViewportHeight()
+  window.addEventListener('resize', applyViewportHeight)
+  window.visualViewport?.addEventListener('resize', applyViewportHeight)
+  // Al desplazarse el viewport visual cambia lo que se ve sin cambiar de alto,
+  // pero en Android llega antes que el «resize» y adelanta la corrección.
+  window.visualViewport?.addEventListener('scroll', applyViewportHeight)
+
   // El documento se desplaza dentro de su caja, no la página: el teclado ya
   // encoge el WebView desde React Native.
   const keepCaretVisible = () => {

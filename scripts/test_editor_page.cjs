@@ -218,6 +218,20 @@ check(
   bridge.document.getElementById('editor').style.fontFamily.includes('serif'),
 )
 
+check(
+  'la página se ajusta al alto que de verdad se ve',
+  bridge.document.documentElement.style.getPropertyValue('--app-height') ===
+    `${Math.round(bridge.window.innerHeight)}px`,
+  bridge.document.documentElement.style.getPropertyValue('--app-height'),
+)
+bridge.window.innerHeight = 420
+bridge.window.dispatchEvent(new bridge.window.Event('resize'))
+check(
+  'y vuelve a medirse cuando el viewport cambia',
+  bridge.document.documentElement.style.getPropertyValue('--app-height') === '420px',
+  bridge.document.documentElement.style.getPropertyValue('--app-height'),
+)
+
 send(bridge.window, { type: 'setKeyboardInset', value: 320, covered: 28 })
 check(
   'el teclado que tapa parte del WebView encoge la página',
