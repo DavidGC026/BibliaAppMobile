@@ -13,18 +13,23 @@ export interface NoteBlockThemeColors {
 /**
  * Bloques de contenido de las notas: versículo, diccionario y tabla.
  *
+ * Regla de oro (igual que en desktop): **el documento solo contiene el
+ * contenido final de la nota**. Ningún bloque lleva barra de botones ni
+ * etiqueta incrustada; lo único que se ve al seleccionarlo es un contorno fino.
+ * Las acciones viven fuera del documento, en la pestaña contextual de la barra
+ * de herramientas, que este módulo alimenta al cambiar la selección.
+ *
  * Estructura de un bloque:
  *
  *   <div class="biblia-content-block biblia-verse-block">
- *     <div class="biblia-block-handle" contenteditable="false"> ↑ ↓ Copiar … </div>
  *     <blockquote class="biblia-verse-quote" contenteditable="false"> … </blockquote>
  *   </div>
  *
  * El envoltorio sí es editable (las celdas de tabla necesitan caret), así que
  * el WebView puede borrarlo "a trozos": un Backspace o Delete pegado al bloque
- * se lleva la barra de botones o el nodo principal y deja un bloque inservible.
- * Este módulo concentra esa responsabilidad: reconocer bloques, mantener su
- * estructura válida (`normalizeContentBlocks`) y gestionar su selección.
+ * se lleva el nodo principal y deja un envoltorio inservible. Este módulo
+ * concentra esa responsabilidad: reconocer bloques, mantener su estructura
+ * válida (`normalizeContentBlocks`) y gestionar su selección.
  *
  * Los tipos de bloque son descriptores: añadir uno nuevo no obliga a tocar la
  * lógica de integridad ni la de selección. El descriptor de tabla lo aporta
@@ -33,12 +38,15 @@ export interface NoteBlockThemeColors {
 export function getNoteBlockCss(colors: NoteBlockThemeColors, isReadOnly: boolean): string {
   if (isReadOnly) {
     return `
-    .biblia-content-block .biblia-block-handle { display: none !important; }
+    .biblia-block-handle,
+    [data-block-action] { display: none !important; }
     .biblia-content-block { border: none; background: transparent; margin: 12px 0; }
     `
   }
 
   return `
+    /* El borde va reservado transparente desde el principio: activar la
+       selección no desplaza el contenido ni le añade altura. */
     .biblia-content-block {
       margin: 0;
       border: 2px solid transparent;
@@ -50,67 +58,13 @@ export function getNoteBlockCss(colors: NoteBlockThemeColors, isReadOnly: boolea
       border-color: ${colors.primary};
       box-shadow: 0 0 0 3px ${colors.primarySoft};
     }
-    .biblia-block-handle {
-      display: none;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 6px;
-      padding: 6px 8px;
-      margin: -2px -2px 0;
-      background: ${colors.background};
-      border-bottom: 1px solid ${colors.border};
-      border-radius: 10px 10px 0 0;
-      user-select: none;
-      -webkit-user-select: none;
-    }
-    .biblia-content-block.is-selected .biblia-block-handle {
-      display: flex;
-    }
-    .biblia-block-handle-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    /* Acciones propias del tipo de bloque (p. ej. filas y columnas de tabla):
-       en su propia fila para no apretar las genéricas en pantallas de móvil. */
-    .biblia-block-actions-extra {
-      justify-content: flex-start;
-      border-top: 1px solid ${colors.border};
-      padding-top: 6px;
-    }
-    .biblia-block-actions-extra .biblia-block-btn {
-      background: ${colors.primarySoft};
-      color: ${colors.primary};
-    }
-    .biblia-block-label {
-      font-size: 11px;
-      font-weight: 800;
-      color: ${colors.textMuted};
-      flex: 1;
-      min-width: 0;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .biblia-block-actions {
-      display: flex;
-      gap: 4px;
-      flex-shrink: 0;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-    .biblia-block-btn {
-      border: none;
-      background: ${colors.accent};
-      color: ${colors.text};
-      font-size: 10px;
-      font-weight: 700;
-      padding: 5px 7px;
-      border-radius: 6px;
-      white-space: nowrap;
-    }
-    .biblia-block-btn[data-block-action="delete"] {
-      color: #dc2626;
+    /* Cinturón de seguridad: la web sigue guardando la barra de botones dentro
+       del contenido, así que una nota abierta desde ahí puede traerla. Se
+       descarta al cargar (stripBlockHandles), y aunque no se hubiera
+       descartado todavía, no se ve. */
+    .biblia-block-handle,
+    [data-block-action] {
+      display: none !important;
     }
     .biblia-verse-block blockquote.biblia-verse-quote,
     .biblia-dict-block aside.biblia-dict-entry {
@@ -124,33 +78,8 @@ export function getNoteBlockCss(colors: NoteBlockThemeColors, isReadOnly: boolea
 
 export function getNoteBlockScript(isReadOnly: boolean): string {
   return `
-      /* ── Constructores de bloque ───────────────────── */
-      function blockActionButtonHtml(action, label) {
-        return '<button type="button" class="biblia-block-btn" data-block-action="' + action +
-          '" contenteditable="false">' + label + '</button>';
-      }
-
-      /* La barra tiene dos filas: las acciones comunes a todo bloque y, si el
-         tipo aporta las suyas (type.actions), una segunda con ellas. Añadir
-         acciones a un tipo no obliga a tocar esta función. */
-      function buildBlockHandleHtml(icon, label, extraActions) {
-        var common = GENERIC_BLOCK_ACTIONS.map(function(a) {
-          return blockActionButtonHtml(a.action, a.label);
-        }).join('');
-        var extra = '';
-        if (extraActions && extraActions.length) {
-          extra = '<div class="biblia-block-actions biblia-block-actions-extra">' +
-            extraActions.map(function(a) {
-              return blockActionButtonHtml(a.action, a.label);
-            }).join('') + '</div>';
-        }
-        return '<div class="biblia-block-handle" contenteditable="false">' +
-          '<div class="biblia-block-handle-row">' +
-          '<span class="biblia-block-label">' + icon + ' ' + label + '</span>' +
-          '<div class="biblia-block-actions">' + common + '</div>' +
-          '</div>' + extra + '</div>';
-      }
-
+      /* Acciones comunes a todo bloque. No se dibujan dentro del documento:
+         las consume la pestaña contextual de la barra de herramientas. */
       var GENERIC_BLOCK_ACTIONS = [
         { action: 'up', label: '↑' },
         { action: 'down', label: '↓' },
@@ -159,10 +88,17 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         { action: 'delete', label: 'Eliminar' }
       ];
 
-      function expectedBlockActionCount(type) {
-        return GENERIC_BLOCK_ACTIONS.length + (type && type.actions ? type.actions.length : 0);
+      /* Quita la interfaz que versiones anteriores (y la web) guardaban dentro
+         del contenido. Devuelve true si tocó algo, para que el host se entere
+         de que la nota quedó más limpia. */
+      function stripBlockHandles(root) {
+        var junk = root.querySelectorAll('.biblia-block-handle, [data-block-action]');
+        if (!junk.length) return false;
+        for (var i = 0; i < junk.length; i++) junk[i].remove();
+        return true;
       }
 
+      /* ── Constructores de bloque ───────────────────── */
       function verseLabelFromBlockquote(bq) {
         if (!bq) return 'Versículo';
         var strong = bq.querySelector('strong');
@@ -184,7 +120,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         tmp.innerHTML = '<blockquote class="biblia-verse-quote" contenteditable="false">' + innerHtml + '</blockquote>';
         var bq = tmp.querySelector('blockquote');
         return '<div class="biblia-content-block biblia-verse-block">' +
-          buildBlockHandleHtml('📖', verseLabelFromBlockquote(bq), null) +
           bq.outerHTML + '</div><p><br></p>';
       }
 
@@ -197,7 +132,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
           aside.setAttribute('contenteditable', 'false');
         }
         return '<div class="biblia-content-block biblia-dict-block">' +
-          buildBlockHandleHtml('📚', dictLabelFromAside(aside), null) +
           (aside ? aside.outerHTML : asideHtml) + '</div><p><br></p>';
       }
 
@@ -284,15 +218,48 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
       // tipo actue donde esta el dedo (insertar la fila junto a esa celda).
       var lastBlockTapTarget = null;
 
+      /* La pestaña contextual la dibuja la barra de herramientas: aquí solo se
+         describe qué hay seleccionado. El documento no conoce la barra y la
+         barra no conoce el DOM del documento; se comunican por este contrato. */
+      function contentBlockSelectionInfo(block) {
+        var main = blockMainNode(block);
+        var type = main ? (contentBlockTypeFor(block) || contentBlockTypeForMain(main)) : null;
+        if (!type) return null;
+        return {
+          icon: type.icon,
+          label: type.label(main),
+          actions: GENERIC_BLOCK_ACTIONS.concat(type.actions || [])
+        };
+      }
+
+      function notifyContentBlockSelection() {
+        if (typeof onContentBlockSelection !== 'function') return;
+        onContentBlockSelection(
+          selectedContentBlock ? contentBlockSelectionInfo(selectedContentBlock) : null
+        );
+      }
+
       function clearContentBlockSelection() {
-        if (selectedContentBlock) selectedContentBlock.classList.remove('is-selected');
+        if (!selectedContentBlock) return;
+        selectedContentBlock.classList.remove('is-selected');
         selectedContentBlock = null;
+        notifyContentBlockSelection();
       }
 
       function selectContentBlock(block) {
-        clearContentBlockSelection();
+        if (selectedContentBlock && selectedContentBlock !== block) {
+          selectedContentBlock.classList.remove('is-selected');
+        }
         selectedContentBlock = block;
         block.classList.add('is-selected');
+        notifyContentBlockSelection();
+      }
+
+      /* Puente para la pestaña contextual: actúa sobre lo seleccionado. */
+      function runSelectedContentBlockAction(action) {
+        if (!selectedContentBlock) return;
+        if (action === 'deselect') return clearContentBlockSelection();
+        handleContentBlockAction(selectedContentBlock, action);
       }
 
       /* ── Utilidades de recorrido ───────────────────── */
@@ -331,23 +298,9 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
 
       /* ── Integridad de los bloques ─────────────────────────────
          El editor del WebView borra a trozos: un Backspace o Delete junto a un
-         bloque puede llevarse la barra de botones (y entonces no hay forma de
-         moverlo ni eliminarlo, porque solo aparece al seleccionarlo) o el nodo
-         principal (y queda un envoltorio invisible que atrapa el caret). Ese
-         HTML roto se guardaba en la nota, así que el bloque quedaba inservible
-         para siempre. Aquí se rehace lo que falte. */
-      function isCurrentBlockHandle(handle, type) {
-        if (!handle.querySelector('.biblia-block-handle-row')) return false;
-        return handle.querySelectorAll('[data-block-action]').length >= expectedBlockActionCount(type);
-      }
-
-      function contentBlockHandles(block) {
-        var out = [];
-        for (var i = 0; i < block.children.length; i++) {
-          if (block.children[i].classList.contains('biblia-block-handle')) out.push(block.children[i]);
-        }
-        return out;
-      }
+         bloque puede llevarse el nodo principal y dejar un envoltorio invisible
+         que atrapa el caret. Ese HTML roto se guardaba en la nota, así que el
+         bloque quedaba inservible para siempre. Aquí se repara. */
 
       // Texto que el WebView metió dentro del envoltorio al fusionar párrafos:
       // se saca detrás del bloque para no perderlo ni dejarlo inaccesible.
@@ -356,7 +309,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         for (var i = 0; i < block.childNodes.length; i++) {
           var node = block.childNodes[i];
           if (node === main) continue;
-          if (node.nodeType === 1 && node.classList.contains('biblia-block-handle')) continue;
           if (isBlankTextNode(node)) continue;
           strays.push(node);
         }
@@ -394,28 +346,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         }
         if (type.prepare) type.prepare(main);
 
-        var handles = contentBlockHandles(block);
-        for (var i = 1; i < handles.length; i++) {
-          handles[i].remove();
-          changed = true;
-        }
-        var handle = handles[0] || null;
-        // Barra incompleta (borrado a trozos) o de una version anterior del
-        // editor: se rehace, y asi las notas antiguas estrenan las acciones
-        // nuevas del tipo sin migracion.
-        if (handle && !isCurrentBlockHandle(handle, type)) {
-          handle.remove();
-          handle = null;
-          changed = true;
-        }
-        if (!handle) {
-          block.insertAdjacentHTML('afterbegin', buildBlockHandleHtml(type.icon, type.label(main), type.actions));
-          changed = true;
-        } else if (block.firstElementChild !== handle) {
-          block.insertBefore(handle, block.firstChild);
-          changed = true;
-        }
-
         return moveStrayNodesOutOfBlock(block, main) || changed;
       }
 
@@ -429,7 +359,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
             var block = document.createElement('div');
             block.className = 'biblia-content-block ' + type.blockClass;
             if (type.prepare) type.prepare(main);
-            block.innerHTML = buildBlockHandleHtml(type.icon, type.label(main), type.actions);
             main.parentNode.insertBefore(block, main);
             block.appendChild(main);
             changed = true;
@@ -459,7 +388,10 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
 
       // Punto único de reparación. Devuelve true si tocó el DOM.
       function normalizeContentBlocks() {
-        var changed = wrapLooseContentBlocks();
+        // Lo primero: fuera la interfaz que traiga el HTML guardado. Un
+        // envoltorio que se quede vacío lo recoge después repairContentBlock.
+        var changed = stripBlockHandles(editor);
+        if (wrapLooseContentBlocks()) changed = true;
         var blocks = editor.querySelectorAll('.biblia-content-block');
         for (var i = 0; i < blocks.length; i++) {
           if (repairContentBlock(blocks[i])) changed = true;
@@ -567,15 +499,12 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         scrollCaretIntoView();
       }
 
-      // La etiqueta describe el contenido ("Tabla 3×4", la referencia del
-      // versiculo), asi que hay que rehacerla cuando el bloque cambia.
+      // El titulo de la pestana contextual describe el contenido ("Tabla 3×4",
+      // la referencia del versiculo), asi que hay que rehacerlo cuando el
+      // bloque cambia.
       function refreshContentBlockLabel(block) {
-        if (!block || !block.parentNode) return;
-        var main = blockMainNode(block);
-        var type = main ? (contentBlockTypeFor(block) || contentBlockTypeForMain(main)) : null;
-        var label = block.querySelector('.biblia-block-label');
-        if (!type || !label) return;
-        label.textContent = type.icon + ' ' + type.label(main);
+        if (!block || block !== selectedContentBlock) return;
+        notifyContentBlockSelection();
       }
 
       function handleContentBlockAction(block, action) {
@@ -612,8 +541,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         if (!target || !target.closest) return false;
         var block = target.closest('.biblia-content-block');
         if (!block) return false;
-        // La barra gestiona sus propios botones.
-        if (target.closest('.biblia-block-handle')) return false;
         lastBlockTapTarget = target;
 
         // En una tabla, el segundo toque sobre la celda suelta la selección
@@ -743,16 +670,6 @@ export function getNoteBlockScript(isReadOnly: boolean): string {
         editor._bibliaContentBlocksInit = true;
 
         editor.addEventListener('click', function(e) {
-          var actionBtn = e.target.closest('[data-block-action]');
-          if (actionBtn) {
-            e.preventDefault();
-            e.stopPropagation();
-            handleContentBlockAction(
-              actionBtn.closest('.biblia-content-block'),
-              actionBtn.getAttribute('data-block-action')
-            );
-            return;
-          }
           if (trySelectContentBlockFromTarget(e.target)) {
             e.preventDefault();
             return;

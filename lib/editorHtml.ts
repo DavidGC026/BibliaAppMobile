@@ -659,6 +659,73 @@ export function getEditorHtml(
       background: rgba(124, 58, 237, 0.1);
       color: #6D28D9;
     }
+
+    /* ── Pestaña contextual del bloque seleccionado ────
+       Equivale a la pestaña contextual de la cinta en Word y en desktop:
+       aparece sola al seleccionar un versículo, una definición o una tabla, y
+       desaparece al deseleccionar. El documento no lleva ningún control. */
+    .ctx-row {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x;
+      overscroll-behavior-x: contain;
+      scrollbar-width: none;
+      padding: 7px 10px;
+      background: ${colors.primarySoft};
+      border-bottom: 1px solid ${colors.primaryBorder};
+    }
+    .ctx-row::-webkit-scrollbar { display: none; }
+    .ctx-row.is-open { display: flex; }
+    .ctx-title {
+      flex-shrink: 0;
+      max-width: 42%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 11px;
+      font-weight: 800;
+      color: ${colors.primary};
+      font-family: system-ui, sans-serif;
+      padding-right: 4px;
+    }
+    .ctx-actions {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .ctx-btn {
+      flex-shrink: 0;
+      height: 30px;
+      padding: 0 10px;
+      border: 1px solid ${colors.primaryBorder};
+      border-radius: 8px;
+      background: ${colors.card};
+      color: ${colors.text};
+      font-size: 12px;
+      font-weight: 700;
+      font-family: system-ui, sans-serif;
+      white-space: nowrap;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: transform 0.1s, opacity 0.15s;
+    }
+    .ctx-btn:active { transform: scale(0.94); opacity: 0.75; }
+    /* Acciones propias del tipo (filas y columnas de una tabla). */
+    .ctx-btn-extra {
+      background: ${colors.primarySoft};
+      color: ${colors.primary};
+    }
+    .ctx-btn-danger { color: #dc2626; }
+    .ctx-btn-close {
+      min-width: 30px;
+      padding: 0 8px;
+      color: ${colors.textMuted};
+    }
   </style>
 </head>
 <body>
@@ -666,6 +733,12 @@ export function getEditorHtml(
     <div id="editor" contenteditable="${!isReadOnly}">${initialContent || ''}</div>
 
     <div class="toolbar-area" id="toolbar">
+      <!-- Row 0: contextual tab — only while a block is selected -->
+      <div class="ctx-row" id="ctx-row">
+        <span class="ctx-title" id="ctx-title"></span>
+        <div class="ctx-actions" id="ctx-actions"></div>
+      </div>
+
       <!-- Row 1: Formatting -->
       <div class="toolbar-row" id="fmt-row">
         <button class="tb" data-action="undo" style="font-size: 18px;" aria-label="Deshacer">↶</button>
@@ -1632,6 +1705,47 @@ export function getEditorHtml(
         });
       }
 
+      /* ── Pestaña contextual del bloque seleccionado ──
+         La llama el módulo de bloques cada vez que cambia la selección. El
+         documento solo muestra el contenido final de la nota: mover, copiar,
+         cortar, eliminar y las acciones de tabla viven aquí, fuera de él.
+         Los botones usan bindToolbarButton, que hace preventDefault, así que
+         pulsarlos no roba el foco ni suelta la selección. */
+      function onContentBlockSelection(info) {
+        var row = document.getElementById('ctx-row');
+        if (!row) return;
+        var actions = document.getElementById('ctx-actions');
+        actions.innerHTML = '';
+        if (!info) {
+          row.classList.remove('is-open');
+          return;
+        }
+        document.getElementById('ctx-title').textContent = info.icon + ' ' + info.label;
+        info.actions.forEach(function(entry) {
+          actions.appendChild(contextTabButton(entry.action, entry.label));
+        });
+        actions.appendChild(contextTabButton('deselect', '✕'));
+        row.classList.add('is-open');
+        row.scrollLeft = 0;
+      }
+
+      function contextTabButton(action, label) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ctx-btn';
+        if (action === 'delete') btn.className += ' ctx-btn-danger';
+        if (action.indexOf('table-') === 0) btn.className += ' ctx-btn-extra';
+        if (action === 'deselect') {
+          btn.className += ' ctx-btn-close';
+          btn.setAttribute('aria-label', 'Quitar selección');
+        }
+        btn.textContent = label;
+        bindToolbarButton(btn, function() {
+          runSelectedContentBlockAction(action);
+        });
+        return btn;
+      }
+
       function enableHorizontalScroll(row) {
         var startX = 0;
         var startScroll = 0;
@@ -2078,7 +2192,7 @@ export function getEditorHtml(
           });
         });
 
-        document.querySelectorAll('.toolbar-row, .colors-row').forEach(enableHorizontalScroll);
+        document.querySelectorAll('.toolbar-row, .colors-row, .ctx-row').forEach(enableHorizontalScroll);
 
         // Track content changes
         editor.addEventListener('input', function() {
@@ -2285,8 +2399,9 @@ export function getEditorHtml(
               notifyTimer = null;
             }
             clearImageEditingChrome();
-            // Nunca persistir un bloque a medias: si el borrado nativo dejó un
-            // versículo sin barra de botones, se repara antes de guardar.
+            // Nunca persistir un bloque a medias ni interfaz dentro de la
+            // nota: normalizeContentBlocks repara el bloque roto por el borrado
+            // nativo y descarta las barras que hubiera guardado la web.
             if (typeof normalizeContentBlocks === 'function') normalizeContentBlocks();
             window.ReactNativeWebView.postMessage(JSON.stringify({
               type: 'getHtmlResponse',

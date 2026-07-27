@@ -323,14 +323,10 @@ export function getNoteTableScript(isReadOnly: boolean): string {
         return 'Tabla ' + cols + '×' + rows;
       }
 
-      function buildTableHandleHtml(label) {
-        return buildBlockHandleHtml('⊞', label);
-      }
-
       /* ── Filas y columnas de una tabla ya insertada ──
          Se respetan los mismos límites que el selector de inserción (hasta 10
          columnas y 20 filas) y no se deja la tabla sin ninguna fila ni columna:
-         para eso está «Eliminar» en la barra del bloque. */
+         para eso está «Eliminar» en la pestaña contextual. */
       var TABLE_MAX_COLS = 10;
       var TABLE_MAX_ROWS = 20;
 
@@ -436,11 +432,7 @@ export function getNoteTableScript(isReadOnly: boolean): string {
 
       function buildTableHtml(cols, rows, withHeader) {
         var tableHtml = buildTableInnerHtml(cols, rows, withHeader);
-        var tmp = document.createElement('div');
-        tmp.innerHTML = tableHtml;
-        var table = tmp.querySelector('table');
-        var label = table ? tableBlockLabel(table) : 'Tabla';
-        return '<div class="biblia-content-block biblia-table-block">' + buildTableHandleHtml(label) + tableHtml + '</div><p><br></p>';
+        return '<div class="biblia-content-block biblia-table-block">' + tableHtml + '</div><p><br></p>';
       }
 
       ${
