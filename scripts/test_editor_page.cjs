@@ -126,6 +126,10 @@ check(
 )
 check('sin selección no hay pestaña contextual', !app.document.querySelector('.ribbon-tab.is-contextual'))
 check(
+  'las pestañas fijas tienen iconos SVG',
+  Array.from(app.document.querySelectorAll('.ribbon-tab')).every((tab) => !!tab.querySelector('svg.ribbon-icon')),
+)
+check(
   'Inicio trae los grupos de formato',
   ['Deshacer', 'Estilos', 'Fuente', 'Formato', 'Párrafo', 'Color'].every((label) =>
     groupLabels(app.document).includes(label),
@@ -133,6 +137,17 @@ check(
   groupLabels(app.document).join(','),
 )
 check('la paleta de colores usa los favoritos', app.document.querySelectorAll('.ribbon-colors .color-dot').length === 4)
+check(
+  'las acciones de formato usan iconos en vez de glifos Unicode',
+  ['Deshacer', 'Rehacer', 'Negrita', 'Cursiva', 'Subrayado', 'Tachado'].every(
+    (label) => !!app.document.querySelector(`.ribbon-btn[aria-label="${label}"] svg.ribbon-icon`),
+  ),
+)
+check(
+  'H1 y H2 tienen jerarquía tipográfica propia',
+  !!app.document.querySelector('.ribbon-btn.is-heading-1') &&
+    !!app.document.querySelector('.ribbon-btn.is-heading-2'),
+)
 
 console.log('\n  Pestañas contextuales\n')
 
@@ -145,6 +160,10 @@ check(
 check(
   'y se activa sola',
   app.document.querySelector('.ribbon-tab.is-active')?.textContent === 'Formato de versículo',
+)
+check(
+  'la pestaña contextual identifica el tipo con un icono',
+  !!app.document.querySelector('.ribbon-tab.is-contextual svg.ribbon-icon'),
 )
 check(
   'con las acciones del bloque',

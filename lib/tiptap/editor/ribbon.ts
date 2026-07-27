@@ -1,4 +1,5 @@
 import type { RibbonContext, RibbonGroup, RibbonItem, RibbonTab } from './ribbonTypes'
+import { ribbonIconSvg, type RibbonIconName } from './ribbonIcons'
 
 /**
  * Cinta de opciones estilo Word dentro del WebView.
@@ -43,7 +44,7 @@ export class Ribbon {
     this.toggle.type = 'button'
     this.toggle.className = 'ribbon-toggle'
     this.toggle.setAttribute('aria-label', 'Contraer la cinta')
-    this.toggle.textContent = '⌄'
+    this.setToggleIcon('chevronDown')
     bindRibbonButton(this.toggle, () => this.setCollapsed(!this.collapsed))
 
     this.root.appendChild(this.tabsRow)
@@ -78,7 +79,7 @@ export class Ribbon {
   private setCollapsed(collapsed: boolean) {
     this.collapsed = collapsed
     this.root.classList.toggle('is-collapsed', collapsed)
-    this.toggle.textContent = collapsed ? '⌃' : '⌄'
+    this.setToggleIcon(collapsed ? 'chevronUp' : 'chevronDown')
     this.toggle.setAttribute('aria-label', collapsed ? 'Desplegar la cinta' : 'Contraer la cinta')
     this.toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true')
   }
@@ -93,7 +94,10 @@ export class Ribbon {
       if (tab.id === this.activeTabId) button.classList.add('is-active')
       button.setAttribute('role', 'tab')
       button.setAttribute('aria-selected', tab.id === this.activeTabId ? 'true' : 'false')
-      button.textContent = tab.label
+      if (tab.icon) button.insertAdjacentHTML('beforeend', ribbonIconSvg(tab.icon))
+      const label = document.createElement('span')
+      label.textContent = tab.label
+      button.appendChild(label)
       bindRibbonButton(button, () => {
         // Pulsar una pestaña con la cinta contraída la despliega, como en Word.
         if (this.collapsed) this.setCollapsed(false)
@@ -133,17 +137,29 @@ export class Ribbon {
     button.type = 'button'
     button.className = 'ribbon-btn'
     if (spec.wide) button.classList.add('is-wide')
+    if (spec.icon) button.classList.add('has-icon')
     if (spec.danger) button.classList.add('is-danger')
+    if (spec.emphasis) button.classList.add('is-' + spec.emphasis)
     if (spec.active?.(this.ctx)) button.classList.add('is-active')
     if (spec.disabled?.(this.ctx)) button.disabled = true
     button.setAttribute('aria-label', spec.hint ?? spec.label)
-    button.textContent = spec.label
+    if (spec.icon) button.insertAdjacentHTML('beforeend', ribbonIconSvg(spec.icon))
+    if (!spec.icon || spec.wide) {
+      const label = document.createElement('span')
+      label.className = 'ribbon-btn-label'
+      label.textContent = spec.label
+      button.appendChild(label)
+    }
     bindRibbonButton(button, () => {
       if (button.disabled) return
       spec.run(this.ctx)
       this.render()
     })
     return button
+  }
+
+  private setToggleIcon(icon: RibbonIconName) {
+    this.toggle.innerHTML = ribbonIconSvg(icon)
   }
 
   private renderSelect(spec: Extract<RibbonItem, { kind: 'select' }>): HTMLElement {

@@ -32,13 +32,14 @@ export function getNoteRibbonCss(colors: AppColors): string {
       z-index: 5;
       border-top: 1px solid ${colors.border};
       background: ${colors.card};
+      box-shadow: 0 -5px 18px rgba(0, 0, 0, 0.05);
     }
 
     .ribbon-tabs {
       display: flex;
       align-items: center;
-      gap: 2px;
-      padding: 0 6px;
+      gap: 4px;
+      padding: 4px 6px 0;
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
@@ -49,6 +50,9 @@ export function getNoteRibbonCss(colors: AppColors): string {
     .ribbon-tabs::-webkit-scrollbar { display: none; }
 
     .ribbon-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       flex-shrink: 0;
       border: none;
       background: transparent;
@@ -56,7 +60,8 @@ export function getNoteRibbonCss(colors: AppColors): string {
       font-family: system-ui, sans-serif;
       font-size: 13px;
       font-weight: 700;
-      padding: 10px 12px 8px;
+      min-height: 38px;
+      padding: 7px 11px 6px;
       border-bottom: 2px solid transparent;
       white-space: nowrap;
       cursor: pointer;
@@ -67,8 +72,16 @@ export function getNoteRibbonCss(colors: AppColors): string {
       border-bottom-color: ${colors.primary};
     }
     /* Las contextuales se distinguen de un vistazo, como en Word. */
-    .ribbon-tab.is-contextual { color: ${colors.primary}; }
-    .ribbon-tab.is-contextual.is-active { background: ${colors.primarySoft}; border-radius: 8px 8px 0 0; }
+    .ribbon-tab.is-contextual {
+      margin-left: 4px;
+      border-radius: 9px 9px 0 0;
+      background: ${colors.primarySoft};
+      color: ${colors.primary};
+    }
+    .ribbon-tab.is-contextual.is-active {
+      box-shadow: inset 0 0 0 1px ${colors.primaryBorder};
+      border-bottom-color: ${colors.primary};
+    }
 
     .ribbon-toggle {
       margin-left: auto;
@@ -76,7 +89,6 @@ export function getNoteRibbonCss(colors: AppColors): string {
       border: none;
       background: transparent;
       color: ${colors.textMuted};
-      font-size: 15px;
       padding: 8px 10px;
       cursor: pointer;
     }
@@ -84,8 +96,8 @@ export function getNoteRibbonCss(colors: AppColors): string {
     .ribbon-groups {
       display: flex;
       align-items: stretch;
-      gap: 0;
-      padding: 6px 8px 4px;
+      gap: 7px;
+      padding: 7px 8px 6px;
       overflow-x: auto;
       overflow-y: hidden;
       scrollbar-width: none;
@@ -99,12 +111,14 @@ export function getNoteRibbonCss(colors: AppColors): string {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 2px;
+      gap: 3px;
       flex-shrink: 0;
-      padding: 0 8px;
-      border-right: 1px solid ${colors.border};
+      padding: 5px 6px 4px;
+      border: 1px solid ${colors.border};
+      border-radius: 12px;
+      background: ${colors.cardMuted};
     }
-    .ribbon-group:last-child { border-right: none; }
+    .ribbon-group:nth-child(even) { background: ${colors.muted}; }
     .ribbon-group-items {
       display: flex;
       align-items: center;
@@ -112,8 +126,10 @@ export function getNoteRibbonCss(colors: AppColors): string {
     }
     .ribbon-group-label {
       font-size: 9px;
-      font-weight: 600;
+      font-weight: 700;
       color: ${colors.textMuted};
+      letter-spacing: 0.025em;
+      line-height: 11px;
       white-space: nowrap;
     }
 
@@ -125,25 +141,53 @@ export function getNoteRibbonCss(colors: AppColors): string {
       height: 36px;
       padding: 0 8px;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       background: transparent;
       color: ${colors.text};
       font-family: system-ui, sans-serif;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       white-space: nowrap;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
-      transition: background 0.15s, transform 0.1s;
+      transition: background 0.15s, color 0.15s, transform 0.1s;
     }
-    .ribbon-btn.is-wide { font-size: 13px; }
+    .ribbon-btn.has-icon:not(.is-wide) { width: 38px; padding: 0; }
+    .ribbon-btn.is-wide { min-width: 44px; font-size: 12px; }
+    .ribbon-btn.is-wide.has-icon {
+      gap: 6px;
+      border: 1px solid ${colors.border};
+      background: ${colors.card};
+    }
+    .ribbon-btn.is-heading-1 {
+      font-size: 18px;
+      font-weight: 850;
+      letter-spacing: -0.04em;
+    }
+    .ribbon-btn.is-heading-2 {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+    }
     .ribbon-btn:active { transform: scale(0.92); }
     .ribbon-btn.is-active {
       background: ${colors.primarySoft};
       color: ${colors.primary};
     }
-    .ribbon-btn.is-danger { color: #dc2626; }
+    .ribbon-btn.is-danger { color: ${colors.danger}; }
+    .ribbon-btn.is-danger.is-wide.has-icon { border-color: ${colors.danger}; }
     .ribbon-btn:disabled { opacity: 0.35; }
+
+    .ribbon-icon {
+      display: block;
+      width: 19px;
+      height: 19px;
+      flex: 0 0 19px;
+      overflow: visible;
+    }
+    .ribbon-tab .ribbon-icon { width: 16px; height: 16px; flex-basis: 16px; }
+    .ribbon-toggle .ribbon-icon { width: 18px; height: 18px; }
+    .ribbon-btn-label { line-height: 1; }
 
     .ribbon-select {
       height: 34px;

@@ -19,6 +19,7 @@ import {
 export const imageTab: RibbonTab = {
   id: 'formato-imagen',
   label: 'Formato de imagen',
+  icon: 'image',
   contextual: true,
   matches: ({ editor }) => !!selectedImage(editor),
   groups: (ctx) => {
@@ -42,25 +43,29 @@ export const imageTab: RibbonTab = {
         label: 'Posición',
         items: [
           {
-            label: '⇤',
+            label: 'Alinear a la izquierda',
+            icon: 'alignLeft',
             hint: 'Alinear a la izquierda',
             active: () => align === 'left',
             run: ({ editor }) => setImageAlign(editor, 'left'),
           },
           {
-            label: '≡',
+            label: 'Centrar',
+            icon: 'alignCenter',
             hint: 'Centrar',
             active: () => align === 'center',
             run: ({ editor }) => setImageAlign(editor, 'center'),
           },
           {
-            label: '⇥',
+            label: 'Alinear a la derecha',
+            icon: 'alignRight',
             hint: 'Alinear a la derecha',
             active: () => align === 'right',
             run: ({ editor }) => setImageAlign(editor, 'right'),
           },
           {
-            label: '⇹',
+            label: 'Ancho completo',
+            icon: 'alignFull',
             hint: 'Ancho completo',
             active: () => align === 'full',
             run: ({ editor }) => setImageAlign(editor, 'full'),
@@ -72,6 +77,7 @@ export const imageTab: RibbonTab = {
         items: [
           {
             label: background ? 'Quitar fondo' : 'Detrás del texto',
+            icon: 'behindText',
             hint: background
               ? 'Devolver la imagen al flujo del texto'
               : 'Enviar la imagen detrás del texto',
@@ -84,8 +90,18 @@ export const imageTab: RibbonTab = {
       {
         label: 'Orden',
         items: [
-          { label: '↑', hint: 'Mover arriba', run: ({ editor }) => moveSelectedBlock(editor, 'up') },
-          { label: '↓', hint: 'Mover abajo', run: ({ editor }) => moveSelectedBlock(editor, 'down') },
+          {
+            label: 'Mover arriba',
+            icon: 'arrowUp',
+            hint: 'Mover arriba',
+            run: ({ editor }) => moveSelectedBlock(editor, 'up'),
+          },
+          {
+            label: 'Mover abajo',
+            icon: 'arrowDown',
+            hint: 'Mover abajo',
+            run: ({ editor }) => moveSelectedBlock(editor, 'down'),
+          },
         ],
       },
       {
@@ -93,12 +109,18 @@ export const imageTab: RibbonTab = {
         items: [
           {
             label: 'Eliminar',
+            icon: 'trash',
             hint: 'Eliminar la imagen',
             wide: true,
             danger: true,
             run: ({ editor }) => removeSelectedBlock(editor),
           },
-          { label: '✕', hint: 'Quitar la selección', run: () => ctx.clearSelection() },
+          {
+            label: 'Quitar selección',
+            icon: 'close',
+            hint: 'Quitar la selección',
+            run: () => ctx.clearSelection(),
+          },
         ],
       },
     ]

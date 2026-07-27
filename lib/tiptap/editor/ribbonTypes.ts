@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import type { RibbonIconName } from './ribbonIcons'
 
 /**
  * Contrato de la cinta de opciones.
@@ -24,14 +25,18 @@ export type RibbonContext = {
 
 export type RibbonButtonSpec = {
   kind?: 'button'
-  /** Texto del botón. Puede ser un icono de texto («↑», «B»). */
+  /** Texto visible en botones anchos y alternativa cuando no hay icono. */
   label: string
+  /** Icono SVG del registro propio del WebView. */
+  icon?: RibbonIconName
   /** Descripción para accesibilidad; si falta se usa `label`. */
   hint?: string
   /** Ocupa más ancho: para etiquetas de palabra completa. */
   wide?: boolean
   /** Rojo: acciones destructivas. */
   danger?: boolean
+  /** Jerarquía tipográfica para los estilos H1/H2. */
+  emphasis?: 'heading-1' | 'heading-2'
   /** Estilo del botón según el formato aplicado en el cursor. */
   active?: (ctx: RibbonContext) => boolean
   /** Deshabilitado cuando la acción no aplica. */
@@ -62,6 +67,8 @@ export type RibbonGroup = {
 export type RibbonTab = {
   id: string
   label: string
+  /** Identidad visual de la pestaña, especialmente útil en las contextuales. */
+  icon?: RibbonIconName
   /** Solo aparece cuando `matches` es cierto, y entonces se activa sola. */
   contextual?: boolean
   matches?: (ctx: RibbonContext) => boolean

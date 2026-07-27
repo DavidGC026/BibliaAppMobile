@@ -6,6 +6,7 @@ import { blockActionGroups } from './blockActions'
 export const verseTab: RibbonTab = {
   id: 'formato-versiculo',
   label: 'Formato de versículo',
+  icon: 'bookOpen',
   contextual: true,
   matches: ({ editor }) => hasBlockSelection(editor, 'verseBlock'),
   groups: blockActionGroups,
@@ -15,6 +16,7 @@ export const verseTab: RibbonTab = {
 export const dictTab: RibbonTab = {
   id: 'formato-definicion',
   label: 'Formato de definición',
+  icon: 'bookSearch',
   contextual: true,
   matches: ({ editor }) => hasBlockSelection(editor, 'dictBlock'),
   groups: blockActionGroups,

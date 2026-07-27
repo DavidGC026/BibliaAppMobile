@@ -14,12 +14,14 @@ export function blockActionGroups(_ctx: RibbonContext): RibbonGroup[] {
       label: 'Orden',
       items: [
         {
-          label: '↑',
+          label: 'Mover arriba',
+          icon: 'arrowUp',
           hint: 'Mover arriba',
           run: ({ editor }) => moveSelectedBlock(editor, 'up'),
         },
         {
-          label: '↓',
+          label: 'Mover abajo',
+          icon: 'arrowDown',
           hint: 'Mover abajo',
           run: ({ editor }) => moveSelectedBlock(editor, 'down'),
         },
@@ -30,11 +32,13 @@ export function blockActionGroups(_ctx: RibbonContext): RibbonGroup[] {
       items: [
         {
           label: 'Copiar',
+          icon: 'copy',
           wide: true,
           run: ({ editor }) => copySelectedBlock(editor),
         },
         {
           label: 'Cortar',
+          icon: 'scissors',
           wide: true,
           run: ({ editor }) => cutSelectedBlock(editor),
         },
@@ -45,12 +49,14 @@ export function blockActionGroups(_ctx: RibbonContext): RibbonGroup[] {
       items: [
         {
           label: 'Eliminar',
+          icon: 'trash',
           wide: true,
           danger: true,
           run: ({ editor }) => removeSelectedBlock(editor),
         },
         {
-          label: '✕',
+          label: 'Quitar selección',
+          icon: 'close',
           hint: 'Quitar la selección',
           run: (ctx) => ctx.clearSelection(),
         },
