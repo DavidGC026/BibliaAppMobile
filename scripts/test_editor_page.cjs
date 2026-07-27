@@ -234,6 +234,25 @@ check(
   JSON.stringify(opened),
 )
 
+console.log('\n  La vista de solo lectura\n')
+
+const readOnlyHtml = getEditorHtml(
+  COLORS,
+  `<p>Cuerpo</p><table class="biblia-note-table"><tbody><tr><td>a</td><td>b</td></tr></tbody></table>`,
+  'Default',
+  {},
+  true,
+)
+const readOnly = new JSDOM(readOnlyHtml, { runScripts: 'dangerously', pretendToBeVisual: true })
+check('no carga el editor', !readOnlyHtml.includes('__NOTE_BOOT__'))
+check('ni la cinta', !readOnly.window.document.querySelector('#ribbon'))
+check('muestra el contenido', /Cuerpo/.test(readOnly.window.document.getElementById('editor').textContent))
+check(
+  'la tabla se compacta y se puede abrir',
+  !!readOnly.window.document.querySelector('.biblia-table-widget .biblia-table-compact') &&
+    !!readOnly.window.document.querySelector('#biblia-table-overlay'),
+)
+
 console.log('')
 if (failed > 0) {
   console.log(`  ${failed} fallidos\n`)
