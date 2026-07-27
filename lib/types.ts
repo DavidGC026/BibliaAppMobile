@@ -78,6 +78,16 @@ export interface VerseNoteLink {
   createdAt?: string;
 }
 
+/**
+ * Una nota de versículo con lo necesario para listarla fuera del lector: el
+ * nombre del libro y, si esa Biblia está a mano, el texto del versículo.
+ */
+export interface VerseNoteEntry extends VerseNoteLink {
+  bookName: string;
+  verseText?: string;
+  updatedAt?: string;
+}
+
 export interface ReadingPlan {
   id: number;
   name: string;

@@ -20,6 +20,7 @@ import type {
   UserReadingPlan,
   Verse,
   VerseHighlight,
+  VerseNoteEntry,
   VerseNoteLink,
   VerseOfDay,
 } from './types';
@@ -214,6 +215,17 @@ export async function getChapterNotes(bookId: number, chapter: number) {
   return request<{ links: VerseNoteLink[] }>(
     `/api/links?book=${bookId}&chapter=${chapter}`,
   );
+}
+
+/**
+ * Todas las notas de versículo del usuario, para la sección «Versículos».
+ *
+ * `bibleId` solo decide con qué traducción viene el texto del versículo: la
+ * nota es del versículo, no de la versión.
+ */
+export async function getAllVerseNotes(bibleId?: number) {
+  const query = bibleId ? `?bible=${bibleId}` : '';
+  return request<{ links: VerseNoteEntry[] }>(`/api/links/all${query}`);
 }
 
 export async function saveVerseNote(

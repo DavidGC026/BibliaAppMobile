@@ -638,13 +638,35 @@ export async function repoGetChapterNotes(bookId: number, chapter: number) {
   if (getIsOnline()) {
     try {
       const res = await api.getChapterNotes(bookId, chapter);
-      await upsertVerseNotesFromServer(bookId, chapter, res.links);
+      await upsertVerseNotesFromServer(res.links);
       return res;
     } catch {
       // fall through
     }
   }
   return { links: await getLocalChapterNotes(bookId, chapter) };
+}
+
+/**
+ * Todas las notas de versículo, para la sección «Versículos».
+ *
+ * Con red se traen del servidor y se guardan, que es la única forma de ver aquí
+ * lo escrito desde la web o desde otro teléfono. Sin red, o si la petición
+ * falla, se lee lo guardado. En los dos casos se devuelve la copia local: así
+ * la lista siempre enseña lo mismo que el lector, incluidas las notas que
+ * todavía no se han podido subir.
+ */
+export async function repoGetAllVerseNotes(bibleId: number) {
+  if (getIsOnline()) {
+    try {
+      const res = await api.getAllVerseNotes(bibleId);
+      await upsertVerseNotesFromServer(res.links);
+    } catch {
+      // sin conexión útil: se lee lo que haya en el teléfono
+    }
+  }
+  const { getLocalVerseNotes } = await import('@/lib/offline/readerStore');
+  return { links: await getLocalVerseNotes(bibleId) };
 }
 
 export async function repoDeleteVerseNote(noteId: number) {

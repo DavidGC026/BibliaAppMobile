@@ -33,10 +33,16 @@ function parseReaderTarget(bookId?: string, chapter?: string) {
   return { bookId: b, chapter: c };
 }
 
+function parseVerse(verse?: string) {
+  if (!verse) return undefined;
+  const v = Number(verse);
+  return Number.isFinite(v) && v > 0 ? v : undefined;
+}
+
 export default function BibleScreen() {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ bookId?: string; chapter?: string; bibleId?: string; mode?: string; strong?: string }>();
+  const params = useLocalSearchParams<{ bookId?: string; chapter?: string; verse?: string; bibleId?: string; mode?: string; strong?: string }>();
   const [mode, setMode] = useState<BibleMode>(() => {
     const m = params.mode;
     if (m === 'search' || m === 'references' || m === 'dictionary' || m === 'plans') return m;
@@ -49,6 +55,8 @@ export default function BibleScreen() {
     const id = Number(params.bibleId);
     return Number.isFinite(id) && id > 0 ? id : undefined;
   });
+  // Versículo al que saltar: llega de la lista de versículos con notas.
+  const [readerVerse, setReaderVerse] = useState<number | undefined>(() => parseVerse(params.verse));
   const [showOfflineStrip, setShowOfflineStrip] = useState(false);
 
   useEffect(() => {
@@ -77,11 +85,12 @@ export default function BibleScreen() {
     }
     const id = Number(params.bibleId);
     if (Number.isFinite(id) && id > 0) setReaderBibleId(id);
+    setReaderVerse(parseVerse(params.verse));
     const m = params.mode;
     if (m === 'search' || m === 'references' || m === 'dictionary' || m === 'plans' || m === 'reader') {
       setMode(m);
     }
-  }, [params.bookId, params.chapter, params.bibleId, params.mode]);
+  }, [params.bookId, params.chapter, params.verse, params.bibleId, params.mode]);
 
   const openInReader = (bookId: number, chapter: number) => {
     setReaderTarget({ bookId, chapter });
@@ -117,9 +126,10 @@ export default function BibleScreen() {
 
       {mode === 'reader' ? (
         <BibleReader
-          key={readerTarget ? `${readerTarget.bookId}-${readerTarget.chapter}-${readerBibleId ?? ''}` : 'default'}
+          key={readerTarget ? `${readerTarget.bookId}-${readerTarget.chapter}-${readerVerse ?? ''}-${readerBibleId ?? ''}` : 'default'}
           initialBookId={readerTarget?.bookId}
           initialChapter={readerTarget?.chapter}
+          initialVerse={readerVerse}
           initialBibleId={readerBibleId}
         />
       ) : mode === 'search' ? (

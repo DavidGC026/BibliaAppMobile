@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { DevotionalsPanel } from '@/components/notes/DevotionalsPanel';
 import { NotebooksPanel } from '@/components/notes/NotebooksPanel';
 import { StudyBooksPanel } from '@/components/notes/StudyBooksPanel';
+import { VerseNotesPanel } from '@/components/notes/VerseNotesPanel';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { ReadingPlansPanel } from '@/components/ReadingPlansPanel';
 import { SyncStatusBadge } from '@/components/SyncStatusBadge';
@@ -13,10 +14,11 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
-type NotesSection = 'libretas' | 'diario' | 'libros' | 'planes';
+type NotesSection = 'libretas' | 'versiculos' | 'diario' | 'libros' | 'planes';
 
 const TABS: { key: NotesSection; label: string }[] = [
   { key: 'libretas', label: 'Notas' },
+  { key: 'versiculos', label: 'Versículos' },
   { key: 'diario', label: 'Diario' },
   { key: 'libros', label: 'Biblioteca' },
   { key: 'planes', label: 'Planes' },
@@ -55,7 +57,7 @@ export default function NotesScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>
             <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-              Apuntes, diario, biblioteca y planes de lectura.
+              Apuntes, versículos, diario, biblioteca y planes.
             </Text>
           </View>
           <View style={styles.syncWrap}>
@@ -65,6 +67,7 @@ export default function NotesScreen() {
       </View>
       <SegmentTabs tabs={TABS} active={section} onChange={setSection} />
       {section === 'libretas' ? <NotebooksPanel /> : null}
+      {section === 'versiculos' ? <VerseNotesPanel /> : null}
       {section === 'diario' ? <DevotionalsPanel /> : null}
       {section === 'libros' ? <StudyBooksPanel /> : null}
       {section === 'planes' ? <ReadingPlansPanel /> : null}
