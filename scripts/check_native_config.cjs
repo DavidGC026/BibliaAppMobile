@@ -108,6 +108,29 @@ if (fs.existsSync(WRAPPER)) {
   }
 }
 
+// — SDK de Android: gradle ni evalúa el proyecto sin él —
+
+// Está en /etc/profile.d/android-sdk.sh, que solo se lee en sesiones de
+// inicio: una consola cualquiera o una tarea en segundo plano se quedan sin
+// ANDROID_HOME y el build cae al configurar, no al compilar.
+const LOCAL_PROPS = path.join(ROOT, 'android/local.properties')
+let sdkDir = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT || null
+let sdkFrom = sdkDir ? 'ANDROID_HOME' : null
+if (fs.existsSync(LOCAL_PROPS)) {
+  const m = fs.readFileSync(LOCAL_PROPS, 'utf8').match(/^\s*sdk\.dir\s*=\s*(.+)$/m)
+  if (m) {
+    sdkDir = m[1].trim().replace(/\\:/g, ':')
+    sdkFrom = 'android/local.properties'
+  }
+}
+if (!sdkDir || !fs.existsSync(sdkDir)) {
+  fail(
+    sdkDir ? `el SDK de Android no está en ${sdkDir}` : 'no hay SDK de Android a la vista',
+    'gradle falla al evaluar el proyecto («SDK location not found»). Exporta la ruta antes de compilar: ' +
+      'export ANDROID_HOME=/opt/android-sdk',
+  )
+}
+
 if (fs.existsSync(GRADLE_PROPS)) {
   const props = fs.readFileSync(GRADLE_PROPS, 'utf8')
   if (!/org\.gradle\.jvm\.toolchain\.foojay\.enabled\s*=\s*false/.test(props)) {
@@ -175,6 +198,7 @@ console.log(`  versionCode      app.json ${app.android?.versionCode}  ·  androi
 console.log(`  paquete          esperado ${expected?.package ?? '(sin app.config.ts)'}  ·  android/ ${nativeApplicationId}`)
 console.log(`  variante         ${variant ?? '(sin APP_VARIANT: app.config.ts usa internal)'}`)
 console.log(`  gradle           wrapper ${wrapperVersion ?? '(sin wrapper)'}  ·  compatible ${GRADLE_OK}`)
+console.log(`  sdk android      ${sdkDir ?? '(sin ruta)'}  ·  según ${sdkFrom ?? 'nada'}`)
 
 if (warnings.length) {
   console.log('\nAvisos:')
