@@ -123,7 +123,7 @@ export function startNoteEditor() {
 
   window.handleAction = (json: string) => {
     try {
-      const action = JSON.parse(json) as { type: string; value?: any }
+      const action = JSON.parse(json) as { type: string; value?: any; covered?: number }
 
       if (action.type === 'getHtml') {
         if (notifyTimer) {
@@ -157,6 +157,11 @@ export function startNoteEditor() {
         return
       }
       if (action.type === 'setKeyboardInset') {
+        // `covered` es lo que el teclado tapa del WebView pese al relleno que
+        // ya puso React Native; casi siempre 0. Cuando no lo es, la cinta se
+        // quedaba a medias debajo del teclado.
+        const covered = Math.max(0, Number(action.covered ?? 0))
+        document.documentElement.style.setProperty('--kb-cover', `${covered}px`)
         if ((action.value ?? 0) > 0) keepCaretVisible()
         return
       }

@@ -27,7 +27,7 @@ import {
 } from '@/components/notes/NoteEditorHeader';
 import { useNetwork } from '@/context/NetworkContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useKeyboardMetrics } from '@/hooks/useKeyboardHeight';
 import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
@@ -84,11 +84,13 @@ export default function NoteEditorScreen() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
   // Edge-to-edge (Expo SDK 56): empujar el editor sobre el teclado manualmente.
-  const keyboardHeight = useKeyboardHeight();
+  const keyboard = useKeyboardMetrics();
+  const keyboardHeight = keyboard.height;
 
   const insets = useSafeAreaInsets();
 
   const webViewRef = useRef<WebView>(null);
+  const contentAreaRef = useRef<View>(null);
   const initialContentRef = useRef<string>('');
   const initialTitleRef = useRef('');
   const initialHtmlRef = useRef<string | null>(null);
@@ -109,10 +111,34 @@ export default function NoteEditorScreen() {
     webViewRef.current?.injectJavaScript(js);
   };
 
+  /**
+   * Mide cuánto del WebView tapa de verdad el teclado y se lo dice a la página.
+   *
+   * El relleno de abajo de esta pantalla ya aparta el WebView, pero esa cuenta
+   * se queda corta de vez en cuando: con edge-to-edge el alto que anuncia el
+   * teclado no siempre incluye la barra de navegación, y entre que llega el
+   * aviso y se maqueta puede haber unos puntos de diferencia. El resultado era
+   * la cinta a medio tapar. En vez de afinar la cuenta se mide el resultado:
+   * dónde acaba el WebView frente al borde superior del teclado. Lo que sobre
+   * lo descuenta la propia página, así que el error se corrige solo.
+   */
+  const reportKeyboardOverlap = useCallback(() => {
+    const area = contentAreaRef.current;
+    if (!area) return;
+    area.measureInWindow((_x, y, _width, height) => {
+      const covered =
+        keyboard.topY === null ? 0 : Math.max(0, Math.round(y + height - keyboard.topY));
+      sendToEditor({ type: 'setKeyboardInset', value: keyboard.height, covered });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyboard.height, keyboard.topY]);
+
   // Scroll caret when keyboard opens; blur editor on Android when it closes (back button).
   useEffect(() => {
     if (preview) return;
-    sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight });
+    reportKeyboardOverlap();
+    // La medida solo vale una vez maquetado con el relleno nuevo.
+    const again = requestAnimationFrame(reportKeyboardOverlap);
     if (
       Platform.OS === 'android' &&
       prevKeyboardHeightRef.current > 0 &&
@@ -121,7 +147,8 @@ export default function NoteEditorScreen() {
       sendToEditor({ type: 'blurEditor' });
     }
     prevKeyboardHeightRef.current = keyboardHeight;
-  }, [keyboardHeight, preview]);
+    return () => cancelAnimationFrame(again);
+  }, [keyboardHeight, preview, reportKeyboardOverlap]);
 
   // ── Load color palette favorites ──
   useEffect(() => {
@@ -579,7 +606,7 @@ export default function NoteEditorScreen() {
         />
 
         {/* Content Area — WebView stays mounted so edits survive preview toggle */}
-        <View style={styles.contentArea}>
+        <View ref={contentAreaRef} style={styles.contentArea} onLayout={reportKeyboardOverlap}>
           <WebView
             ref={webViewRef}
             originWhitelist={['*']}

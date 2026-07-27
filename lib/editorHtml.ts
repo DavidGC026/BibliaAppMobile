@@ -105,7 +105,9 @@ function editorPage(
 <html>
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <!-- interactive-widget=resizes-content: si el motor llega a ver el teclado
+       por su cuenta, que encoja la maqueta en vez de dejar la cinta debajo. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content"/>
   <style>${documentCss}${ribbonCss}</style>
 </head>
 <body>

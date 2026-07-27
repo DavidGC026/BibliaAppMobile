@@ -218,6 +218,19 @@ check(
   bridge.document.getElementById('editor').style.fontFamily.includes('serif'),
 )
 
+send(bridge.window, { type: 'setKeyboardInset', value: 320, covered: 28 })
+check(
+  'el teclado que tapa parte del WebView encoge la página',
+  bridge.document.documentElement.style.getPropertyValue('--kb-cover') === '28px',
+  bridge.document.documentElement.style.getPropertyValue('--kb-cover'),
+)
+send(bridge.window, { type: 'setKeyboardInset', value: 0, covered: 0 })
+check(
+  'y al cerrarse recupera todo el alto',
+  bridge.document.documentElement.style.getPropertyValue('--kb-cover') === '0px',
+  bridge.document.documentElement.style.getPropertyValue('--kb-cover'),
+)
+
 const opened = []
 bridge.window.ReactNativeWebView.postMessage = (raw) => opened.push(JSON.parse(raw))
 const insertTab = Array.from(bridge.document.querySelectorAll('.ribbon-tab')).find(

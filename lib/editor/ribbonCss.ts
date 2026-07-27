@@ -11,10 +11,13 @@ import { AppColors } from '@/constants/Colors'
  */
 export function getNoteRibbonCss(colors: AppColors): string {
   return `
+    /* --kb-cover: lo que el teclado sigue tapando del WebView pese al relleno
+       que pone React Native (normalmente 0). Descontarlo aquí deja la cinta
+       entera por encima del teclado aunque esa cuenta se quede corta. */
     #app {
       display: flex;
       flex-direction: column;
-      height: 100%;
+      height: calc(100% - var(--kb-cover, 0px));
       min-height: 0;
     }
 
