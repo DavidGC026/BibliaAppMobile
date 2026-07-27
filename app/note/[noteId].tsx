@@ -25,6 +25,7 @@ import {
   type NoteEditorMenuAction,
   type NoteSaveState,
 } from '@/components/notes/NoteEditorHeader';
+import { NoteEditorTour } from '@/components/notes/NoteEditorTour';
 import { useNetwork } from '@/context/NetworkContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useKeyboardMetrics } from '@/hooks/useKeyboardHeight';
@@ -34,6 +35,7 @@ import { getEditorHtml } from '@/lib/editorHtml';
 import { deleteNoteFont, getDownloadedFonts, getNoteFont, saveNoteFont } from '@/lib/fontManager';
 import { countNoteWords, noteHtmlToPlainText } from '@/lib/notebookCovers';
 import { exportNoteAsPdf } from '@/lib/noteExport';
+import { isNoteTourSeen, markNoteTourSeen } from '@/lib/noteTourState';
 import { shareNote } from '@/lib/share';
 import type { StrongEntry } from '@/lib/types';
 
@@ -82,6 +84,9 @@ export default function NoteEditorScreen() {
   // Custom font base64 mappings for offline support
   const [base64Fonts, setBase64Fonts] = useState<Record<string, string>>({});
   const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  // Tutorial de primera vez: se ofrece solo, y luego queda en el menú.
+  const [tourOpen, setTourOpen] = useState(false);
 
   // Edge-to-edge (Expo SDK 56): empujar el editor sobre el teclado manualmente.
   const keyboard = useKeyboardMetrics();
@@ -149,6 +154,24 @@ export default function NoteEditorScreen() {
     prevKeyboardHeightRef.current = keyboardHeight;
     return () => cancelAnimationFrame(again);
   }, [keyboardHeight, preview, reportKeyboardOverlap]);
+
+  // El tutorial se ofrece una vez, con la nota ya cargada para no salir encima
+  // del indicador de carga.
+  useEffect(() => {
+    if (loading || !fontsLoaded) return;
+    let alive = true;
+    isNoteTourSeen().then((seen) => {
+      if (alive && !seen) setTourOpen(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loading, fontsLoaded]);
+
+  const closeTour = () => {
+    setTourOpen(false);
+    void markNoteTourSeen();
+  };
 
   // ── Load color palette favorites ──
   useEffect(() => {
@@ -526,6 +549,14 @@ export default function NoteEditorScreen() {
 
   const menuActions: NoteEditorMenuAction[] = [
     {
+      label: 'Cómo funciona el editor',
+      icon: { ios: 'questionmark.circle', android: 'help_outline', web: 'help_outline' },
+      onPress: () => {
+        Keyboard.dismiss();
+        setTourOpen(true);
+      },
+    },
+    {
       label: 'Compartir como texto',
       icon: { ios: 'square.and.arrow.up', android: 'share', web: 'share' },
       onPress: () => void shareNote({ title, body: noteHtmlToPlainText(content) }),
@@ -630,6 +661,8 @@ export default function NoteEditorScreen() {
           ) : null}
         </View>
       </View>
+
+      <NoteEditorTour visible={tourOpen} onClose={closeTour} />
 
       <FontSelectorModal
         visible={fontModalOpen}
