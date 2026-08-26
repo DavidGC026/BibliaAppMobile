@@ -2,7 +2,7 @@
   "expo": {
     "name": "BibliaAPP",
     "slug": "bibliaapp",
-    "version": "4.0.8",
+    "version": "4.0.9",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "bibliaapp",
@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.bibliaapp.mobile",
-      "versionCode": 47,
+      "versionCode": 48,
       "adaptiveIcon": {
         "backgroundColor": "#9A6700",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
