@@ -11,6 +11,8 @@ import {
   Text,
   TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
@@ -35,6 +37,7 @@ import {
   saveReaderPreferences,
   type ReaderAlign,
   type ReaderDensity,
+  type ReaderLayout,
   type ReaderTheme,
 } from '@/lib/readerState';
 import { safeShare } from '@/lib/share';
@@ -42,18 +45,23 @@ import { buildImageCreatorData, buildSelectionShareText, formatVerseRange } from
 import { cancelStreakReminderForToday } from '@/lib/localNotifications';
 import { markReadToday } from '@/lib/readingToday';
 import type { BibleVersion, Book, Verse, VerseHighlight, VerseNoteLink } from '@/lib/types';
-import { HIGHLIGHT_COLORS, getHighlightTheme, verseHighlightStyle } from '@/lib/highlightColors';
+import { HIGHLIGHT_COLORS, getHighlightTheme, highlightBg, verseHighlightStyle } from '@/lib/highlightColors';
 
 const READER_FONT_MIN = 16;
 const READER_FONT_MAX = 24;
+/** Aire por encima del versículo al saltar a él: no queda pegado al borde. */
+const VERSE_SCROLL_MARGIN = 80;
 
 export function BibleReader({
   initialBookId,
   initialChapter,
+  initialVerse,
   initialBibleId,
 }: {
   initialBookId?: number;
   initialChapter?: number;
+  /** Versículo al que saltar al abrir: queda seleccionado y a la vista. */
+  initialVerse?: number;
   initialBibleId?: number;
 } = {}) {
   const { colors, radius, shadow, isDark } = useAppTheme();
@@ -71,6 +79,17 @@ export function BibleReader({
   const [chapter, setChapter] = useState(1);
   const [selectedVerses, setSelectedVerses] = useState<number[]>([]);
   const lastSelectedRef = useRef<number | null>(null);
+  // Salto al versículo con el que se abrió el lector (por ejemplo desde la
+  // lista de versículos con notas). Se resuelve cuando ese versículo ya tiene
+  // caja medida, no antes: hasta entonces no se sabe a qué altura está.
+  const scrollRef = useRef<ScrollView>(null);
+  const versesTopRef = useRef(0);
+  const verseOffsetsRef = useRef(new Map<number, number>());
+  // En modo párrafos no hay caja por versículo: el scroll-spy y el salto a un
+  // versículo se aproximan por proporción sobre la caja del texto corrido.
+  const paragraphsTopRef = useRef(0);
+  const paragraphsHeightRef = useRef(0);
+  const pendingVerseRef = useRef<number | null>(initialVerse ?? null);
   const [imageCreatorOpen, setImageCreatorOpen] = useState(false);
   const [noteModalOpen, setNoteModalOpen] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -84,6 +103,10 @@ export function BibleReader({
   const [readerDensity, setReaderDensity] = useState<ReaderDensity>(DEFAULT_READER_PREFERENCES.density);
   const [readerAlign, setReaderAlign] = useState<ReaderAlign>(DEFAULT_READER_PREFERENCES.align);
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>(DEFAULT_READER_PREFERENCES.theme);
+  const [readerLayout, setReaderLayout] = useState<ReaderLayout>(DEFAULT_READER_PREFERENCES.layout);
+  // Versículo visible en la parte superior del scroll: alimenta la referencia
+  // viva del pill inferior y la barra de progreso del capítulo.
+  const [currentVerseNum, setCurrentVerseNum] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadingChapter, setLoadingChapter] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -93,7 +116,10 @@ export function BibleReader({
   const selectedBook = books.find((b) => b.bookId === bookId) ?? null;
   const maxChapter = selectedBook?.chapters ?? 1;
   const currentBible = bibles.find((b) => b.bibleId === bibleId);
-  const chapterProgress = maxChapter > 0 ? chapter / maxChapter : 0;
+  // Progreso dentro del capítulo según el versículo visible (no del libro:
+  // "Capítulo X de Y" ya lo dice el eyebrow de la cabecera).
+  const readingProgress =
+    verses.length > 0 ? Math.min(1, Math.max(0.03, currentVerseNum / verses.length)) : 0;
   const readerLineHeight = Math.round(readerFontSize * (readerDensity === 'relaxed' ? 1.72 : 1.48));
   const verseGap = readerDensity === 'relaxed' ? 10 : 4;
   const readerPalette = readerTheme === 'auto' ? null : READER_THEME_PALETTES[readerTheme];
@@ -133,6 +159,7 @@ export function BibleReader({
         setReaderDensity(prefs.density);
         setReaderAlign(prefs.align);
         setReaderTheme(prefs.theme);
+        setReaderLayout(prefs.layout);
       })
       .finally(() => {
         readerPrefsReadyRef.current = true;
@@ -146,8 +173,9 @@ export function BibleReader({
       density: readerDensity,
       align: readerAlign,
       theme: readerTheme,
+      layout: readerLayout,
     }).catch(() => {});
-  }, [readerFontSize, readerDensity, readerAlign, readerTheme]);
+  }, [readerFontSize, readerDensity, readerAlign, readerTheme, readerLayout]);
 
   useEffect(() => {
     let cancelled = false;
@@ -216,6 +244,9 @@ export function BibleReader({
       setError(null);
       setSelectedVerses([]);
       lastSelectedRef.current = null;
+      verseOffsetsRef.current.clear();
+      paragraphsHeightRef.current = 0;
+      setCurrentVerseNum(1);
       const [{ verses: chapterVerses }, hl, ln, favMap] = await Promise.all([
         repo.repoGetVerses(bibleId, bookId, chapter),
         isGuest ? Promise.resolve({ highlights: [] as VerseHighlight[] }) : repo.repoGetHighlights(bookId, chapter, bibleId),
@@ -237,6 +268,68 @@ export function BibleReader({
   useEffect(() => {
     if (bookId) loadChapter();
   }, [bookId, chapter, bibleId, isGuest, loadChapter]);
+
+  /**
+   * Deja a la vista el versículo con el que se abrió el lector, si ya se sabe
+   * dónde cae. Lo llama cada versículo al medirse, así que en cuanto le toca al
+   * buscado se resuelve; si el capítulo no lo tiene, no pasa nada.
+   */
+  const revealPendingVerse = useCallback(() => {
+    const target = pendingVerseRef.current;
+    if (target === null) return;
+    const offset = verseOffsetsRef.current.get(target);
+    if (offset !== undefined) {
+      pendingVerseRef.current = null;
+      setSelectedVerses([target]);
+      lastSelectedRef.current = target;
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, versesTopRef.current + offset - VERSE_SCROLL_MARGIN),
+        animated: true,
+      });
+      return;
+    }
+    // Modo párrafos: sin caja por versículo se estima la posición por
+    // proporción dentro del bloque de texto ya medido.
+    const height = paragraphsHeightRef.current;
+    if (height > 0 && verses.length > 0) {
+      pendingVerseRef.current = null;
+      setSelectedVerses([target]);
+      lastSelectedRef.current = target;
+      scrollRef.current?.scrollTo({
+        y: Math.max(
+          0,
+          paragraphsTopRef.current + ((target - 1) / verses.length) * height - VERSE_SCROLL_MARGIN,
+        ),
+        animated: true,
+      });
+    }
+  }, [verses.length]);
+
+  /**
+   * Scroll-spy: el versículo visible arriba manda. En modo versículos se
+   * calcula con las cajas medidas; en párrafos, por proporción del bloque.
+   */
+  const handleReaderScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      if (readerLayout === 'paragraphs') {
+        const height = paragraphsHeightRef.current;
+        if (height <= 0 || verses.length === 0) return;
+        const ratio = Math.min(1, Math.max(0, (y - paragraphsTopRef.current + VERSE_SCROLL_MARGIN) / height));
+        const num = Math.max(1, Math.min(verses.length, Math.ceil(ratio * verses.length)));
+        setCurrentVerseNum((prev) => (prev === num ? prev : num));
+        return;
+      }
+      const base = versesTopRef.current;
+      let current = 1;
+      for (const [num, offset] of verseOffsetsRef.current) {
+        if (base + offset - VERSE_SCROLL_MARGIN <= y) current = num;
+        else break;
+      }
+      setCurrentVerseNum((prev) => (prev === current ? prev : current));
+    },
+    [readerLayout, verses.length],
+  );
 
   useEffect(() => {
     if (!bookId || !selectedBook || !currentBible || verses.length === 0) return;
@@ -350,6 +443,10 @@ export function BibleReader({
 
   const handleCopySelection = async () => {
     if (!bookId || !selectedBook) return;
+    if (currentBible?.canCopy === false) {
+      Alert.alert('Acción no disponible', 'La licencia de esta versión no permite copiar el texto.');
+      return;
+    }
     const share = buildSelectionShareText({
       selectedVerses,
       verses,
@@ -366,6 +463,10 @@ export function BibleReader({
 
   const handleShareSelection = async () => {
     if (!bookId || !selectedBook) return;
+    if (currentBible?.canShare === false) {
+      Alert.alert('Acción no disponible', 'La licencia de esta versión no permite compartir el texto.');
+      return;
+    }
     const share = buildSelectionShareText({
       selectedVerses,
       verses,
@@ -450,11 +551,14 @@ export function BibleReader({
     <View style={{ flex: 1, backgroundColor: readingColors.background }}>
       <OfflineBanner />
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={[styles.content, { paddingBottom: contentPadding }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        onScroll={handleReaderScroll}
+        scrollEventThrottle={120}
       >
         {isGuest ? (
           <Pressable
@@ -507,7 +611,7 @@ export function BibleReader({
 
         <View style={styles.readerMeta}>
           <View style={[styles.progressTrack, { backgroundColor: readingColors.card }]}>
-            <View style={[styles.progressFill, { backgroundColor: readingColors.accent, width: `${Math.max(4, chapterProgress * 100)}%` }]} />
+            <View style={[styles.progressFill, { backgroundColor: readingColors.accent, width: `${readingProgress * 100}%` }]} />
           </View>
           <Text style={{ color: readingColors.muted, fontSize: 12, fontWeight: '700' }}>
             {verses.length} versículos
@@ -516,8 +620,83 @@ export function BibleReader({
 
         {loadingChapter ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
+        ) : readerLayout === 'paragraphs' ? (
+          /*
+           * Texto corrido: un solo <Text> con un span por versículo. RN no
+           * tiene superíndice real; el número va inline, más pequeño y en
+           * negrita. El toque/larga pulsación siguen funcionando por versículo
+           * (Text anidado soporta onPress/onLongPress) y el subrayado pinta
+           * solo el texto, como el marcador de la web.
+           */
+          <Text
+            style={{
+              color: readingColors.text,
+              fontSize: readerFontSize,
+              lineHeight: readerLineHeight,
+              textAlign: readerAlign,
+            }}
+            onLayout={(e) => {
+              paragraphsTopRef.current = e.nativeEvent.layout.y;
+              paragraphsHeightRef.current = e.nativeEvent.layout.height;
+              revealPendingVerse();
+            }}
+          >
+            {verses.map((v) => {
+              const hl = highlightMap.get(v.verse);
+              const hasNote = noteMap.has(v.verse);
+              const isSelected = selectedVerses.includes(v.verse);
+              return (
+                <Text
+                  key={v.verse}
+                  onPress={() => toggleVerseSelection(v.verse)}
+                  onLongPress={() => selectRangeTo(v.verse)}
+                  delayLongPress={400}
+                >
+                  <Text
+                    style={{
+                      color: readingColors.accent,
+                      fontSize: Math.max(11, Math.round(readerFontSize * 0.6)),
+                      fontWeight: '800',
+                    }}
+                  >
+                    {v.verse}{' '}
+                  </Text>
+                  <Text
+                    style={{
+                      backgroundColor: isSelected
+                        ? readingColors.accentSoft
+                        : hl
+                          ? highlightBg(hl, readerIsDark)
+                          : undefined,
+                      textDecorationLine: isSelected ? 'underline' : 'none',
+                      textDecorationColor: readingColors.accent,
+                    }}
+                  >
+                    {v.text}
+                  </Text>
+                  {hasNote ? (
+                    <Text
+                      style={{
+                        color: readingColors.accent,
+                        fontSize: Math.max(10, Math.round(readerFontSize * 0.55)),
+                        fontWeight: '800',
+                      }}
+                    >
+                      {' ✎'}
+                    </Text>
+                  ) : null}
+                  {' '}
+                </Text>
+              );
+            })}
+          </Text>
         ) : (
-          <View style={[styles.verses, { gap: verseGap }]}>
+          <View
+            style={[styles.verses, { gap: verseGap }]}
+            onLayout={(e) => {
+              versesTopRef.current = e.nativeEvent.layout.y;
+            }}
+          >
             {verses.map((v) => {
               const hl = highlightMap.get(v.verse);
               const hasNote = noteMap.has(v.verse);
@@ -529,6 +708,10 @@ export function BibleReader({
                   onPress={() => toggleVerseSelection(v.verse)}
                   onLongPress={() => selectRangeTo(v.verse)}
                   delayLongPress={400}
+                  onLayout={(e) => {
+                    verseOffsetsRef.current.set(v.verse, e.nativeEvent.layout.y);
+                    revealPendingVerse();
+                  }}
                   style={[
                     styles.verseRow,
                     hl && !isSelected ? verseHighlightStyle(hl, readerIsDark) : null,
@@ -589,16 +772,24 @@ export function BibleReader({
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
-            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={handleShareSelection}>
+            <Pressable
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: currentBible?.canShare === false ? 0.4 : 1 }]}
+              onPress={handleShareSelection}
+              disabled={currentBible?.canShare === false}
+            >
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Compartir</Text>
             </Pressable>
-            <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={handleCopySelection}>
+            <Pressable
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: currentBible?.canCopy === false ? 0.4 : 1 }]}
+              onPress={handleCopySelection}
+              disabled={currentBible?.canCopy === false}
+            >
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Copiar</Text>
             </Pressable>
             <Pressable
-              style={[styles.toolBtn, { borderColor: colors.primary, opacity: imageCreatorData ? 1 : 0.4 }]}
+              style={[styles.toolBtn, { borderColor: colors.primary, opacity: imageCreatorData && currentBible?.canCreateImages !== false ? 1 : 0.4 }]}
               onPress={() => imageCreatorData && setImageCreatorOpen(true)}
-              disabled={!imageCreatorData}
+              disabled={!imageCreatorData || currentBible?.canCreateImages === false}
             >
               <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Imagen</Text>
             </Pressable>
@@ -634,7 +825,9 @@ export function BibleReader({
             ) : null}
             {!isGuest && primaryVerse !== null ? (
               <Pressable style={[styles.toolBtn, { borderColor: colors.primary }]} onPress={openNoteModal}>
-                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Nota</Text>
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>
+                  {noteMap.has(primaryVerse) ? 'Ver nota' : 'Generar nota'}
+                </Text>
               </Pressable>
             ) : null}
             {primaryVerse !== null ? (
@@ -656,7 +849,7 @@ export function BibleReader({
           </Pressable>
           <Pressable style={styles.navCenter} onPress={() => setSelectorOpen(true)}>
             <Text style={[styles.navCenterText, { color: colors.text }]} numberOfLines={1}>
-              {(selectedBook?.bookName ?? '—').toUpperCase()} {chapter}
+              {(selectedBook?.bookName ?? '—').toUpperCase()} {chapter}:{currentVerseNum}
             </Text>
           </Pressable>
           <Pressable
@@ -776,6 +969,31 @@ export function BibleReader({
               >
                 <Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>+</Text>
               </Pressable>
+            </View>
+
+            <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Texto</Text>
+            <View style={styles.segmentRow}>
+              {[
+                ['verses', 'Versículos'],
+                ['paragraphs', 'Párrafos'],
+              ].map(([key, label]) => {
+                const selected = readerLayout === key;
+                return (
+                  <Pressable
+                    key={key}
+                    style={[
+                      styles.segmentBtn,
+                      {
+                        borderColor: selected ? colors.primary : colors.border,
+                        backgroundColor: selected ? colors.primarySoft : colors.card,
+                      },
+                    ]}
+                    onPress={() => setReaderLayout(key as ReaderLayout)}
+                  >
+                    <Text style={{ color: selected ? colors.primary : colors.textMuted, fontWeight: '700' }}>{label}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
 
             <Text style={[styles.settingLabel, { color: colors.textMuted }]}>Espaciado</Text>

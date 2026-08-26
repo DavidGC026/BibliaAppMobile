@@ -5,18 +5,14 @@ import {
   Alert,
   Keyboard,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
-import { SymbolView } from 'expo-symbols';
 import * as ImagePicker from 'expo-image-picker';
 import * as api from '@/lib/api';
 
@@ -24,15 +20,22 @@ import { FontSelectorModal } from '@/components/FontSelectorModal';
 import { InsertDictionaryModal } from '@/components/InsertDictionaryModal';
 import { InsertVerseModal } from '@/components/InsertVerseModal';
 import { NoteContent } from '@/components/NoteContent';
+import {
+  NoteEditorHeader,
+  type NoteEditorMenuAction,
+  type NoteSaveState,
+} from '@/components/notes/NoteEditorHeader';
+import { NoteEditorTour } from '@/components/notes/NoteEditorTour';
 import { useNetwork } from '@/context/NetworkContext';
 import { useThemeColors } from '@/hooks/useThemeColors';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 import * as repo from '@/lib/repo';
 import { formatDictionaryInsertion } from '@/lib/dictionaryInsert';
 import { getEditorHtml } from '@/lib/editorHtml';
 import { deleteNoteFont, getDownloadedFonts, getNoteFont, saveNoteFont } from '@/lib/fontManager';
 import { countNoteWords, noteHtmlToPlainText } from '@/lib/notebookCovers';
 import { exportNoteAsPdf } from '@/lib/noteExport';
+import { isNoteTourSeen, markNoteTourSeen } from '@/lib/noteTourState';
 import { shareNote } from '@/lib/share';
 import type { StrongEntry } from '@/lib/types';
 
@@ -68,11 +71,11 @@ export default function NoteEditorScreen() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [preview, setPreview] = useState(false);
   const [verseModalOpen, setVerseModalOpen] = useState(false);
   const [dictionaryModalOpen, setDictionaryModalOpen] = useState(false);
   const [fontModalOpen, setFontModalOpen] = useState(false);
-  const [imageEditMode, setImageEditMode] = useState(false);
 
   // Formatting state
   const [activeFont, setActiveFont] = useState('Default');
@@ -82,12 +85,19 @@ export default function NoteEditorScreen() {
   const [base64Fonts, setBase64Fonts] = useState<Record<string, string>>({});
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  // Edge-to-edge (Expo SDK 56): empujar el editor sobre el teclado manualmente.
-  const keyboardHeight = useKeyboardHeight();
+  // Tutorial de primera vez: se ofrece solo, y luego queda en el menú.
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // Edge-to-edge (Expo SDK 56): la ventana no encoge con el teclado, así que
+  // esta pantalla lo aparta a mano. El alto sale del inset IME del sistema, no
+  // de los eventos de teclado de React Native: ver `useKeyboardInset`.
+  const keyboardHeight = useKeyboardInset();
 
   const insets = useSafeAreaInsets();
 
   const webViewRef = useRef<WebView>(null);
+  const screenRef = useRef<View>(null);
+  const contentAreaRef = useRef<View>(null);
   const initialContentRef = useRef<string>('');
   const initialTitleRef = useRef('');
   const initialHtmlRef = useRef<string | null>(null);
@@ -108,14 +118,39 @@ export default function NoteEditorScreen() {
     webViewRef.current?.injectJavaScript(js);
   };
 
+  /**
+   * Comprueba que el relleno de abajo llegó de verdad a la maqueta, y le pasa a
+   * la página lo que falte.
+   *
+   * No vuelve a estimar dónde está el teclado —de eso ya se encarga el inset
+   * IME—, sino que mide el resultado: la distancia entre el fondo del WebView y
+   * el fondo de la pantalla es el relleno tal y como quedó. Si es menor que el
+   * teclado, esa diferencia es lo que sigue tapado, y la propia página lo
+   * descuenta con `--kb-cover`.
+   *
+   * Normalmente da cero. Sirve para el hueco entre que cambia el estado y se
+   * maqueta, y para cualquier caso en que algo de por medio se coma el relleno.
+   */
+  const reportKeyboardOverlap = useCallback(() => {
+    const area = contentAreaRef.current;
+    const screen = screenRef.current;
+    if (!area || !screen) return;
+    screen.measureInWindow((_sx, screenY, _sw, screenHeight) => {
+      area.measureInWindow((_x, y, _width, height) => {
+        const appliedPadding = screenY + screenHeight - (y + height);
+        const covered = Math.max(0, Math.round(keyboardHeight - appliedPadding));
+        sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight, covered });
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyboardHeight]);
+
   // Scroll caret when keyboard opens; blur editor on Android when it closes (back button).
   useEffect(() => {
     if (preview) return;
-    if (imageEditMode) {
-      Keyboard.dismiss();
-      return;
-    }
-    sendToEditor({ type: 'setKeyboardInset', value: keyboardHeight });
+    reportKeyboardOverlap();
+    // La medida solo vale una vez maquetado con el relleno nuevo.
+    const again = requestAnimationFrame(reportKeyboardOverlap);
     if (
       Platform.OS === 'android' &&
       prevKeyboardHeightRef.current > 0 &&
@@ -124,7 +159,26 @@ export default function NoteEditorScreen() {
       sendToEditor({ type: 'blurEditor' });
     }
     prevKeyboardHeightRef.current = keyboardHeight;
-  }, [imageEditMode, keyboardHeight, preview]);
+    return () => cancelAnimationFrame(again);
+  }, [keyboardHeight, preview, reportKeyboardOverlap]);
+
+  // El tutorial se ofrece una vez, con la nota ya cargada para no salir encima
+  // del indicador de carga.
+  useEffect(() => {
+    if (loading || !fontsLoaded) return;
+    let alive = true;
+    isNoteTourSeen().then((seen) => {
+      if (alive && !seen) setTourOpen(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [loading, fontsLoaded]);
+
+  const closeTour = () => {
+    setTourOpen(false);
+    void markNoteTourSeen();
+  };
 
   // ── Load color palette favorites ──
   useEffect(() => {
@@ -275,6 +329,7 @@ export default function NoteEditorScreen() {
         // Se guarda el título tal cual lo escribió el usuario (no 'Sin título')
         // para que la comparación de cambios pendientes sea estable.
         initialTitleRef.current = trimmedTitle;
+        setSaveFailed(false);
         setSaveFlash(true);
         if (saveFlashTimerRef.current) clearTimeout(saveFlashTimerRef.current);
         saveFlashTimerRef.current = setTimeout(() => setSaveFlash(false), 2000);
@@ -287,6 +342,7 @@ export default function NoteEditorScreen() {
         if (navigateBack) router.back();
         return true;
       } catch (err) {
+        setSaveFailed(true);
         if (!showErrors) {
           // Autoguardado: fallar en silencio, se reintenta en el próximo ciclo.
         } else if (silent) {
@@ -418,9 +474,6 @@ export default function NoteEditorScreen() {
         setDictionaryModalOpen(true);
       } else if (data.type === 'openImagePicker') {
         void handleImagePick();
-      } else if (data.type === 'imageEditMode') {
-        setImageEditMode(!!data.active);
-        if (data.active) Keyboard.dismiss();
       }
     } catch (e) {
       console.error('Error parsing WebView message:', e);
@@ -471,27 +524,15 @@ export default function NoteEditorScreen() {
   };
 
   const words = countNoteWords(content);
-  const statusText = saving ? 'Guardando...' : saveFlash ? 'Guardado' : `${words} palabras`;
-
-  const openShareOptions = () => {
-    Alert.alert('Compartir nota', undefined, [
-      {
-        text: 'Compartir como texto',
-        onPress: () => void shareNote({ title, body: noteHtmlToPlainText(content) }),
-      },
-      {
-        text: 'Exportar como PDF',
-        onPress: async () => {
-          try {
-            await exportNoteAsPdf({ title, contentHtml: content });
-          } catch {
-            Alert.alert('Error', 'No se pudo generar el PDF.');
-          }
-        },
-      },
-      { text: 'Cancelar', style: 'cancel' },
-    ]);
-  };
+  const saveState: NoteSaveState = saving
+    ? 'saving'
+    : saveFailed
+      ? 'error'
+      : saveFlash
+        ? 'saved'
+        : hasUnsavedChanges()
+          ? 'dirty'
+          : 'idle';
 
   const remove = () => {
     if (isNew) return;
@@ -512,6 +553,43 @@ export default function NoteEditorScreen() {
       },
     ]);
   };
+
+  const menuActions: NoteEditorMenuAction[] = [
+    {
+      label: 'Cómo funciona el editor',
+      icon: { ios: 'questionmark.circle', android: 'help_outline', web: 'help_outline' },
+      onPress: () => {
+        Keyboard.dismiss();
+        setTourOpen(true);
+      },
+    },
+    {
+      label: 'Compartir como texto',
+      icon: { ios: 'square.and.arrow.up', android: 'share', web: 'share' },
+      onPress: () => void shareNote({ title, body: noteHtmlToPlainText(content) }),
+    },
+    {
+      label: 'Exportar como PDF',
+      icon: { ios: 'doc.richtext', android: 'picture_as_pdf', web: 'picture_as_pdf' },
+      onPress: async () => {
+        try {
+          await exportNoteAsPdf({ title, contentHtml: content });
+        } catch {
+          Alert.alert('Error', 'No se pudo generar el PDF.');
+        }
+      },
+    },
+    ...(isNew
+      ? []
+      : ([
+          {
+            label: 'Eliminar nota',
+            icon: { ios: 'trash', android: 'delete', web: 'delete' },
+            danger: true,
+            onPress: remove,
+          },
+        ] as NoteEditorMenuAction[])),
+  ];
 
   // ── Loading guard ──
   if (loading || !fontsLoaded) {
@@ -536,93 +614,39 @@ export default function NoteEditorScreen() {
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: isNew ? 'Nueva nota' : 'Editar nota',
-          // Al editar una imagen el panel inferior ocupa espacio; ocultar el
-          // header nativo deja subir la nota y evita que el panel tape la imagen.
-          headerShown: !imageEditMode,
-          headerRight: () => (
-            <View style={styles.headerActions}>
-              {!isNew ? (
-                <Pressable onPress={openShareOptions} hitSlop={8} accessibilityLabel="Compartir nota" style={styles.headerIconBtn}>
-                  <SymbolView name={{ ios: 'square.and.arrow.up', android: 'share', web: 'share' }} tintColor={colors.primary} size={18} />
-                </Pressable>
-              ) : null}
-              {!isNew ? (
-                <Pressable onPress={remove} hitSlop={8} accessibilityLabel="Borrar nota" style={styles.headerIconBtn}>
-                  <SymbolView name={{ ios: 'trash', android: 'delete', web: 'delete' }} tintColor={colors.danger} size={18} />
-                </Pressable>
-              ) : null}
-              <Pressable onPress={save} disabled={saving} style={[styles.saveBtn, { backgroundColor: colors.primary }]}>
-                <Text style={{ color: colors.primaryForeground, fontWeight: '800', fontSize: 13 }}>
-                  {saving ? '...' : 'Guardar'}
-                </Text>
-              </Pressable>
-            </View>
-          ),
-        }}
-      />
+      {/* La cabecera nativa se sustituye por la propia: una sola fila, y el
+          cuerpo de la nota se queda con toda la pantalla. */}
+      <Stack.Screen options={{ headerShown: false }} />
 
       <View
+        ref={screenRef}
         style={{
           flex: 1,
           backgroundColor: colors.background,
-          paddingBottom: !imageEditMode && keyboardHeight > 0 ? keyboardHeight : insets.bottom,
-          paddingTop: imageEditMode ? insets.top : 0,
+          paddingTop: insets.top,
+          paddingBottom: keyboardHeight > 0 ? keyboardHeight : insets.bottom,
         }}
+        onLayout={reportKeyboardOverlap}
       >
-        {imageEditMode ? (
-          <View style={[styles.imageEditBanner, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
-            <SymbolView name={{ ios: 'photo', android: 'image', web: 'image' }} tintColor={colors.primary} size={14} />
-            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>
-              Editando imagen · toca fuera para terminar
-            </Text>
-          </View>
-        ) : (
-          <View style={[styles.documentHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-            <View style={styles.titleBlock}>
-              <TextInput
-                style={[styles.titleInput, { color: colors.text }]}
-                placeholder="Título de la nota"
-                placeholderTextColor={colors.textMuted}
-                value={title}
-                onChangeText={setTitle}
-                returnKeyType="next"
-                submitBehavior="submit"
-                onSubmitEditing={() => {
-                  webViewRef.current?.injectJavaScript(
-                    "(function(){var e=document.getElementById('editor');if(e)e.focus();})();true;",
-                  );
-                }}
-              />
-              <View style={styles.titleMeta}>
-                <View style={[styles.statusDot, { backgroundColor: saveFlash ? colors.primary : colors.border }]} />
-                <Text
-                  style={[styles.statusText, { color: saveFlash ? colors.primary : colors.textMuted }]}
-                  numberOfLines={1}
-                >
-                  {statusText}
-                </Text>
-              </View>
-            </View>
-            <Pressable
-              onPress={togglePreview}
-              hitSlop={6}
-              accessibilityLabel={preview ? 'Editar' : 'Vista previa'}
-              style={[styles.previewToggle, { borderColor: preview ? colors.primaryBorder : colors.border, backgroundColor: preview ? colors.primarySoft : colors.cardMuted }]}
-            >
-              <SymbolView
-                name={preview ? { ios: 'pencil', android: 'edit', web: 'edit' } : { ios: 'eye', android: 'visibility', web: 'visibility' }}
-                tintColor={colors.primary}
-                size={15}
-              />
-            </Pressable>
-          </View>
-        )}
+        <NoteEditorHeader
+          title={title}
+          onChangeTitle={setTitle}
+          onBack={() => router.back()}
+          onSave={save}
+          saveState={saveState}
+          words={words}
+          preview={preview}
+          onTogglePreview={togglePreview}
+          menu={menuActions}
+          onSubmitTitle={() =>
+            webViewRef.current?.injectJavaScript(
+              "(function(){var e=document.querySelector('#editor .ProseMirror');if(e)e.focus();})();true;",
+            )
+          }
+        />
 
         {/* Content Area — WebView stays mounted so edits survive preview toggle */}
-        <View style={styles.contentArea}>
+        <View ref={contentAreaRef} style={styles.contentArea} onLayout={reportKeyboardOverlap}>
           <WebView
             ref={webViewRef}
             originWhitelist={['*']}
@@ -638,7 +662,7 @@ export default function NoteEditorScreen() {
           />
 
           {preview ? (
-            <ScrollView style={styles.previewContainer}>
+            <ScrollView style={[styles.previewContainer, { backgroundColor: colors.background }]}>
               <View style={[styles.previewBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <NoteContent content={content || 'Sin contenido'} font={activeFont} />
               </View>
@@ -646,6 +670,8 @@ export default function NoteEditorScreen() {
           ) : null}
         </View>
       </View>
+
+      <NoteEditorTour visible={tourOpen} onClose={closeTour} />
 
       <FontSelectorModal
         visible={fontModalOpen}
@@ -671,46 +697,6 @@ export default function NoteEditorScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  headerActions: { flexDirection: 'row', gap: 8, paddingHorizontal: 8, alignItems: 'center' },
-  headerIconBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  saveBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
-  // Fila única y compacta: el título fijo arriba sin robarle altura a la nota.
-  documentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-  },
-  imageEditBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-  },
-  titleInput: {
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.35,
-    lineHeight: 25,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-  titleBlock: { flex: 1, gap: 2 },
-  titleMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 15 },
-  statusDot: { width: 6, height: 6, borderRadius: 999 },
-  statusText: { fontSize: 11, fontWeight: '500' },
-  previewToggle: {
-    width: 36,
-    height: 36,
-    borderWidth: 1,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   contentArea: {
     flex: 1,
     position: 'relative',

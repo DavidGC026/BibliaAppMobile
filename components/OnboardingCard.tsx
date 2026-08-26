@@ -1,33 +1,33 @@
 import { router } from 'expo-router';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { dismissOnboarding, isOnboardingDismissed } from '@/lib/onboardingState';
 
-const STEPS: { icon: SymbolViewProps['name']; title: string; description: string; route: string; params?: Record<string, string> }[] = [
+const STEPS: { icon: AppIconName; title: string; description: string; route: string; params?: Record<string, string> }[] = [
   {
-    icon: { ios: 'arrow.down.circle.fill', android: 'download', web: 'download' },
+    icon: 'download',
     title: 'Descarga tu Biblia',
     description: 'Léela sin conexión donde estés.',
     route: '/downloads',
   },
   {
-    icon: { ios: 'magnifyingglass', android: 'search', web: 'search' },
+    icon: 'search',
     title: 'Busca en toda la app',
     description: 'Versículos, notas, devocionales y diccionario.',
     route: '/search',
   },
   {
-    icon: { ios: 'note.text', android: 'edit_note', web: 'edit_note' },
+    icon: 'notes',
     title: 'Toma notas',
     description: 'Libretas para estudio o cualquier apunte.',
     route: '/(tabs)/notes',
   },
   {
-    icon: { ios: 'photo.fill', android: 'image', web: 'image' },
+    icon: 'image',
     title: 'Crea imágenes de versículos',
     description: 'Selecciona un versículo en el lector y compártelo.',
     route: '/(tabs)/bible',
@@ -66,7 +66,7 @@ export function OnboardingCard() {
           onPress={() => router.push({ pathname: step.route as never, params: step.params })}
         >
           <View style={[styles.icon, { backgroundColor: colors.primarySoft }]}>
-            <SymbolView name={step.icon} tintColor={colors.primary} size={17} />
+            <AppIcon name={step.icon} color={colors.primary} size={17} />
           </View>
           <View style={{ flex: 1, gap: 1 }}>
             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '700' }}>{step.title}</Text>

@@ -6,12 +6,15 @@ const LAST_PASSAGE_KEY = 'BIBLIA_LAST_PASSAGE';
 export type ReaderDensity = 'relaxed' | 'compact';
 export type ReaderAlign = 'left' | 'justify';
 export type ReaderTheme = 'auto' | 'light' | 'sepia' | 'night' | 'contrast';
+/** 'verses': una fila por versículo; 'paragraphs': texto corrido con números en superíndice */
+export type ReaderLayout = 'verses' | 'paragraphs';
 
 export type ReaderPreferences = {
   fontSize: number;
   density: ReaderDensity;
   align: ReaderAlign;
   theme: ReaderTheme;
+  layout: ReaderLayout;
 };
 
 export type ReaderThemePalette = {
@@ -71,6 +74,7 @@ export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
   density: 'relaxed',
   align: 'left',
   theme: 'auto',
+  layout: 'verses',
 };
 
 function parseReaderTheme(value: unknown): ReaderTheme {
@@ -87,6 +91,7 @@ export async function getReaderPreferences(): Promise<ReaderPreferences> {
       density: parsed.density === 'compact' ? 'compact' : 'relaxed',
       align: parsed.align === 'justify' ? 'justify' : 'left',
       theme: parseReaderTheme(parsed.theme),
+      layout: parsed.layout === 'paragraphs' ? 'paragraphs' : 'verses',
     };
   } catch {
     return DEFAULT_READER_PREFERENCES;
@@ -101,6 +106,7 @@ export async function saveReaderPreferences(preferences: ReaderPreferences) {
       density: preferences.density,
       align: preferences.align,
       theme: preferences.theme,
+      layout: preferences.layout,
     }),
   );
 }

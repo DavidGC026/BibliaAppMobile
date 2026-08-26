@@ -1,6 +1,8 @@
 import * as api from '@/lib/api';
 import { setMeta } from '@/lib/db';
 import { getIsOnline } from '@/lib/network';
+import { hasEmbeddedImages } from '@/lib/noteImageHtml';
+import { uploadEmbeddedNoteImages } from '@/lib/noteImageSync';
 import {
   getDirtyNotebooks,
   getDirtyNotes,
@@ -9,6 +11,7 @@ import {
   purgeDeletedNote,
   purgeDeletedNotebook,
   repairNotebookData,
+  setLocalNoteContent,
   setNotebookServerId,
   setNoteServerId,
   upsertNoteFromServer,
@@ -152,6 +155,7 @@ async function pushDirtyNotesOnly() {
       if (!nbSid) continue; // la libreta aún no está en el servidor
       const title = (note.title || '').trim() || 'Sin título';
       const sid = note.server_id ?? (note.id > 0 ? note.id : null);
+      const content = await withUploadedImages(note.id, note.content);
 
       let tags: string[] | undefined;
       try {
@@ -161,19 +165,19 @@ async function pushDirtyNotesOnly() {
       }
 
       if (!sid) {
-        const res = await api.createNotebookNote(nbSid, title, note.content);
+        const res = await api.createNotebookNote(nbSid, title, content);
         await setNoteServerId(note.id, res.id);
         continue;
       }
 
       try {
-        await api.updateNotebookNote(sid, title, note.content, tags);
+        await api.updateNotebookNote(sid, title, content, tags);
         await markNoteSynced(note.id);
       } catch (err) {
         // server_id obsoleto (la nota ya no existe en el servidor) → recrear
         const status = (err as { status?: number })?.status;
         if (status === 404) {
-          const res = await api.createNotebookNote(nbSid, title, note.content);
+          const res = await api.createNotebookNote(nbSid, title, content);
           await setNoteServerId(note.id, res.id);
         } else {
           throw err;
@@ -183,6 +187,19 @@ async function pushDirtyNotesOnly() {
       // retry later
     }
   }
+}
+
+/**
+ * Sube las imágenes que la nota lleve incrustadas en base64 y deja el contenido
+ * con sus URLs, también en SQLite. Así el servidor nunca recibe base64 y la
+ * misma foto no vuelve a subirse en la siguiente sincronización.
+ */
+async function withUploadedImages(localId: number, content: string): Promise<string> {
+  if (!hasEmbeddedImages(content)) return content;
+  const cleaned = await uploadEmbeddedNoteImages(content);
+  if (cleaned === content) return content;
+  await setLocalNoteContent(localId, cleaned);
+  return cleaned;
 }
 
 async function resolveNotebookServerId(notebookId: number): Promise<number | null> {

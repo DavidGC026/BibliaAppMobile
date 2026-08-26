@@ -123,6 +123,9 @@ export async function hydrateOfflineDownloads() {
 }
 
 export async function enqueueBibleDownload(bible: BibleVersion) {
+  if (bible.canDownload !== true) {
+    throw new Error('La licencia de esta versión solo permite lectura en línea.');
+  }
   await hydrateOfflineDownloads();
   const id = taskId('bible', String(bible.bibleId));
   const existing = tasks.find((task) => task.id === id && (task.status === 'queued' || task.status === 'running'));

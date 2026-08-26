@@ -159,6 +159,17 @@ export async function updateLocalNote(id: number, title: string, content: string
   }
 }
 
+/**
+ * Reescribe solo el contenido, sin tocar `dirty` ni `updated_at`.
+ *
+ * Para sustituciones que no son una edición del usuario: p. ej. cambiar una
+ * imagen base64 por su URL ya subida (`lib/noteImageSync.ts`). La nota debe
+ * seguir pendiente de subir si lo estaba.
+ */
+export async function setLocalNoteContent(localId: number, content: string) {
+  await run('UPDATE notes SET content = ? WHERE id = ?', [content, localId]);
+}
+
 export async function moveLocalNote(id: number, notebookId: number) {
   const note = await getFirst<{ id: number }>('SELECT id FROM notes WHERE id = ? OR server_id = ?', [id, id]);
   if (!note) throw new Error('Nota no encontrada');

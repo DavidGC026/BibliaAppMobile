@@ -1,14 +1,14 @@
 import * as WebBrowser from 'expo-web-browser';
 
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, APP_VARIANT } from './config';
 
 WebBrowser.maybeCompleteAuthSession();
 
-const MOBILE_REDIRECT = 'bibliaapp://auth/google';
+const MOBILE_REDIRECT = `${APP_VARIANT === 'internal' ? 'bibliaapp-internal' : 'bibliaapp'}://auth/google`;
 
 export async function signInWithGoogle(): Promise<string> {
   const result = await WebBrowser.openAuthSessionAsync(
-    `${API_BASE_URL}/api/auth/google?mobile=1`,
+    `${API_BASE_URL}/api/auth/google?mobile=1&variant=${encodeURIComponent(APP_VARIANT)}`,
     MOBILE_REDIRECT,
   );
 

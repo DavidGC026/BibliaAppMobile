@@ -1,11 +1,14 @@
 import 'expo-router/entry';
-import {
-  registerWidgetConfigurationScreen,
-  registerWidgetTaskHandler,
-} from 'react-native-android-widget';
+import { Platform } from 'react-native';
 
-import { WidgetConfigurationScreen } from './widgets/WidgetConfigurationScreen';
-import { widgetTaskHandler } from './widgets/widget-task-handler';
+if (Platform.OS === 'android') {
+  const {
+    registerWidgetConfigurationScreen,
+    registerWidgetTaskHandler,
+  } = require('react-native-android-widget') as typeof import('react-native-android-widget');
+  const { WidgetConfigurationScreen } = require('./widgets/WidgetConfigurationScreen') as typeof import('./widgets/WidgetConfigurationScreen');
+  const { widgetTaskHandler } = require('./widgets/widget-task-handler') as typeof import('./widgets/widget-task-handler');
 
-registerWidgetTaskHandler(widgetTaskHandler);
-registerWidgetConfigurationScreen(WidgetConfigurationScreen);
+  registerWidgetTaskHandler(widgetTaskHandler);
+  registerWidgetConfigurationScreen(WidgetConfigurationScreen);
+}

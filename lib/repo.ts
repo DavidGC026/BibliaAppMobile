@@ -4,6 +4,7 @@ import {
   cacheBibleCatalog,
   cacheBooks,
   cacheChapterVerses,
+  canCacheBible,
   deleteDownloadedBible,
   downloadBible,
   getDownloadedSize,
@@ -54,15 +55,18 @@ import {
   downloadCrossReferences,
   downloadDictionary,
   getChapterArcs,
+  getChapterConnections,
   getCrossRefsDownloadInfo,
   getDictionaryDownloadInfo,
   getLocalCrossReferences,
   getLocalDictionaryEntry,
   isDictionaryDownloaded,
   searchLocalDictionary,
+  type ChapterConnection,
   type StudyDownloadInfo,
   type StudyDownloadProgress,
 } from '@/lib/offline/studyStore';
+import { uploadEmbeddedNoteImages } from '@/lib/noteImageSync';
 import { syncAll } from '@/lib/sync';
 import { nowIso } from '@/lib/db';
 import type { BibleVersion, Book, CrossReference, HighlightItem, Notebook, NotebookNote, StrongEntry, Verse } from '@/lib/types';
@@ -75,11 +79,12 @@ export {
   downloadCrossReferences,
   downloadDictionary,
   getChapterArcs,
+  getChapterConnections,
   getCrossRefsDownloadInfo,
   getDictionaryDownloadInfo,
   isDictionaryDownloaded,
 };
-export type { DownloadProgress, StudyDownloadInfo, StudyDownloadProgress };
+export type { ChapterConnection, DownloadProgress, StudyDownloadInfo, StudyDownloadProgress };
 
 export type RecentNotebookNote = NotebookNote & {
   notebookName: string;
@@ -103,7 +108,7 @@ export async function initOffline() {
   await getDb();
 }
 
-export async function repoListBibles(): Promise<{ bibles: BibleVersion[] }> {
+export async function repoListBibles(): Promise<{ bibles: BibleVersion[]; defaultBibleId?: number | null }> {
   if (getIsOnline()) {
     try {
       const res = await api.listBibles();
@@ -139,7 +144,9 @@ export async function repoGetVerses(bibleId: number, bookId: number, chapter: nu
   }
   if (getIsOnline()) {
     const res = await api.getVerses(bibleId, bookId, chapter);
-    await cacheChapterVerses(bibleId, bookId, chapter, res.verses);
+    if (await canCacheBible(bibleId)) {
+      await cacheChapterVerses(bibleId, bookId, chapter, res.verses);
+    }
     return res;
   }
   const verses = await getLocalVerses(bibleId, bookId, chapter);
@@ -380,6 +387,9 @@ export async function repoDeleteNotebook(id: number) {
 
 export async function repoCreateNotebookNote(notebookId: number, title: string, content: string) {
   const finalTitle = title.trim() || 'Sin título';
+  // Las imágenes insertadas sin conexión viajan en base64 dentro del HTML: se
+  // suben y se dejan como URL para no guardar megas en la base de datos.
+  content = await uploadEmbeddedNoteImages(content);
   const note = await createLocalNote(notebookId, finalTitle, content);
   if (useRemote() && notebookId > 0) {
     try {
@@ -395,6 +405,7 @@ export async function repoCreateNotebookNote(notebookId: number, title: string, 
 
 export async function repoUpdateNotebookNote(noteId: number, title: string, content: string, tags?: string[]) {
   const finalTitle = title.trim() || 'Sin título';
+  content = await uploadEmbeddedNoteImages(content);
   await updateLocalNote(noteId, finalTitle, content, tags ? JSON.stringify(tags) : undefined);
   if (useRemote() && noteId > 0) {
     try {
@@ -627,13 +638,35 @@ export async function repoGetChapterNotes(bookId: number, chapter: number) {
   if (getIsOnline()) {
     try {
       const res = await api.getChapterNotes(bookId, chapter);
-      await upsertVerseNotesFromServer(bookId, chapter, res.links);
+      await upsertVerseNotesFromServer(res.links);
       return res;
     } catch {
       // fall through
     }
   }
   return { links: await getLocalChapterNotes(bookId, chapter) };
+}
+
+/**
+ * Todas las notas de versículo, para la sección «Versículos».
+ *
+ * Con red se traen del servidor y se guardan, que es la única forma de ver aquí
+ * lo escrito desde la web o desde otro teléfono. Sin red, o si la petición
+ * falla, se lee lo guardado. En los dos casos se devuelve la copia local: así
+ * la lista siempre enseña lo mismo que el lector, incluidas las notas que
+ * todavía no se han podido subir.
+ */
+export async function repoGetAllVerseNotes(bibleId: number) {
+  if (getIsOnline()) {
+    try {
+      const res = await api.getAllVerseNotes(bibleId);
+      await upsertVerseNotesFromServer(res.links);
+    } catch {
+      // sin conexión útil: se lee lo que haya en el teléfono
+    }
+  }
+  const { getLocalVerseNotes } = await import('@/lib/offline/readerStore');
+  return { links: await getLocalVerseNotes(bibleId) };
 }
 
 export async function repoDeleteVerseNote(noteId: number) {

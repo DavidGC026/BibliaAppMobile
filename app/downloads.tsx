@@ -226,8 +226,10 @@ export default function DownloadsScreen() {
                   <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>
                     Descargada · {b.verseCount.toLocaleString()} versículos
                   </Text>
-                ) : (
+                ) : b.canDownload === true ? (
                   <Text style={{ color: colors.textMuted, fontSize: 12 }}>No descargada</Text>
+                ) : (
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>Disponible solo en línea</Text>
                 )}
                 {downloading ? <ProgressLine progress={progress} queued={task?.status === 'queued'} /> : null}
                 {task?.status === 'error' ? (
@@ -238,11 +240,13 @@ export default function DownloadsScreen() {
                 <ActivityIndicator color={colors.primary} />
               ) : b.downloaded ? (
                 <Button label="Eliminar" variant="outline" onPress={() => removeDownload(b.bibleId, b.abbr)} />
-              ) : (
+              ) : b.canDownload === true ? (
                 <Button
                   label={task?.status === 'error' ? 'Reintentar' : 'Descargar'}
                   onPress={() => startDownload(b)}
                 />
+              ) : (
+                <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '600' }}>Sin descarga</Text>
               )}
             </View>
           </Card>

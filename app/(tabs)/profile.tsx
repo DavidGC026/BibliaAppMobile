@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { LegalLinksFooter } from '@/components/LegalLinksFooter';
 import { OfflineStatusBadge } from '@/components/OfflineStatusBadge';
 import { ReminderSettings } from '@/components/ReminderSettings';
 import { ThemeSwitch } from '@/components/ThemeSwitch';
@@ -11,6 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import { androidWidgetAvailable } from '@/hooks/useAppReminders';
+import { LEGAL_URLS } from '@/lib/config';
 
 function MenuRow({
   icon,
@@ -18,7 +20,7 @@ function MenuRow({
   onPress,
   right,
 }: {
-  icon: SymbolViewProps['name'];
+  icon: AppIconName;
   label: string;
   onPress: () => void;
   right?: React.ReactNode;
@@ -28,7 +30,7 @@ function MenuRow({
   return (
     <Pressable style={styles.menuRow} onPress={onPress}>
       <View style={[styles.menuIcon, { backgroundColor: colors.primarySoft }]}>
-        <SymbolView name={icon} tintColor={colors.primary} size={20} />
+        <AppIcon name={icon} color={colors.primary} size={20} />
       </View>
       <Text style={[styles.menuLabel, { color: colors.text }]}>{label}</Text>
       {right}
@@ -62,6 +64,14 @@ export default function ProfileScreen() {
         </Text>
         <Button label="Entrar" onPress={() => router.push('/login')} />
         <ThemeSwitch />
+        <Card style={styles.menuCard}>
+          <MenuRow
+            icon="info"
+            label="Información legal y licencias"
+            onPress={() => router.push('/legal')}
+          />
+        </Card>
+        <LegalLinksFooter />
       </ScrollView>
     );
   }
@@ -101,26 +111,26 @@ export default function ProfileScreen() {
         <Text style={[styles.menuHeading, { color: colors.textMuted }]}>MI BIBLIA</Text>
         <Card style={styles.menuCard}>
           <MenuRow
-            icon={{ ios: 'arrow.down.circle.fill', android: 'download', web: 'download' }}
+            icon="download"
             label="Descargas offline"
             onPress={() => router.push('/downloads')}
             right={<OfflineStatusBadge compact />}
           />
           <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
           <MenuRow
-            icon={{ ios: 'highlighter', android: 'border_color', web: 'border_color' }}
+            icon="highlighter"
             label="Subrayados"
             onPress={() => router.push('/highlights')}
           />
           <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
           <MenuRow
-            icon={{ ios: 'star.fill', android: 'star', web: 'star' }}
+            icon="star"
             label="Favoritos"
             onPress={() => router.push('/favorites')}
           />
           <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
           <MenuRow
-            icon={{ ios: 'square.grid.2x2.fill', android: 'grid_view', web: 'grid_view' }}
+            icon="settings"
             label="Personalizar accesos rápidos"
             onPress={() => router.push('/customize-home')}
           />
@@ -129,6 +139,40 @@ export default function ProfileScreen() {
 
       <ThemeSwitch isAdmin={user?.role === 'admin'} />
       <ReminderSettings />
+
+      {user?.role === 'admin' ? (
+        <View style={styles.menuSection}>
+          <Text style={[styles.menuHeading, { color: colors.textMuted }]}>ADMINISTRACIÓN</Text>
+          <Card style={styles.menuCard}>
+            <MenuRow
+              icon="groups"
+              label="Gestión de usuarios"
+              onPress={() => router.push('/admin')}
+            />
+          </Card>
+        </View>
+      ) : null}
+
+      <View style={styles.menuSection}>
+        <Text style={[styles.menuHeading, { color: colors.textMuted }]}>LEGAL Y AYUDA</Text>
+        <Card style={styles.menuCard}>
+          <MenuRow
+            icon="info"
+            label="Información legal y licencias"
+            onPress={() => router.push('/legal')}
+          />
+          {LEGAL_URLS.accountDeletion ? (
+            <>
+              <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+              <MenuRow
+                icon="profile"
+                label="Solicitar eliminación de cuenta"
+                onPress={() => Linking.openURL(LEGAL_URLS.accountDeletion!)}
+              />
+            </>
+          ) : null}
+        </Card>
+      </View>
 
       {androidWidgetAvailable() ? (
         <Card style={styles.widgetHint}>
@@ -140,6 +184,7 @@ export default function ProfileScreen() {
       ) : null}
 
       <Button label="Cerrar sesión" variant="outline" onPress={() => logout()} fullWidth />
+      <LegalLinksFooter />
     </ScrollView>
   );
 }
