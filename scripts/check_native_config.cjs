@@ -23,6 +23,7 @@
  * compile y de si ya se ha hecho prebuild con ella.
  */
 const fs = require('fs')
+const os = require('os')
 const path = require('path')
 
 const ROOT = path.resolve(__dirname, '..')
@@ -141,6 +142,50 @@ if (fs.existsSync(GRADLE_PROPS)) {
   }
 }
 
+// — Firma de release: un APK con la llave de debug no actualiza la app —
+
+// La plantilla de Expo firma el release con la keystore de debug, y `android/`
+// se regenera entera en cada prebuild: sin el plugin `withReleaseSigning` el
+// cableado se pierde sin avisar y el APK siguiente ya no vale como
+// actualización de lo publicado (Android lo rechaza por firma distinta).
+const SIGNING_CANDIDATES = [
+  process.env.DVGUZMAN_KEYSTORE_PROPERTIES,
+  path.join(os.homedir(), '.dvguzman/keystore.properties'),
+  path.join(ROOT, 'keystore.properties'),
+]
+
+function releaseKeystore() {
+  for (const candidate of SIGNING_CANDIDATES) {
+    if (!candidate || !fs.existsSync(candidate)) continue
+    const props = Object.fromEntries(
+      fs
+        .readFileSync(candidate, 'utf8')
+        .split('\n')
+        .filter((line) => line.includes('=') && !line.trim().startsWith('#'))
+        .map((line) => [line.slice(0, line.indexOf('=')).trim(), line.slice(line.indexOf('=') + 1).trim()]),
+    )
+    if (props.storeFile && fs.existsSync(props.storeFile)) return { from: candidate, ...props }
+  }
+  return null
+}
+
+const signingWired = /signingConfig\s+dvguzmanSigning\s*!=\s*null/.test(gradle)
+const keystore = signingWired ? releaseKeystore() : null
+
+if (!signingWired) {
+  fail(
+    'el buildType release firma con la keystore de debug',
+    'un prebuild se llevó por delante el cableado de la firma. Vuelve a generarlo con ' +
+      '`npm run prebuild:android` (el plugin plugins/withReleaseSigning lo repone), ' +
+      'o el APK no se podrá instalar encima de la app publicada',
+  )
+} else if (!keystore) {
+  warn(
+    'no se encontró la llave de firma: el APK saldrá firmado con la de debug',
+    'copia keystore.properties y el .jks a ~/.dvguzman/ (ver docs-mobile/40-firma-de-release.md)',
+  )
+}
+
 // — Paquete y esquema: dependen de la variante —
 
 const variant = process.env.APP_VARIANT ?? process.env.EXPO_PUBLIC_APP_VARIANT ?? null
@@ -198,6 +243,7 @@ console.log(`  versionCode      app.json ${app.android?.versionCode}  ·  androi
 console.log(`  paquete          esperado ${expected?.package ?? '(sin app.config.ts)'}  ·  android/ ${nativeApplicationId}`)
 console.log(`  variante         ${variant ?? '(sin APP_VARIANT: app.config.ts usa internal)'}`)
 console.log(`  gradle           wrapper ${wrapperVersion ?? '(sin wrapper)'}  ·  compatible ${GRADLE_OK}`)
+console.log(`  firma release    ${signingWired ? (keystore ? `${keystore.keyAlias} · ${keystore.from}` : 'cableada, pero sin llave a mano') : 'keystore de debug'}`)
 console.log(`  sdk android      ${sdkDir ?? '(sin ruta)'}  ·  según ${sdkFrom ?? 'nada'}`)
 
 if (warnings.length) {
