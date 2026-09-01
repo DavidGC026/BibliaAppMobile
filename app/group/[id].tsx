@@ -13,12 +13,13 @@ import {
 
 import { FeedContent } from '@/components/FeedContent';
 import { GroupHeader } from '@/components/GroupHeader';
+import { GroupInviteCard } from '@/components/GroupInviteCard';
 import { useThemeColors } from '@/hooks/useThemeColors';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
 import type { GroupEvent, GroupPost, GroupPrayer, GroupSummary } from '@/lib/types';
 
-type GroupTab = 'prayers' | 'events' | 'activity';
+type GroupTab = 'prayers' | 'events' | 'activity' | 'invite';
 
 function formatDate(iso: string) {
   try {
@@ -57,7 +58,7 @@ export default function GroupDetailScreen() {
     } else if (tab === 'events') {
       const { events: list } = await api.getGroupEvents(groupId);
       setEvents(list);
-    } else {
+    } else if (tab === 'activity') {
       const { posts: list } = await api.getGroupPosts(groupId);
       setPosts(list);
     }
@@ -107,6 +108,7 @@ export default function GroupDetailScreen() {
     { key: 'prayers', label: 'Oración' },
     { key: 'events', label: 'Calendario' },
     { key: 'activity', label: 'Actividad' },
+    { key: 'invite', label: 'Invitar' },
   ];
 
   return (
@@ -217,6 +219,17 @@ export default function GroupDetailScreen() {
                   </View>
                 )}
               />
+            ) : tab === 'invite' ? (
+              <ScrollView contentContainerStyle={[styles.list, { paddingBottom: contentPadding }]}>
+                {group ? (
+                  <GroupInviteCard
+                    groupId={group.id}
+                    inviteCode={group.invite_code}
+                    isAdmin={group.role === 'admin'}
+                    onCodeChange={(code) => setGroup((prev) => (prev ? { ...prev, invite_code: code } : prev))}
+                  />
+                ) : null}
+              </ScrollView>
             ) : (
               <FlatList
                 data={posts}

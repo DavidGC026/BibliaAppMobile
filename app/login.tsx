@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import {
   Image,
@@ -18,10 +18,16 @@ import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { IS_INTERNAL_APP, LEGAL_URLS } from '@/lib/config';
+import { consumePendingGroupJoin } from '@/lib/pendingGroupJoin';
 
 const logo = require('@/assets/images/icon.png');
 
-function finishLogin() {
+async function finishLogin() {
+  const pendingCode = await consumePendingGroupJoin();
+  if (pendingCode) {
+    router.replace(`/join-group?code=${pendingCode}` as Href);
+    return;
+  }
   // Tras OAuth el stack queda raro; replace evita volver al modal de login.
   router.replace('/(tabs)');
 }
@@ -48,7 +54,7 @@ export default function LoginScreen() {
       setLoading(true);
       setError(null);
       await login(email, password);
-      finishLogin();
+      await finishLogin();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión');
     } finally {
@@ -61,7 +67,7 @@ export default function LoginScreen() {
       setGoogleLoading(true);
       setError(null);
       await loginWithGoogle();
-      finishLogin();
+      await finishLogin();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al iniciar sesión con Google');
     } finally {
@@ -162,8 +168,8 @@ export default function LoginScreen() {
             }
           >
             términos y condiciones
-          </Text>{' '}
-          y el{' '}
+          </Text>
+          {', el '}
           <Text
             style={[styles.legalLink, { color: colors.primary }]}
             onPress={() =>
@@ -171,6 +177,15 @@ export default function LoginScreen() {
             }
           >
             aviso de privacidad
+          </Text>
+          {' y las '}
+          <Text
+            style={[styles.legalLink, { color: colors.primary }]}
+            onPress={() =>
+              LEGAL_URLS.communityGuidelines ? Linking.openURL(LEGAL_URLS.communityGuidelines) : router.push('/legal')
+            }
+          >
+            normas de la comunidad
           </Text>
           .
         </Text>

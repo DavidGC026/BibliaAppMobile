@@ -20,6 +20,7 @@ import { loadAllDownloadedFonts } from '@/lib/fontManager';
 import { hydrateOfflineDownloads } from '@/lib/offlineDownloadManager';
 import { initOffline } from '@/lib/repo';
 import { useAppReminders } from '@/hooks/useAppReminders';
+import { useGroupJoinDeepLink } from '@/hooks/useGroupJoinDeepLink';
 
 export {
   ErrorBoundary,
@@ -89,6 +90,7 @@ function RootLayoutNav() {
   const palette = Colors[colorScheme];
   const usesDarkChrome = isDarkTheme(colorScheme);
   useAppReminders();
+  useGroupJoinDeepLink();
 
   const theme = usesDarkChrome
     ? {
@@ -182,6 +184,11 @@ function RootLayoutNav() {
         <Stack.Screen name="customize-home" options={{ title: 'Accesos rápidos' }} />
         <Stack.Screen name="search" options={{ title: 'Búsqueda' }} />
         <Stack.Screen name="rainbow" options={{ title: 'Mapa de referencias' }} />
+        <Stack.Screen name="friends" options={{ title: 'Amigos' }} />
+        <Stack.Screen name="discipleship" options={{ title: 'Discipulado' }} />
+        <Stack.Screen name="join-group" options={{ title: 'Unirse a un grupo' }} />
+        <Stack.Screen name="scan-group" options={{ title: 'Escanear QR' }} />
+        <Stack.Screen name="user/[username]" options={{ title: 'Perfil' }} />
       </Stack>
       <LegalAcceptanceGate />
     </ThemeProvider>

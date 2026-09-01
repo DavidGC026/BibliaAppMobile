@@ -64,6 +64,16 @@
         }
       ],
       "expo-sqlite",
+      "expo-audio",
+      "expo-speech",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "BibliaAPP usa la cámara para escanear el código QR de un grupo.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       [
         "react-native-android-widget",
         {

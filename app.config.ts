@@ -46,6 +46,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           'BibliaAPP usa las fotos que eliges para portadas, notas e imágenes de versículos.',
         NSPhotoLibraryAddUsageDescription:
           'BibliaAPP guarda en Fotos únicamente las imágenes de versículos que tú creas.',
+        NSCameraUsageDescription:
+          'BibliaAPP usa la cámara para escanear el código QR de un grupo.',
       },
     },
     android: {
@@ -53,7 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       package: isInternal
         ? 'com.bibliaapp.mobile.internal'
         : 'com.bibliaapp.mobile',
-      permissions: [],
+      permissions: ['android.permission.CAMERA'],
       blockedPermissions: [
         'android.permission.READ_EXTERNAL_STORAGE',
         'android.permission.WRITE_EXTERNAL_STORAGE',

@@ -1,6 +1,8 @@
+import { Href, router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +19,7 @@ import type { FeedComment, FeedPost } from '@/lib/types';
 interface FeedPostCardProps {
   post: FeedPost;
   onUpdate: (post: FeedPost) => void;
+  onRemove?: (postId: number) => void;
 }
 
 function formatDate(iso: string) {
@@ -27,7 +30,7 @@ function formatDate(iso: string) {
   }
 }
 
-export function FeedPostCard({ post, onUpdate }: FeedPostCardProps) {
+export function FeedPostCard({ post, onUpdate, onRemove }: FeedPostCardProps) {
   const { colors, radius } = useAppTheme();
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState<FeedComment[]>([]);
@@ -36,6 +39,75 @@ export function FeedPostCard({ post, onUpdate }: FeedPostCardProps) {
   const [busy, setBusy] = useState(false);
 
   const liked = !!post.is_liked;
+
+  const handleOptions = () => {
+    Alert.alert(
+      'Opciones',
+      `Acciones para la publicación de ${post.user_name}`,
+      [
+        {
+          text: 'Denunciar publicación',
+          onPress: () => {
+            Alert.alert(
+              'Denunciar contenido',
+              'Selecciona el motivo:',
+              [
+                {
+                  text: 'Spam o contenido engañoso',
+                  onPress: () => submitReport('spam'),
+                },
+                {
+                  text: 'Acoso o intimidación',
+                  onPress: () => submitReport('harassment'),
+                },
+                {
+                  text: 'Contenido inapropiado / Odio',
+                  onPress: () => submitReport('inappropriate'),
+                },
+                { text: 'Cancelar', style: 'cancel' },
+              ],
+            );
+          },
+        },
+        {
+          text: `Bloquear a ${post.user_name}`,
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Bloquear usuario',
+              `¿Deseas bloquear a ${post.user_name}? Ya no verás sus publicaciones.`,
+              [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                  text: 'Bloquear',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await api.blockUser(post.user_id);
+                      Alert.alert('Usuario bloqueado', 'El usuario ha sido bloqueado exitosamente.');
+                      if (onRemove) onRemove(post.id);
+                    } catch (e) {
+                      Alert.alert('Error', e instanceof Error ? e.message : 'Error al bloquear');
+                    }
+                  },
+                },
+              ],
+            );
+          },
+        },
+        { text: 'Cancelar', style: 'cancel' },
+      ],
+    );
+  };
+
+  const submitReport = async (reason: string) => {
+    try {
+      await api.reportContent('post', post.id, reason);
+      Alert.alert('Gracias', 'Tu reporte ha sido enviado. Revisaremos el contenido.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Error al enviar reporte');
+    }
+  };
 
   const toggleLike = async () => {
     setBusy(true);
@@ -92,12 +164,23 @@ export function FeedPostCard({ post, onUpdate }: FeedPostCardProps) {
 
   return (
     <Card style={styles.card}>
-      <Text style={[styles.author, { color: colors.text }]}>
-        {post.user_name}
-        {post.user_username ? (
-          <Text style={{ color: colors.textMuted }}> @{post.user_username}</Text>
-        ) : null}
-      </Text>
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={() => {
+            if (post.user_username) router.push(`/user/${encodeURIComponent(post.user_username)}` as Href);
+          }}
+        >
+          <Text style={[styles.author, { color: colors.text }]}>
+            {post.user_name}
+            {post.user_username ? (
+              <Text style={{ color: colors.textMuted }}> @{post.user_username}</Text>
+            ) : null}
+          </Text>
+        </Pressable>
+        <Pressable hitSlop={10} style={styles.optionsBtn} onPress={handleOptions}>
+          <Text style={{ color: colors.textMuted, fontSize: 18, fontWeight: '700' }}>⋮</Text>
+        </Pressable>
+      </View>
 
       {post.verse_ref ? (
         <View style={[styles.verseBox, { borderColor: colors.primary, backgroundColor: colors.primarySoft }]}>
@@ -160,7 +243,9 @@ export function FeedPostCard({ post, onUpdate }: FeedPostCardProps) {
 
 const styles = StyleSheet.create({
   card: { marginBottom: 12, gap: 8, padding: 16 },
-  author: { fontSize: 15, fontWeight: '700' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  author: { fontSize: 15, fontWeight: '700', flex: 1 },
+  optionsBtn: { paddingHorizontal: 6, paddingVertical: 2 },
   verseBox: { borderLeftWidth: 3, borderRadius: 8, padding: 10, gap: 4 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 16, flexWrap: 'wrap' },
   actionBtn: { paddingVertical: 4 },

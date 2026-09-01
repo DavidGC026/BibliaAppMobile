@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { DevotionalsPanel } from '@/components/notes/DevotionalsPanel';
 import { NotebooksPanel } from '@/components/notes/NotebooksPanel';
+import { PrayersPanel } from '@/components/notes/PrayersPanel';
 import { StudyBooksPanel } from '@/components/notes/StudyBooksPanel';
 import { VerseNotesPanel } from '@/components/notes/VerseNotesPanel';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -14,7 +15,7 @@ import { AppIcon } from '@/components/ui/AppIcon';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
-type NotesSection = 'libretas' | 'versiculos' | 'diario' | 'libros' | 'planes';
+type NotesSection = 'libretas' | 'versiculos' | 'diario' | 'libros' | 'planes' | 'oracion';
 
 const TABS: { key: NotesSection; label: string }[] = [
   { key: 'libretas', label: 'Notas' },
@@ -22,6 +23,7 @@ const TABS: { key: NotesSection; label: string }[] = [
   { key: 'diario', label: 'Diario' },
   { key: 'libros', label: 'Biblioteca' },
   { key: 'planes', label: 'Planes' },
+  { key: 'oracion', label: 'Oración' },
 ];
 
 export default function NotesScreen() {
@@ -57,7 +59,7 @@ export default function NotesScreen() {
           <View style={{ flex: 1 }}>
             <Text style={[typography.h1, { color: colors.text, fontSize: 22 }]}>Notas</Text>
             <Text style={{ color: colors.textMuted, fontSize: 13, lineHeight: 19 }}>
-              Apuntes, versículos, diario, biblioteca y planes.
+              Apuntes, versículos, diario, oración, biblioteca y planes.
             </Text>
           </View>
           <View style={styles.syncWrap}>
@@ -71,6 +73,7 @@ export default function NotesScreen() {
       {section === 'diario' ? <DevotionalsPanel /> : null}
       {section === 'libros' ? <StudyBooksPanel /> : null}
       {section === 'planes' ? <ReadingPlansPanel /> : null}
+      {section === 'oracion' ? <PrayersPanel /> : null}
     </View>
   );
 }

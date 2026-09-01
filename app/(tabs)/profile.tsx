@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Href, router } from 'expo-router';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,6 +13,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import { androidWidgetAvailable } from '@/hooks/useAppReminders';
 import { LEGAL_URLS } from '@/lib/config';
+import * as api from '@/lib/api';
 
 function MenuRow({
   icon,
@@ -137,6 +138,23 @@ export default function ProfileScreen() {
         </Card>
       </View>
 
+      <View style={styles.menuSection}>
+        <Text style={[styles.menuHeading, { color: colors.textMuted }]}>COMUNIDAD</Text>
+        <Card style={styles.menuCard}>
+          <MenuRow
+            icon="community"
+            label="Amigos y seguir"
+            onPress={() => router.push('/friends' as Href)}
+          />
+          <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+          <MenuRow
+            icon="groups"
+            label="Discipulado"
+            onPress={() => router.push('/discipleship' as Href)}
+          />
+        </Card>
+      </View>
+
       <ThemeSwitch isAdmin={user?.role === 'admin'} />
       <ReminderSettings />
 
@@ -154,6 +172,69 @@ export default function ProfileScreen() {
       ) : null}
 
       <View style={styles.menuSection}>
+        <Text style={[styles.menuHeading, { color: colors.textMuted }]}>PRIVACIDAD Y SEGURIDAD</Text>
+        <Card style={styles.menuCard}>
+          <MenuRow
+            icon="profile"
+            label="Usuarios bloqueados"
+            onPress={async () => {
+              try {
+                const { blockedUsers } = await api.getBlockedUsers();
+                if (blockedUsers.length === 0) {
+                  Alert.alert('Usuarios bloqueados', 'No tienes usuarios bloqueados.');
+                  return;
+                }
+                const first = blockedUsers[0];
+                Alert.alert(
+                  'Usuarios bloqueados',
+                  `Tienes ${blockedUsers.length} usuario(s) bloqueado(s).\n\nEjemplo: ${first.name} (@${first.username})`,
+                  [
+                    {
+                      text: `Desbloquear a ${first.name}`,
+                      onPress: async () => {
+                        await api.unblockUser(first.id);
+                        Alert.alert('Éxito', `${first.name} ha sido desbloqueado.`);
+                      },
+                    },
+                    { text: 'Cerrar', style: 'cancel' },
+                  ],
+                );
+              } catch (e) {
+                Alert.alert('Error', e instanceof Error ? e.message : 'Error al obtener bloqueados');
+              }
+            }}
+          />
+          <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
+          <MenuRow
+            icon="delete"
+            label="Eliminar mi cuenta definitivamente"
+            onPress={() => {
+              Alert.alert(
+                'Eliminar cuenta',
+                '¿Estás seguro de que deseas eliminar tu cuenta permanentemente? Esta acción es irreversible y eliminará todos tus datos.',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  {
+                    text: 'Eliminar definitivamente',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await api.deleteMyAccount();
+                        Alert.alert('Cuenta eliminada', 'Tu cuenta ha sido eliminada.');
+                        logout();
+                      } catch (e) {
+                        Alert.alert('Error', e instanceof Error ? e.message : 'Error al eliminar cuenta');
+                      }
+                    },
+                  },
+                ],
+              );
+            }}
+          />
+        </Card>
+      </View>
+
+      <View style={styles.menuSection}>
         <Text style={[styles.menuHeading, { color: colors.textMuted }]}>LEGAL Y AYUDA</Text>
         <Card style={styles.menuCard}>
           <MenuRow
@@ -166,7 +247,7 @@ export default function ProfileScreen() {
               <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
               <MenuRow
                 icon="profile"
-                label="Solicitar eliminación de cuenta"
+                label="Solicitar eliminación de cuenta (Web)"
                 onPress={() => Linking.openURL(LEGAL_URLS.accountDeletion!)}
               />
             </>

@@ -704,3 +704,164 @@ export async function fetchUnsplashImages(
   if (opts?.page && opts.page > 1) params.set('page', String(opts.page));
   return request<UnsplashSearchResult>(`/api/unsplash?${params}`);
 }
+
+export async function reportContent(
+  targetType: 'post' | 'comment' | 'user',
+  targetId: number,
+  reason: string,
+  details?: string,
+) {
+  return request<{ success: boolean; message: string }>('/api/moderation/report', {
+    method: 'POST',
+    body: JSON.stringify({ targetType, targetId, reason, details }),
+  });
+}
+
+export async function blockUser(userId: number) {
+  return request<{ success: boolean; message: string }>('/api/moderation/block', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function unblockUser(userId: number) {
+  return request<{ success: boolean; message: string }>(`/api/moderation/block?userId=${userId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getBlockedUsers() {
+  return request<{
+    blockedUsers: Array<{
+      id: number;
+      name: string;
+      username: string;
+      avatar_media_id: number | null;
+      blocked_at: string;
+    }>;
+  }>('/api/moderation/blocked');
+}
+
+export async function deleteMyAccount() {
+  return request<{ success: boolean; message: string }>('/api/profile', {
+    method: 'DELETE',
+  });
+}
+
+export async function getTtsVoices() {
+  return request<{ available: boolean; voices: import('./types').TtsVoice[] }>('/api/tts?info=voices');
+}
+
+export async function previewGroupByCode(code: string) {
+  return request<{ group: import('./types').GroupPreview }>(
+    `/api/groups/preview?code=${encodeURIComponent(code.trim())}`,
+  );
+}
+
+export async function regenerateGroupInvite(groupId: number) {
+  return request<{ success: boolean; invite_code: string }>(`/api/groups/${groupId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ action: 'regenerate_invite' }),
+  });
+}
+
+export async function listMyPrayers() {
+  return request<{ prayers: import('./types').UserPrayer[] }>('/api/prayers');
+}
+
+export async function createPrayer(input: {
+  title: string;
+  description?: string;
+  visibility?: 'private' | 'group';
+  groupId?: number | null;
+}) {
+  return request<{ id: number }>('/api/prayers', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updatePrayerStatus(id: number, status: string) {
+  return request<{ success: boolean }>('/api/prayers', {
+    method: 'PUT',
+    body: JSON.stringify({ id, status }),
+  });
+}
+
+export async function deletePrayer(id: number) {
+  return request<{ success: boolean }>(`/api/prayers?id=${id}`, { method: 'DELETE' });
+}
+
+export async function listFriends() {
+  return request<{ friends: import('./types').FriendUser[] }>('/api/friends');
+}
+
+export async function listPendingFriendRequests() {
+  return request<{ requests: import('./types').FriendRequest[] }>('/api/friends?tab=pending');
+}
+
+export async function sendFriendRequest(userId: number) {
+  return request<{ success: boolean }>('/api/friends', {
+    method: 'POST',
+    body: JSON.stringify({ userId }),
+  });
+}
+
+export async function respondFriendRequest(requesterId: number, action: 'accept' | 'reject') {
+  return request<{ success: boolean }>('/api/friends', {
+    method: 'PATCH',
+    body: JSON.stringify({ requesterId, action }),
+  });
+}
+
+export async function searchUsers(query: string) {
+  return request<{ users: import('./types').FriendUser[] }>(
+    `/api/users/search?q=${encodeURIComponent(query)}`,
+  );
+}
+
+export async function getPublicProfile(username: string) {
+  return request<{ profile: import('./types').PublicProfile }>(
+    `/api/profile/${encodeURIComponent(username)}`,
+  );
+}
+
+export async function followUser(username: string) {
+  return request<{ success: boolean }>(`/api/profile/${encodeURIComponent(username)}/follow`, {
+    method: 'POST',
+  });
+}
+
+export async function unfollowUser(username: string) {
+  return request<{ success: boolean }>(`/api/profile/${encodeURIComponent(username)}/follow`, {
+    method: 'DELETE',
+  });
+}
+
+export async function listDiscipleship() {
+  return request<{
+    asMentor: import('./types').DiscipleshipRelation[];
+    asDisciple: import('./types').DiscipleshipRelation[];
+  }>('/api/discipleship');
+}
+
+export async function requestDiscipleship(mentorUsername: string) {
+  return request<{ success: boolean; id: number }>('/api/discipleship', {
+    method: 'POST',
+    body: JSON.stringify({ mentorUsername }),
+  });
+}
+
+export async function respondDiscipleship(id: number, accept: boolean) {
+  return request<{ success: boolean }>('/api/discipleship', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'respond', id, accept }),
+  });
+}
+
+export async function getDiscipleProgress(discipleId: number) {
+  return request<{ progress: import('./types').DiscipleProgress }>(
+    `/api/discipleship?discipleId=${discipleId}`,
+  );
+}
+

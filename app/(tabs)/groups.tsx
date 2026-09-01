@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { Href, router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -152,6 +152,12 @@ export default function GroupsScreen() {
             onPress={joinGroup}
             disabled={joining || !inviteCode.trim()}
             loading={joining}
+            fullWidth
+          />
+          <Button
+            label="Escanear QR"
+            variant="outline"
+            onPress={() => router.push('/scan-group' as Href)}
             fullWidth
           />
         </Card>

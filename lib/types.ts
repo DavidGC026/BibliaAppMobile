@@ -116,6 +116,7 @@ export interface VerseOfDay {
 
 export interface FeedPost {
   id: number;
+  user_id: number;
   content: string;
   created_at: string;
   user_name: string;
@@ -350,6 +351,76 @@ export interface HighlightItem {
   text: string;
   bible_id: number;
   bible_abbr?: string;
+}
+
+export interface UserPrayer {
+  id: number;
+  title: string;
+  description: string;
+  status: 'active' | 'answered' | 'archived' | string;
+  visibility?: 'private' | 'group';
+  group_id?: number | null;
+  created_at: string;
+}
+
+export interface FriendUser {
+  id: number;
+  name: string;
+  username: string | null;
+}
+
+export interface FriendRequest {
+  id: number;
+  requester_id: number;
+  created_at: string;
+  name: string;
+  username: string | null;
+}
+
+export type FriendStatus = 'none' | 'pending_sent' | 'pending_received' | 'friends';
+
+export interface PublicProfile {
+  id: number;
+  name: string;
+  username: string | null;
+  followersCount: number;
+  followingCount: number;
+  isFollowing: boolean;
+  friendStatus: FriendStatus;
+  avatarUrl?: string | null;
+  streak_count?: number;
+  streakCount?: number;
+}
+
+export interface DiscipleshipRelation {
+  id: number;
+  status: 'pending' | 'active' | 'declined' | 'ended' | string;
+  created_at: string;
+  partner_id: number;
+  partner_name: string;
+  partner_username: string | null;
+  role: 'mentor' | 'disciple' | string;
+}
+
+export interface DiscipleProgress {
+  reading_plans: Array<{ plan_id: number; name: string; progress: string; started_at: string }>;
+  devotionals: Array<{ id: number; title: string; emotion: string | null; verse_ref: string | null; created_at: string }>;
+  streak_count: number;
+  last_active_date: string | null;
+}
+
+export interface TtsVoice {
+  id: string;
+  name: string;
+  lang: string;
+  gender: string;
+}
+
+export interface GroupPreview {
+  id: number;
+  name: string;
+  description: string | null;
+  member_count?: number;
 }
 
 export const HIGHLIGHT_COLORS = ['yellow', 'green', 'blue', 'orange', 'pink'] as const;

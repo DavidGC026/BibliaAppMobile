@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
+import { BibleAudioPlayer } from '@/components/BibleAudioPlayer';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
 import { CrossReferencesModal } from '@/components/CrossReferencesModal';
@@ -116,10 +117,14 @@ export function BibleReader({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chapterFavorites, setChapterFavorites] = useState<Map<number, number>>(new Map());
+  const [audioOpen, setAudioOpen] = useState(false);
+  const [audioStartVerse, setAudioStartVerse] = useState<number | undefined>(undefined);
+  const [speakingVerse, setSpeakingVerse] = useState<number | null>(null);
 
   const selectedBook = books.find((b) => b.bookId === bookId) ?? null;
   const maxChapter = selectedBook?.chapters ?? 1;
   const currentBible = bibles.find((b) => b.bibleId === bibleId);
+  const audioAllowed = currentBible?.canUseAudio !== false;
   // Progreso dentro del capítulo según el versículo visible (no del libro:
   // "Capítulo X de Y" ya lo dice el eyebrow de la cabecera).
   const readingProgress =
@@ -587,6 +592,18 @@ export function BibleReader({
             </Text>
           </View>
           <View style={styles.headerActions}>
+            {audioAllowed ? (
+              <Pressable
+                style={[styles.iconPill, { backgroundColor: colors.primarySoft, borderRadius: radius.full }]}
+                onPress={() => {
+                  setAudioStartVerse(selectedVerses[0] ?? currentVerseNum);
+                  setAudioOpen(true);
+                }}
+                accessibilityLabel="Escuchar capítulo"
+              >
+                <SymbolView name={{ ios: 'headphones', android: 'headphones', web: 'headphones' }} tintColor={colors.primary} size={18} />
+              </Pressable>
+            ) : null}
             <Pressable
               style={[styles.iconPill, { backgroundColor: colors.primarySoft, borderRadius: radius.full }]}
               onPress={() => router.push('/downloads')}
@@ -649,6 +666,7 @@ export function BibleReader({
               const hl = highlightMap.get(v.verse);
               const hasNote = noteMap.has(v.verse);
               const isSelected = selectedVerses.includes(v.verse);
+              const isSpeaking = speakingVerse === v.verse;
               return (
                 <Text
                   key={v.verse}
@@ -666,11 +684,13 @@ export function BibleReader({
                   </Text>
                   <Text
                     style={{
-                      backgroundColor: isSelected
+                      backgroundColor: isSpeaking
                         ? readingColors.accentSoft
-                        : hl
-                          ? highlightBg(hl, readerIsDark)
-                          : undefined,
+                        : isSelected
+                          ? readingColors.accentSoft
+                          : hl
+                            ? highlightBg(hl, readerIsDark)
+                            : undefined,
                       textDecorationLine: isSelected ? 'underline' : 'none',
                       textDecorationColor: readingColors.accent,
                     }}
@@ -705,6 +725,7 @@ export function BibleReader({
               const hasNote = noteMap.has(v.verse);
               const isFavorite = chapterFavorites.has(v.verse);
               const isSelected = selectedVerses.includes(v.verse);
+              const isSpeaking = speakingVerse === v.verse;
               return (
                 <Pressable
                   key={v.verse}
@@ -717,8 +738,16 @@ export function BibleReader({
                   }}
                   style={[
                     styles.verseRow,
-                    hl && !isSelected ? verseHighlightStyle(hl, readerIsDark) : null,
-                    isSelected ? { backgroundColor: readingColors.accentSoft, borderRadius: 8, paddingLeft: 8 } : null,
+                    hl && !isSelected && !isSpeaking ? verseHighlightStyle(hl, readerIsDark) : null,
+                    isSelected || isSpeaking
+                      ? {
+                          backgroundColor: readingColors.accentSoft,
+                          borderRadius: 8,
+                          paddingLeft: 8,
+                          borderWidth: isSpeaking ? 1 : 0,
+                          borderColor: isSpeaking ? readingColors.accent : 'transparent',
+                        }
+                      : null,
                   ]}
                 >
                   <View style={styles.verseContentRow}>
@@ -764,6 +793,19 @@ export function BibleReader({
         )}
       </ScrollView>
 
+      {audioOpen && verses.length > 0 && audioAllowed ? (
+        <BibleAudioPlayer
+          verses={verses}
+          chapterLabel={`${selectedBook?.bookName ?? ''} ${chapter}`}
+          startVerse={audioStartVerse}
+          onActiveVerseChange={setSpeakingVerse}
+          onClose={() => {
+            setAudioOpen(false);
+            setSpeakingVerse(null);
+          }}
+        />
+      ) : null}
+
       {selectedVerses.length > 0 ? (
         <View style={[styles.actionBar, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl, bottom: 16 + bottomInset }]}>
           <View style={styles.actionHeader}>
@@ -775,6 +817,17 @@ export function BibleReader({
             </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
+            {audioAllowed ? (
+              <Pressable
+                style={[styles.toolBtn, { borderColor: colors.primary }]}
+                onPress={() => {
+                  setAudioStartVerse(selectedVerses[0]);
+                  setAudioOpen(true);
+                }}
+              >
+                <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '600' }}>Escuchar</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               style={[styles.toolBtn, { borderColor: colors.primary, opacity: currentBible?.canShare === false ? 0.4 : 1 }]}
               onPress={handleShareSelection}
