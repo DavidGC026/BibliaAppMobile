@@ -268,6 +268,24 @@ check(
   bridge.document.documentElement.style.getPropertyValue('--kb-cover') === '28px',
   bridge.document.documentElement.style.getPropertyValue('--kb-cover'),
 )
+
+// Al bajar el teclado el viewport crece sin que llegue ningún «resize»: la
+// página tiene que remedirse igual, o se queda a media pantalla.
+bridge.window.innerHeight = 900
+send(bridge.window, { type: 'setKeyboardInset', value: 0, covered: 0 })
+check(
+  'sin teclado la página se remide aunque no llegue un «resize»',
+  bridge.document.documentElement.style.getPropertyValue('--app-height') === '900px',
+  bridge.document.documentElement.style.getPropertyValue('--app-height'),
+)
+
+bridge.window.innerHeight = 1024
+bridge.window.dispatchEvent(new bridge.window.Event('focusout'))
+check(
+  'y al perder el foco el editor, también',
+  bridge.document.documentElement.style.getPropertyValue('--app-height') === '1024px',
+  bridge.document.documentElement.style.getPropertyValue('--app-height'),
+)
 send(bridge.window, { type: 'setKeyboardInset', value: 0, covered: 0 })
 check(
   'y al cerrarse recupera todo el alto',

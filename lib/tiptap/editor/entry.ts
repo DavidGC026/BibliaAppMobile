@@ -16,6 +16,9 @@ import { TextSelection } from '@tiptap/pm/state'
  * `getHtml`, mandando `insertVerse` y recibiendo `onChange`.
  */
 
+/** El teclado se va animado: un segundo repaso recoge el alto ya asentado. */
+const VIEWPORT_SETTLE_MS = 300
+
 type Boot = {
   content: string
   colors: string[]
@@ -127,12 +130,26 @@ export function startNoteEditor() {
       document.documentElement.style.setProperty('--app-height', `${height}px`)
     }
   }
+  /**
+   * Vuelve a medir cuando el teclado se va.
+   *
+   * Al bajar el teclado el viewport visual crece otra vez, pero no siempre llega
+   * un `resize`: si el WebView pierde el foco, el motor puede quedarse con el
+   * alto de antes y la página se queda a media pantalla. El teclado además se va
+   * animado, así que un segundo repaso recoge el alto final.
+   */
+  const remeasureViewportHeight = () => {
+    applyViewportHeight()
+    window.setTimeout(applyViewportHeight, VIEWPORT_SETTLE_MS)
+  }
+
   applyViewportHeight()
   window.addEventListener('resize', applyViewportHeight)
   window.visualViewport?.addEventListener('resize', applyViewportHeight)
   // Al desplazarse el viewport visual cambia lo que se ve sin cambiar de alto,
   // pero en Android llega antes que el «resize» y adelanta la corrección.
   window.visualViewport?.addEventListener('scroll', applyViewportHeight)
+  window.addEventListener('focusout', remeasureViewportHeight)
 
   // El documento se desplaza dentro de su caja, no la página: el teclado ya
   // encoge el WebView desde React Native.
@@ -195,6 +212,9 @@ export function startNoteEditor() {
         const covered = Math.max(0, Number(action.covered ?? 0))
         document.documentElement.style.setProperty('--kb-cover', `${covered}px`)
         if ((action.value ?? 0) > 0) keepCaretVisible()
+        // Sin teclado la pantalla vuelve a ser toda de la página: se remide por
+        // si el motor no avisó de que el viewport visual creció.
+        else remeasureViewportHeight()
         return
       }
       if (action.type === 'blurEditor') {

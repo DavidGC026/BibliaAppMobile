@@ -23,7 +23,7 @@ import { CrossReferencesModal } from '@/components/CrossReferencesModal';
 import { VerseImageCreator } from '@/components/VerseImageCreator';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { useKeyboardHeight } from '@/hooks/useKeyboardHeight';
+import { useKeyboardInset } from '@/hooks/useKeyboardInset';
 import * as api from '@/lib/api';
 import { DEFAULT_BIBLE_ID } from '@/lib/config';
 import * as repo from '@/lib/repo';
@@ -66,8 +66,12 @@ export function BibleReader({
 } = {}) {
   const { colors, radius, shadow, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const keyboardHeight = useKeyboardHeight();
-  const contentPadding = 110 + insets.bottom + keyboardHeight;
+  // El inset IME se mide desde el borde de la ventana, asi que con el teclado
+  // abierto ya incluye la banda de la barra de navegacion: se toma el mayor de
+  // los dos, nunca la suma, o esa banda se cuenta dos veces.
+  const keyboardInset = useKeyboardInset();
+  const bottomInset = Math.max(insets.bottom, keyboardInset);
+  const contentPadding = 110 + bottomInset;
   const { isGuest } = useAuth();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
@@ -650,7 +654,6 @@ export function BibleReader({
                   key={v.verse}
                   onPress={() => toggleVerseSelection(v.verse)}
                   onLongPress={() => selectRangeTo(v.verse)}
-                  delayLongPress={400}
                 >
                   <Text
                     style={{
@@ -762,7 +765,7 @@ export function BibleReader({
       </ScrollView>
 
       {selectedVerses.length > 0 ? (
-        <View style={[styles.actionBar, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl, bottom: 16 + insets.bottom + keyboardHeight }]}>
+        <View style={[styles.actionBar, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.xl, bottom: 16 + bottomInset }]}>
           <View style={styles.actionHeader}>
             <Text style={[styles.actionLabel, { color: colors.textMuted }]} numberOfLines={1}>
               {selectionLabel}
@@ -838,7 +841,7 @@ export function BibleReader({
           </ScrollView>
         </View>
       ) : (
-        <View style={[styles.bottomNav, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.full, bottom: 16 + insets.bottom + keyboardHeight }]}>
+        <View style={[styles.bottomNav, shadow.md, { backgroundColor: colors.card, borderColor: colors.border, borderRadius: radius.full, bottom: 16 + bottomInset }]}>
           <Pressable
             style={[styles.navArrow, { opacity: chapter <= 1 ? 0.3 : 1 }]}
             onPress={() => setChapter((c) => Math.max(1, c - 1))}
@@ -1050,7 +1053,7 @@ export function BibleReader({
       </Modal>
 
       <Modal visible={noteModalOpen} animationType="slide" transparent onRequestClose={() => void closeNoteModal()}>
-        <View style={[styles.modalOverlay, { paddingBottom: insets.bottom + keyboardHeight }]}>
+        <View style={[styles.modalOverlay, { paddingBottom: bottomInset }]}>
           <View style={[styles.sheet, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               Nota — v. {primaryVerse}
