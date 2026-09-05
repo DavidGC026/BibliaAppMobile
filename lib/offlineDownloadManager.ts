@@ -7,8 +7,10 @@ import {
 } from '@/lib/repo';
 import { getMeta, setMeta } from '@/lib/db';
 import type { BibleVersion } from '@/lib/types';
+import { downloadStudyBook, studyBookTargetId, type StudyBookDownload } from '@/lib/offline/chapterStudyDownload';
+import { STUDY_LABELS, type ChapterStudyKind } from '@/lib/study';
 
-export type OfflineDownloadKind = 'bible' | 'dictionary' | 'references';
+export type OfflineDownloadKind = 'bible' | 'dictionary' | 'references' | ChapterStudyKind;
 export type OfflineDownloadStatus = 'queued' | 'running' | 'done' | 'error';
 
 export type OfflineDownloadTask = {
@@ -20,6 +22,7 @@ export type OfflineDownloadTask = {
   progress?: DownloadProgress | StudyDownloadProgress;
   error?: string;
   updatedAt: string;
+  studyBook?: StudyBookDownload;
 };
 
 type Listener = (tasks: OfflineDownloadTask[]) => void;
@@ -143,7 +146,7 @@ export async function enqueueBibleDownload(bible: BibleVersion) {
   return task;
 }
 
-export async function enqueueStudyDownload(kind: Exclude<OfflineDownloadKind, 'bible'>) {
+export async function enqueueStudyDownload(kind: 'dictionary' | 'references') {
   await hydrateOfflineDownloads();
   const id = taskId(kind, 'default');
   const existing = tasks.find((task) => task.id === id && (task.status === 'queued' || task.status === 'running'));
@@ -159,6 +162,34 @@ export async function enqueueStudyDownload(kind: Exclude<OfflineDownloadKind, 'b
   upsertTask(task);
   runQueue().catch(() => {});
   return task;
+}
+
+export async function enqueueChapterStudyDownload(kind: ChapterStudyKind, book: StudyBookDownload) {
+  await hydrateOfflineDownloads();
+  const targetId = studyBookTargetId(kind, book.bibleId, book.bookId);
+  const id = taskId(kind, targetId);
+  const existing = tasks.find((task) => task.id === id && (task.status === 'queued' || task.status === 'running'));
+  if (existing) return existing;
+  const task: OfflineDownloadTask = {
+    id, kind, targetId, studyBook: book,
+    label: `${STUDY_LABELS[kind]} · ${book.bookName}`,
+    status: 'queued', updatedAt: now(),
+  };
+  upsertTask(task);
+  await persistQueue();
+  runQueue().catch(() => {});
+  return task;
+}
+
+/** Quitar errores o tareas terminadas de un libro cuya copia se elimina. */
+export async function forgetStudyBookTask(kind: ChapterStudyKind, bibleId: number, bookId: number) {
+  const id = taskId(kind, studyBookTargetId(kind, bibleId, bookId));
+  if (tasks.some((task) => task.id === id && (task.status === 'queued' || task.status === 'running'))) {
+    throw new Error('Espera a que termine la descarga antes de eliminarla.');
+  }
+  tasks = tasks.filter((task) => task.id !== id);
+  notify();
+  await persistQueue();
 }
 
 async function runQueue() {
@@ -188,8 +219,12 @@ async function runTask(task: OfflineDownloadTask) {
       await downloadBible(Number(task.targetId), onProgress);
     } else if (task.kind === 'dictionary') {
       await downloadDictionary('strong', onProgress);
-    } else {
+    } else if (task.kind === 'references') {
       await downloadCrossReferences(onProgress);
+    } else if ((task.kind === 'interlinear' || task.kind === 'commentaries') && task.studyBook) {
+      await downloadStudyBook(task.kind, task.studyBook, onProgress);
+    } else {
+      throw new Error('La descarga guardada no contiene un libro válido.');
     }
     upsertTask({ ...task, status: 'done', progress: undefined, error: undefined, updatedAt: now() });
   } catch (err) {

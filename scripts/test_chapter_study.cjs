@@ -51,7 +51,8 @@ print(json.dumps(result))
     });
   `);
   fs.writeFileSync(apiPath, `
-    exports.getInterlinear = async () => {
+    exports.getInterlinear = async passage => {
+      if (global.studyFetch) return { words: await global.studyFetch(passage) };
       if (global.studyError) throw global.studyError;
       return { words: global.studyResponse };
     };
@@ -63,7 +64,7 @@ print(json.dumps(result))
       stdin: {
         contents: `export * from './lib/studyRepository'; export * from './lib/study';
           export * from './lib/offline/chapterStudyStore'; export * from './lib/network';
-          export * from './lib/commentaryText';`,
+          export * from './lib/commentaryText'; export * from './lib/offline/chapterStudyDownload';`,
         resolveDir: path.resolve(__dirname, '..'), loader: 'ts',
       },
       outfile, bundle: true, platform: 'node', format: 'cjs',
@@ -127,10 +128,37 @@ print(json.dumps(result))
     await study.deleteStudyBook('interlinear', 200, 19);
     assert.equal(await study.readStudyChapter('interlinear', passage), null);
     assert.equal((await study.listStudyBookCaches()).length, 1, 'borrar interlineal conserva comentarios');
+
+    const requested = [];
+    global.studyFetch = async chapter => {
+      requested.push(chapter.chapter);
+      if (chapter.chapter === 2) throw new Error('Red interrumpida');
+      return [{ ...title, chapter: chapter.chapter }];
+    };
+    const book = { bibleId: 149, bookId: 19, bookName: 'Salmos', chapters: 3 };
+    await assert.rejects(study.downloadStudyBook('interlinear', book), /Red interrumpida/);
+    assert.equal((await study.listStudyBookCaches()).find(item => item.kind === 'interlinear').chapters, 1);
+    global.studyFetch = async chapter => {
+      requested.push(chapter.chapter);
+      return chapter.chapter === 2 ? [] : [{ ...title, chapter: chapter.chapter }];
+    };
+    const progress = [];
+    await study.downloadStudyBook('interlinear', book, value => progress.push(value.current));
+    assert.deepEqual(requested, [1, 2, 2, 3], 'reanuda sin descargar de nuevo el capítulo terminado');
+    assert.deepEqual(progress, [0, 1, 2, 3]);
+    assert.equal((await study.listStudyBookCaches()).find(item => item.kind === 'interlinear').chapters, 3);
+    requested.length = 0;
+    await study.downloadStudyBook('interlinear', { ...book, refresh: true });
+    assert.deepEqual(requested, [1, 2, 3], 'actualizar incluye capítulos antes vacíos');
+    study.setIsOnline(false);
+    await study.downloadStudyBook('interlinear', book);
+    await assert.rejects(study.downloadStudyBook('interlinear', { ...book, chapters: 4 }), /Sin conexión/);
+    await assert.rejects(study.downloadStudyBook('interlinear', { ...book, chapters: -1 }), /no es válido/);
     console.log('ok estudio: SQLite, offline, títulos, versiones, rangos, fallos de escritura y refresco');
   } finally {
     delete global.studyResponse;
     delete global.studyError;
+    delete global.studyFetch;
     fs.rmSync(temporary, { recursive: true, force: true });
   }
 }

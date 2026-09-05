@@ -11,7 +11,7 @@ normales; no se reescribe el historial.
 | API y almacenamiento local por capítulo | Implementado |
 | Interlineal griego, hebreo y arameo; fichas Strong | Implementado; revisión visual al cierre |
 | Comentarios por capítulo y rango de versículos | Implementado; revisión visual al cierre |
-| Descargas por libro, progreso, reanudación y eliminación | Pendiente |
+| Descargas por libro, progreso, reanudación y eliminación | En curso: motor y cola preparados |
 | Atribuciones, comprobaciones y revisión visual | Pendiente |
 
 ## Punto de partida verificado
@@ -79,3 +79,8 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
   sin inventar comentarios para los capítulos ausentes. El texto se presenta en
   párrafos nativos virtualizados con títulos, citas y énfasis; no ejecuta HTML ni
   necesita el editor de notas. Información legal identifica la obra y traducción.
+- 2026-09-04: descargas de estudio incorporadas a la cola persistente existente.
+  Se solicita y guarda un capítulo a la vez; una interrupción conserva los
+  capítulos terminados. Reintentar completa los restantes; Actualizar vuelve a
+  consultar el libro, incluidos capítulos vacíos. La prueba simula una caída en
+  el segundo capítulo y verifica reanudación, progreso y lectura sin red.
