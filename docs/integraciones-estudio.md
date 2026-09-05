@@ -46,15 +46,22 @@ las palabras de las versiones españolas conservan su selección habitual.
 
 ## Cómo usarlo
 
-1. Abrir un capítulo en el lector y pulsar **Interlineal** o **Comentarios**.
-2. Si se selecciona antes un versículo, el estudio se abre filtrado a ese versículo.
-   **Todo el capítulo** amplía la consulta e incluye los títulos de Salmos.
-3. En Interlineal, tocar una palabra abre su ficha. **Volver** regresa a la lista.
-   Auto/Hebreo/Griego se conserva entre aperturas del lector.
-4. En **Perfil → Descargas → Estudio por libro**, elegir versión y libro.
+1. Abrir un capítulo y buscar **Estudiar este pasaje**: **Interlineal — Palabra
+   por palabra** o **Comentarios — Explicación del pasaje**.
+2. En Interlineal se abre el versículo seleccionado en la Biblia, o el primero.
+   Las flechas inferiores avanzan y retroceden; **Cambiar versículo** permite
+   saltar a otro e incluye el **Título** cuando el salmo lo tiene.
+3. Tocar una palabra abre su significado y su ficha Strong. **Ayuda** explica
+   cómo leer las filas. **Ver detalles lingüísticos** muestra la morfología y
+   otras entradas de la fuente. **Volver** conserva la posición de las palabras.
+4. En Comentarios, elegir **Capítulo completo** o un versículo y pulsar **Leer
+   comentario**. La ficha indica autor y alcance real. Filtrar por versículo no
+   recorta una explicación del capítulo completo: el lector aclara qué abarca.
+   **Ver texto bíblico** permite consultar el versículo dentro del artículo.
+5. En **Perfil → Descargas → Estudio por libro**, elegir versión y libro.
    **Completar libro** conserva capítulos ya guardados; **Actualizar** consulta
    todo el libro de nuevo. La cola continúa mientras la app siga abierta.
-5. Si la app se cierra durante una descarga, la tarea pendiente se recupera al
+6. Si la app se cierra durante una descarga, la tarea pendiente se recupera al
    abrirla. Ante un error de red, pulsar **Reintentar** cuando vuelva la conexión.
 
 ## Validación realizada
@@ -114,16 +121,48 @@ descarga antes de poder leer. Se simplifica el recorrido de estudio:
   la presentación. La forma íntegra sigue disponible en el detalle y permanece
   intacta en API/SQLite. Se mantienen diacríticos y dirección de escritura.
   Las glosas inglesas se identifican como tales, sin inventar traducciones.
+- **Comentarios:** listado de autores con vista previa y acción «Leer comentario».
+  La lectura del artículo tiene su propia pantalla, párrafos con más interlineado,
+  acceso al texto bíblico seleccionado y aviso del alcance real. Volver conserva
+  los filtros del listado. Una selección sin resultados permite ver todo el capítulo.
+- **Accesibilidad:** controles de al menos 48 puntos, marca de selección además del
+  color, foco en el encabezado al cambiar de vista y contenido oculto excluido del
+  árbol accesible. El botón Atrás vuelve un nivel; cerrar regresa a la Biblia.
 
 El diseño usa las paletas del lector: fondo, texto, texto secundario, superficie,
-borde y acento. Por ejemplo, en claro se conservan `#FFFFFF`, `#1F2937`,
-`#6B7280`, `#F3F4F6`, `#E5E7EB` y `#92700C`. La tipografía de navegación sigue
+borde y acento. Por ejemplo, en claro parte de `#FFFFFF`, `#1F2937`,
+`#6B7280`, `#F3F4F6`, `#E5E7EB` y `#92700C`. El texto secundario se aproxima
+al color principal hasta alcanzar contraste suficiente sobre fondo, tarjetas y
+selecciones: se corrigieron contrastes de 4,39:1 en claro y 3,47:1 en sepia.
+La tipografía de navegación sigue
 siendo la del sistema; los originales y citas usan la serif nativa. Citas y
 definiciones respetan el tamaño elegido en el lector. El contenido tiene un
 ancho máximo de 760 puntos y las palabras pasan a una columna con texto grande.
 
-Validación inicial: TypeScript y casos de presentación añadidos a `check:study`.
-La revisión visual y el rediseño de comentarios se registrarán al completarse.
+Validación: TypeScript y `check:study` correctos. Se completaron **21 comprobaciones
+de interfaz** con los componentes reales en React Native Web, contenido obtenido
+de la API local y adaptadores temporales de red/almacenamiento. Se comprobaron:
+
+- Ayuda, ficha G3056, detalles, foco y posición conservada al volver.
+- Versículos siguiente/anterior, selección del último y título 0 de Salmos.
+- Alcance de Spurgeon, texto bíblico, retorno y filtros conservados. Un autor
+  sintético permitió comprobar filtros múltiples y rangos parciales.
+- Carga, error con reintento y capítulos sin contenido en ambas vistas.
+- Pantallas de 320×640, 375×812, 812×375 y 768×1024, claro/oscuro/sepia,
+  texto al 160 % combinado con tamaño de lector 24 y movimiento reducido.
+- Ningún desbordamiento horizontal, controles visibles de al menos 48 puntos y
+  cero infracciones de Axe en las vistas auditadas.
+- Atrás/Escape desde artículo y listado, y navegación a información legal.
+
+Capturas de la vista de prueba (no de un APK instalado):
+[Interlineal](images/estudio/interlineal-4.1.3.png),
+[Comentarios](images/estudio/comentarios-4.1.3.png) y
+[Lectura nocturna](images/estudio/lectura-4.1.3.png).
+
+El emulador sigue `offline` en ADB. La prueba de escalado simula fuentes y
+disposición en web; falta comprobar TalkBack/VoiceOver, tipografía y gestos en
+un dispositivo instalado. La implementación de foco usa la API documentada de
+[React Native 0.85](https://reactnative.dev/docs/0.85/accessibilityinfo#sendaccessibilityevent).
 
 ### Implementación inicial
 

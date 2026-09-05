@@ -7,9 +7,10 @@ import { readableOriginal, studyVerseNumbers, studyVerseReference } from '@/lib/
 import type { Verse } from '@/lib/types';
 import { InterlinearWordDetails } from './InterlinearWordDetails';
 import { StudyPassageQuote, StudyVerseNavigation, StudyVersePicker } from './StudyPassage';
-import { StudyFeedback, StudyFooter, StudySheet, studyReadingFont, studyStyles, type StudyPalette } from './StudySheet';
+import { StudyButton, StudyFeedback, StudyFooter, StudySheet, studyReadingFont, studyStyles, type StudyPalette } from './StudySheet';
+import { readableStudyPalette } from './studyPalette';
 
-export function InterlinearSheet({ passage, bookName, verses, initialVerse, palette, onClose, bibleAbbr, fontSize = 19 }: {
+export function InterlinearSheet({ passage, bookName, verses, initialVerse, palette: readerPalette, onClose, bibleAbbr, fontSize = 19 }: {
   passage: StudyPassage; bookName: string; verses: Verse[]; initialVerse: number | null;
   palette: StudyPalette; onClose: () => void; bibleAbbr?: string; fontSize?: number;
 }) {
@@ -17,6 +18,8 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pale
   const [activeWord, setActiveWord] = useState<InterlinearWord | null>(null);
   const [lastPosition, setLastPosition] = useState<number | null>(null);
   const [choosingVerse, setChoosingVerse] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const palette = useMemo(() => readableStudyPalette(readerPalette), [readerPalette]);
   const { result, loading, error, retry } = useChapterStudy('interlinear', passage);
   const groups = useMemo(() => groupInterlinearWords(result?.content ?? []), [result?.content]);
   const numbers = useMemo(() => studyVerseNumbers(verses.map((verse) => verse.verse), result?.content ?? [], initialVerse), [verses, result?.content, initialVerse]);
@@ -50,10 +53,17 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pale
       ListHeaderComponent={<View style={{ gap: 20 }}>
         <StudyPassageQuote reference={verseReference} text={text} bibleAbbr={bibleAbbr} palette={palette} fontSize={fontSize} />
         <View style={{ gap: 8 }}>
-          <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 22, fontWeight: '800' }}>Palabra por palabra</Text>
+          <View style={[studyStyles.row, { flexWrap: 'nowrap' }]}>
+            <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 22, fontWeight: '800', flex: 1 }}>Palabra por palabra</Text>
+            <StudyButton label="Ayuda" icon="info" quiet expanded={helpOpen} palette={palette} onPress={() => setHelpOpen((open) => !open)} />
+          </View>
           <Text style={{ color: palette.muted, fontSize: 14, lineHeight: 22 }}>
-            {language} original{words.length ? ` · ${words.length} palabras` : ''}. Sigue el orden de arriba abajo y toca una palabra para conocer su significado.
+            {language} original{words.length ? ` · ${words.length} palabras` : ''}. Toca una palabra para conocer su significado.
           </Text>
+          {helpOpen ? <View style={[studyStyles.card, { backgroundColor: palette.card, borderColor: palette.border }]}>
+            <Text style={{ color: palette.text, fontSize: 15, lineHeight: 24 }}>Lee las filas de arriba abajo: siguen el orden del texto original. El texto grande es la palabra original y la línea pequeña la escribe con letras latinas.</Text>
+            <Text style={{ color: palette.text, fontSize: 15, lineHeight: 24 }}>El significado breve ayuda a estudiar cada palabra; no es una traducción completa de la frase. Al tocarla, se abre su definición en el diccionario Strong.</Text>
+          </View> : null}
           {englishGlosses ? <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 21 }}>
             Los significados breves de esta fuente están en inglés. Abre una palabra para consultar el diccionario Strong.
           </Text> : null}
@@ -64,7 +74,7 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pale
         <Text style={{ color: palette.text, fontSize: 17, fontWeight: '700' }}>Este versículo aún no tiene interlineal</Text>
         <Text style={{ color: palette.muted, fontSize: 15, lineHeight: 24 }}>Puedes consultar otro versículo con los controles de abajo.</Text>
       </View> : null}
-      renderItem={({ item }) => <InterlinearWordRow word={item} selected={item.position === lastPosition} palette={palette}
+      renderItem={({ item }) => <InterlinearWordRow word={item} selected={item.position === lastPosition} palette={palette} fontSize={fontSize}
         onPress={() => { setLastPosition(item.position); setActiveWord(item); }} />}
       ListFooterComponent={<StudyFooter palette={palette} onClose={onClose} source="STEPBible.org · Tyndale House Cambridge · CC BY 4.0">
         {!loading && !error ? <StudyFeedback {...feedback} /> : null}
@@ -72,8 +82,8 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pale
   </StudySheet>;
 }
 
-const InterlinearWordRow = memo(function InterlinearWordRow({ word, selected, palette, onPress }: {
-  word: InterlinearWord; selected: boolean; palette: StudyPalette; onPress: () => void;
+const InterlinearWordRow = memo(function InterlinearWordRow({ word, selected, palette, fontSize, onPress }: {
+  word: InterlinearWord; selected: boolean; palette: StudyPalette; fontSize: number; onPress: () => void;
 }) {
   const { width, fontScale } = useWindowDimensions();
   const stacked = width < 360 || fontScale > 1.3;
@@ -89,13 +99,13 @@ const InterlinearWordRow = memo(function InterlinearWordRow({ word, selected, pa
     <Text style={{ color: palette.muted, fontSize: 12, minWidth: 16, textAlign: 'center' }}>{word.position}</Text>
     <View style={{ flex: 1, minWidth: 0, flexDirection: stacked ? 'column' : 'row', alignItems: stacked ? 'stretch' : 'center', gap: 12 }}>
       <View style={{ flex: stacked ? undefined : 1, minWidth: 0, gap: 4 }}>
-        <Text style={{ color: palette.text, fontFamily: studyReadingFont, fontSize: 26, lineHeight: 42,
+        <Text style={{ color: palette.text, fontFamily: studyReadingFont, fontSize: Math.max(26, fontSize + 6), lineHeight: Math.max(42, fontSize * 1.8),
           writingDirection: word.language === 'grc' ? 'ltr' : 'rtl', textAlign: 'left' }}>{original}</Text>
-        {word.transliteration ? <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 20 }}>{word.transliteration}</Text> : null}
+        {word.transliteration ? <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 20 }}>{readableOriginal(word.transliteration)}</Text> : null}
       </View>
       <View style={{ flex: stacked ? undefined : 1, minWidth: 0, gap: 4 }}>
         <Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18 }}>{word.glossEs ? 'Significado' : word.glossEn ? 'En inglés' : 'Diccionario'}</Text>
-        <Text style={{ color: palette.text, fontSize: 16, lineHeight: 24, fontWeight: '600' }}>{gloss}</Text>
+        <Text style={{ color: palette.text, fontSize: Math.max(16, fontSize - 3), lineHeight: Math.max(24, fontSize * 1.4), fontWeight: '600' }}>{gloss}</Text>
       </View>
     </View>
     <AppIcon name="chevron-right" color={palette.muted} size={18} />

@@ -20,7 +20,7 @@ export function InterlinearWordDetails({ word, palette, fontSize, onBack }: {
       <Text style={{ color: palette.muted, fontSize: 13, fontWeight: '600' }}>Palabra del versículo</Text>
       <Text selectable style={{ color: palette.text, fontFamily: studyReadingFont, fontSize: 36, lineHeight: 58,
         textAlign: 'center', writingDirection: word.language === 'grc' ? 'ltr' : 'rtl' }}>{readableOriginal(word.original)}</Text>
-      {word.transliteration ? <Text style={{ color: palette.muted, fontSize: 17, lineHeight: 26, textAlign: 'center' }}>{word.transliteration}</Text> : null}
+      {word.transliteration ? <Text style={{ color: palette.muted, fontSize: 17, lineHeight: 26, textAlign: 'center' }}>{readableOriginal(word.transliteration)}</Text> : null}
       {gloss ? <View style={{ alignItems: 'center', gap: 4 }}>
         <Text style={{ color: palette.muted, fontSize: 13 }}>{englishGloss ? 'Significado breve en inglés' : 'Significado breve'}</Text>
         <Text selectable style={{ color: palette.text, fontSize: 22, lineHeight: 32, fontWeight: '700', textAlign: 'center' }}>{gloss}</Text>

@@ -46,10 +46,11 @@ export function StudyVersePicker({ verse, numbers, palette, onChange }: {
 }) {
   const { width, fontScale } = useWindowDimensions();
   const columns = fontScale > 1.3 ? 3 : width > 600 ? 8 : 5;
-  return <FlatList key={columns} data={numbers} numColumns={columns} keyExtractor={String}
+  const cells: (number | null)[] = [...numbers, ...Array((columns - numbers.length % columns) % columns).fill(null)];
+  return <FlatList key={columns} data={cells} numColumns={columns} keyExtractor={(verse, index) => verse === null ? `empty:${index}` : String(verse)}
     contentContainerStyle={studyStyles.content} columnWrapperStyle={{ gap: 8 }}
     ListHeaderComponent={<Text style={{ color: palette.muted, fontSize: 16, lineHeight: 25 }}>Elige el versículo que quieres estudiar.</Text>}
-    renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={studyVerseLabel(item)}
+    renderItem={({ item }) => item === null ? <View style={{ flex: 1 }} /> : <Pressable accessibilityRole="button" accessibilityLabel={studyVerseLabel(item)}
       accessibilityState={{ selected: item === verse }} onPress={() => onChange(item)}
       style={({ pressed }) => ({ flex: 1, minHeight: 56, padding: 8, justifyContent: 'center', alignItems: 'center',
         borderRadius: 12, borderWidth: 1, borderColor: item === verse ? palette.accent : palette.border,

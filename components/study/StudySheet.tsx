@@ -1,24 +1,27 @@
-import type { ReactNode } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { AccessibilityInfo, ActivityIndicator, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import type { StudyPalette } from './studyPalette';
 
-export interface StudyPalette {
-  background: string;
-  text: string;
-  muted: string;
-  card: string;
-  border: string;
-  accent: string;
-  accentSoft: string;
-}
+export type { StudyPalette } from './studyPalette';
 
 export function StudySheet({ title, reference, palette, onClose, onBack, backLabel = 'Volver', closeLabel = 'Cerrar', children, footer }: {
   title: string; reference: string; palette: StudyPalette; onClose: () => void; closeLabel?: string; children: ReactNode;
   onBack?: () => void; backLabel?: string; footer?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const headingRef = useRef<Text>(null);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const heading = headingRef.current;
+      if (!heading) return;
+      if (Platform.OS === 'web') heading.focus();
+      else AccessibilityInfo.sendAccessibilityEvent(heading, 'focus');
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [title, reference]);
   return (
     <Modal visible animationType="none" accessibilityLabel={`${title} · ${reference}`} onRequestClose={onBack ?? onClose}>
       <View accessibilityViewIsModal style={{ flex: 1, backgroundColor: palette.background,
@@ -27,7 +30,8 @@ export function StudySheet({ title, reference, palette, onClose, onBack, backLab
           <View style={studyStyles.header}>
             {onBack ? <StudyButton label={backLabel} icon="arrow-left" quiet onPress={onBack} palette={palette} /> : null}
             <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-              <Text accessibilityRole="header" accessibilityLiveRegion="polite" style={{ color: palette.text, fontSize: 20, fontWeight: '800' }}>{title}</Text>
+              <Text ref={headingRef} accessible accessibilityRole="header" tabIndex={-1}
+                style={{ color: palette.text, fontSize: 20, fontWeight: '800' }}>{title}</Text>
               <Text style={{ color: palette.muted, fontSize: 14, lineHeight: 21 }}>{reference}</Text>
             </View>
             <Pressable accessibilityRole="button" accessibilityLabel={`${closeLabel} estudio y volver a la Biblia`}
@@ -48,7 +52,8 @@ export function StudyButton({ label, onPress, palette, selected, disabled, icon,
   icon?: AppIconName; quiet?: boolean; expanded?: boolean;
 }) {
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected, disabled, expanded }} disabled={disabled}
+    <Pressable accessibilityRole="button" accessibilityState={{ selected, disabled }} aria-expanded={expanded} disabled={disabled}
+      {...(Platform.OS === 'web' && selected !== undefined ? { 'aria-pressed': selected } : {})}
       onPress={onPress} style={({ pressed }) => [studyStyles.button, {
         borderColor: quiet ? 'transparent' : selected ? palette.accent : palette.border,
         backgroundColor: selected ? palette.accentSoft : quiet ? 'transparent' : palette.card,
@@ -56,6 +61,7 @@ export function StudyButton({ label, onPress, palette, selected, disabled, icon,
       }]}>
       {icon ? <AppIcon name={icon} color={palette.text} size={18} /> : null}
       <Text style={{ color: palette.text, fontSize: 14, lineHeight: 20, fontWeight: '700', textAlign: 'center', flexShrink: 1 }}>{label}</Text>
+      {selected ? <AppIcon name="check" color={palette.text} size={16} /> : null}
     </Pressable>
   );
 }

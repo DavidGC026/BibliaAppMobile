@@ -20,7 +20,7 @@ import { SymbolView } from 'expo-symbols';
 import { BibleAudioPlayer } from '@/components/BibleAudioPlayer';
 import { InterlinearSheet } from '@/components/study/InterlinearSheet';
 import { CommentariesSheet } from '@/components/study/CommentariesSheet';
-import { StudyButton } from '@/components/study/StudySheet';
+import { StudyEntryPoints } from '@/components/study/StudyEntryPoints';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
 import { CrossReferencesModal } from '@/components/CrossReferencesModal';
@@ -646,10 +646,8 @@ export function BibleReader({
         </View>
 
         {selectedBook ? (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
-            {currentBible?.hasInterlinear ? <StudyButton label="Interlineal" palette={readingColors} onPress={() => setInterlinearOpen(true)} disabled={loadingChapter} /> : null}
-            <StudyButton label="Comentarios" palette={readingColors} onPress={() => setCommentariesOpen(true)} disabled={loadingChapter} />
-          </View>
+          <StudyEntryPoints hasInterlinear={currentBible?.hasInterlinear === true} disabled={loadingChapter} palette={readingColors}
+            onInterlinear={() => setInterlinearOpen(true)} onCommentaries={() => setCommentariesOpen(true)} />
         ) : null}
 
         {loadingChapter ? (
@@ -815,7 +813,8 @@ export function BibleReader({
 
       {commentariesOpen && selectedBook ? (
         <CommentariesSheet key={`${bibleId}:${bookId}:${chapter}`} passage={{ bibleId, bookId: selectedBook.bookId, chapter }}
-          bookName={selectedBook.bookName} initialVerse={primaryVerse} palette={readingColors} onClose={() => setCommentariesOpen(false)} />
+          bookName={selectedBook.bookName} initialVerse={primaryVerse} verses={verses} bibleAbbr={currentBible?.abbr}
+          fontSize={readerFontSize} palette={readingColors} onClose={() => setCommentariesOpen(false)} />
       ) : null}
 
       {audioOpen && verses.length > 0 && audioAllowed ? (
