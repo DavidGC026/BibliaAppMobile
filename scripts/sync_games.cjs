@@ -4,8 +4,9 @@ const path = require('node:path');
 const source = path.resolve(__dirname, '../..');
 const destination = path.resolve(__dirname, '..');
 const files = [
-  ...['content.ts', 'engine.ts', 'hooks.ts', 'progress.ts', '__check__.ts'].map((file) => `lib/games/${file}`),
+  ...['content.ts', 'engine.ts', 'hooks.ts', 'progress.ts', 'catalog.ts', 'review.ts', 'round.ts', 'session.ts', 'editor.ts', '__check__.ts'].map((file) => `lib/games/${file}`),
   'docs/juegos-biblicos.md',
+  'docs/juegos-cambios.md',
 ];
 const check = process.argv.includes('--check');
 

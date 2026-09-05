@@ -1,5 +1,7 @@
 import { API_BASE_URL } from './config';
 import type { GameVerse } from './games/engine';
+import type { ContentEnvelope, EditorCatalog, GameContent } from './games/catalog';
+import { verseQuery, type RoundSettings } from './games/round';
 import type { InterlinearWord, Commentary, StudyPassage } from './study';
 import type {
   AdminSectionGroup,
@@ -71,11 +73,11 @@ async function request<T>(
 }
 
 // — Estudio por capítulo —
-async function requestStudy<T>(path: string): Promise<T> {
+async function requestStudy<T>(path: string, options: RequestInit = {}): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    return await request<T>(path, { signal: controller.signal });
+    return await request<T>(path, { ...options, signal: controller.signal });
   } finally {
     clearTimeout(timer);
   }
@@ -170,9 +172,13 @@ export async function listBibles() {
   return request<{ bibles: BibleVersion[]; defaultBibleId: number | null }>('/api/bibles');
 }
 
-export async function listGameVerses(bibleId?: number) {
+export const loadGameContent = () => requestStudy<ContentEnvelope>('/api/games/content');
+export const loadEditorCatalog = () => requestStudy<EditorCatalog>('/api/admin/games/content');
+export const saveEditorCatalog = (catalog: GameContent, revision: number) => requestStudy<{ catalog: GameContent; revision: number }>('/api/admin/games/content', { method: 'PUT', body: JSON.stringify({ catalog, revision }) });
+
+export async function listGameVerses(bibleId?: number, settings?: RoundSettings) {
   return requestStudy<{ bible: BibleVersion; verses: GameVerse[] }>(
-    `/api/games/verses${bibleId ? `?bible=${bibleId}` : ''}`,
+    verseQuery(settings, bibleId),
   );
 }
 

@@ -1,9 +1,10 @@
-export type GameId = "complete" | "memory" | "wordle"
+export type GameId = "complete" | "memory" | "wordle" | "order"
 
 export const GAME_CATALOG = [
   { id: "complete", title: "Completa el versículo", description: "Encuentra la palabra que falta y vuelve al pasaje para leerlo completo.", detail: "5 versículos · con opciones o de memoria", icon: "edit" },
   { id: "memory", title: "Memoria bíblica", description: "Da vuelta a las tarjetas y relaciona cada personaje con su historia.", detail: "4, 6 u 8 pares · a tu ritmo", icon: "groups" },
   { id: "wordle", title: "Wordle bíblico", description: "Una pista, una palabra y seis intentos. Cada letra te acerca a la respuesta.", detail: "Personajes, lugares y objetos", icon: "dictionary" },
+  { id: "order", title: "Ordena el versículo", description: "Toca las palabras en orden hasta reconstruir el pasaje.", detail: "3 versículos · sin límite de tiempo", icon: "bible" },
 ] as const
 
 export interface PassageReference {

@@ -96,3 +96,90 @@ for (const passage of COMPLETION_PASSAGES) {
   for (const value of passage) assert.ok(Number.isSafeInteger(value) && value > 0)
 }
 console.log("Juegos: letras repetidas, tildes, preguntas, memoria, puntuaciones y persistencia verificados.")
+
+// El contenido y el historial deben comportarse igual en los dos clientes.
+const catalogTools = require('./catalog') as typeof import('./catalog')
+const reviewTools = require('./review') as typeof import('./review')
+const editorTools = require('./editor') as typeof import('./editor')
+const orderTools = require('./engine') as typeof import('./engine')
+const { DEFAULT_CONTENT, parseGameContent, selectUnseenWord, seededRandom, createDailyChallenge, gameDay } = catalogTools
+assert.deepEqual(parseGameContent(DEFAULT_CONTENT), DEFAULT_CONTENT)
+assert.throws(() => parseGameContent({ ...DEFAULT_CONTENT, words: [...WORD_PUZZLES, { ...WORD_PUZZLES[6], word: 'moises' }] }), /repetid/)
+assert.throws(() => parseGameContent({ ...DEFAULT_CONTENT, pairs: MEMORY_PAIRS.slice(0, 4) }))
+assert.throws(() => parseGameContent({ ...DEFAULT_CONTENT, passages: [{ bookId: 1, chapter: 1, verse: 0 }, ...DEFAULT_CONTENT.passages] }))
+let cycle: string[] = []
+let lastWord = ''
+for (let round = 0; round < 3; round++) {
+  const seenThisCycle = new Set<string>()
+  for (let index = 0; index < 50; index++) {
+    const selection = selectUnseenWord(WORD_PUZZLES, cycle, seededRandom(`cycle:${round}:${index}`))
+    const normalized = normalizeAnswer(selection.puzzle.word)
+    assert.ok(!seenThisCycle.has(normalized), 'No debe repetir palabras dentro del ciclo')
+    assert.notEqual(normalized, lastWord, 'No debe repetir al cambiar de ciclo')
+    seenThisCycle.add(normalized); cycle = selection.seen; lastWord = normalized
+  }
+  assert.equal(seenThisCycle.size, 50)
+}
+const addedWord = { word: 'ABRAHAM', clue: 'Recibió un nuevo nombre.', category: 'Personaje' as const, bookId: 1, chapter: 17, verse: 5, reference: 'Génesis 17:5' }
+assert.equal(selectUnseenWord([...WORD_PUZZLES, addedWord], cycle).puzzle.word, 'ABRAHAM')
+assert.equal(selectUnseenWord([WORD_PUZZLES[0]], [normalizeAnswer(WORD_PUZZLES[0].word)]).puzzle.word, WORD_PUZZLES[0].word)
+assert.equal(gameDay(Date.parse('2026-09-06T05:59:59Z')), '2026-09-05')
+assert.equal(gameDay(Date.parse('2026-09-06T06:00:00Z')), '2026-09-06')
+const daily = createDailyChallenge(DEFAULT_CONTENT, '2026-09-05')
+assert.deepEqual(daily, createDailyChallenge(JSON.parse(JSON.stringify(DEFAULT_CONTENT)), '2026-09-05'))
+assert.equal(daily.pairs.length, 6)
+assert.equal(daily.passages.length, 5)
+assert.notDeepEqual(daily, createDailyChallenge(DEFAULT_CONTENT, '2026-09-06'))
+const dailyResult = { ...result, dailyKey: '2026-09-05:wordle' }
+const dailyProgress = recordResult(emptyProgress(), dailyResult)
+assert.equal(recordResult(dailyProgress, { ...dailyResult, id: 'another-round', score: 100 }), dailyProgress)
+const migrated = parseProgress(JSON.stringify({ version: 1, games: progress.games, recentIds: ['legacy-round'] }))
+assert.deepEqual(migrated.games.wordle, progress.games.wordle)
+assert.deepEqual(migrated.games.order, { played: 0, won: 0, best: 0, points: 0 })
+assert.deepEqual(migrated.wordCycle, [])
+assert.deepEqual(parseProgress(JSON.stringify({ ...dailyProgress, wordCycle: cycle })).wordCycle, cycle)
+
+const target = { kind: 'wordle' as const, puzzle: addedWord }
+let reviews = reviewTools.updateReview([], { target, correct: false }, '2026-09-05')
+assert.equal(reviews[0].due, '2026-09-05')
+reviews = reviewTools.updateReview(reviews, { target, correct: true }, '2026-09-05')
+assert.equal(reviews[0].due, '2026-09-06')
+assert.deepEqual(reviewTools.updateReview(reviews, { target, correct: true }, '2026-09-05'), reviews)
+reviews = reviewTools.updateReview(reviews, { target, correct: true }, '2026-09-06')
+assert.equal(reviews[0].due, '2026-09-09')
+reviews = reviewTools.updateReview(reviews, { target, correct: true }, '2026-09-09')
+assert.equal(reviews[0].due, '2026-09-16')
+assert.deepEqual(reviewTools.updateReview(reviews, { target, correct: true }, '2026-09-16'), [])
+const resetReview = reviewTools.updateReview(reviews, { target, correct: false }, '2026-09-10')
+assert.equal(resetReview[0].successes, 0)
+assert.equal(resetReview[0].misses, 2)
+assert.deepEqual(reviewTools.parseReview([null, ...reviews, { target: {} }]), reviews)
+assert.deepEqual(parseProgress(JSON.stringify({ ...emptyProgress(), reviews })).reviews, reviews)
+
+const orderVerses = [{ ...verses[0], text: 'La luz y la luz.' }, { ...verses[1], text: 'Una palabra muy larga para practicar.' }]
+const ordering = orderTools.createOrderQuestions(orderVerses, 3, seededRandom('orden'))
+assert.deepEqual(ordering, orderTools.createOrderQuestions([...orderVerses].reverse(), 3, seededRandom('orden')))
+for (const question of ordering) {
+  assert.equal(orderTools.isOrdered(question.tokens, question.shuffled), false)
+  assert.equal(orderTools.isOrdered(question.tokens, question.tokens.map((_, index) => index)), true)
+  assert.equal(new Set(question.shuffled).size, question.tokens.length)
+}
+assert.equal(orderTools.isOrdered(['la', 'la', 'luz'], [1, 0, 2]), true)
+assert.equal(orderTools.isOrdered(['la', 'la', 'luz'], [0, 0, 2]), false)
+assert.equal(orderTools.isOrdered(['la', 'luz'], [-1, 0]), false)
+assert.deepEqual(orderTools.createOrderQuestions([{ ...verses[0], text: 'una '.repeat(50) }]), [])
+const focused = createVerseQuestions(verses, 1, seededRandom('repaso'), verses[2])
+assert.equal(focused.length, 1)
+assert.equal(focused[0].verse.id, verses[2].id)
+assert.deepEqual(createVerseQuestions(verses, 5, seededRandom('daily')), createVerseQuestions([...verses].reverse(), 5, seededRandom('daily')))
+
+const editable = { revision: 1, catalog: DEFAULT_CONTENT, books: [{ bookId: 1, name: 'Génesis' }] }
+const draft = { ...editorTools.emptyDraft(), word: addedWord.word, clue: addedWord.clue, chapter: '17', verse: '5' }
+const expanded = editorTools.applyContentDraft(editable, 'words', draft, null)
+assert.equal(expanded.words.length, 51)
+assert.equal(expanded.words.at(-1)?.reference, 'Génesis 17:5')
+assert.equal(DEFAULT_CONTENT.words.length, 50)
+assert.throws(() => editorTools.applyContentDraft(editable, 'words', { ...draft, word: 'Adán' }, null), /repetid/)
+assert.throws(() => editorTools.applyContentDraft(editable, 'words', { ...draft, bookId: '0' }, null))
+assert.throws(() => editorTools.applyContentDraft(editable, 'words', { ...draft, clue: '' }, null))
+console.log('Ampliación: ciclos sin repetir, retos por fecha, migración, repasos, orden y editor verificados.')

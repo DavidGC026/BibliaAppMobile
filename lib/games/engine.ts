@@ -77,24 +77,25 @@ function candidateWords(text: string) {
     .filter((match) => match[0].length >= 4 && !SKIP_WORDS.has(normalizeAnswer(match[0])))
 }
 
-export function createVerseQuestions(verses: readonly GameVerse[], count = 5): VerseQuestion[] {
-  const candidates = verses.filter((verse) => candidateWords(verse.text).length > 0)
+export function createVerseQuestions(verses: readonly GameVerse[], count = 5, random = Math.random, focus?: Pick<GameVerse, "bookId" | "chapter" | "verse">): VerseQuestion[] {
+  const candidates = [...verses].sort((a, b) => a.bookId - b.bookId || a.chapter - b.chapter || a.verse - b.verse).filter((verse) => candidateWords(verse.text).length > 0)
   const vocabulary = new Map<string, string>()
   candidates.forEach((verse) => candidateWords(verse.text).forEach(([word]) => {
     vocabulary.set(normalizeAnswer(word), word)
   }))
   if (vocabulary.size < 4) return []
   const unique = [...new Map(candidates.map((verse) => [`${verse.bookId}:${verse.chapter}:${verse.verse}`, verse])).values()]
-  return shuffle(unique).slice(0, count).map((verse) => {
-    const match = shuffle(candidateWords(verse.text))[0]
+  const selected = focus ? unique.filter(verse => verse.bookId === focus.bookId && verse.chapter === focus.chapter && verse.verse === focus.verse) : unique
+  return shuffle(selected, random).slice(0, count).map((verse) => {
+    const match = shuffle(candidateWords(verse.text), random)[0]
     const answer = match[0]
     const start = match.index!
     const alternatives = shuffle([...vocabulary.entries()]
-      .filter(([normalized]) => normalized !== normalizeAnswer(answer)))
+      .filter(([normalized]) => normalized !== normalizeAnswer(answer)), random)
       .slice(0, 3).map(([, word]) => word)
     return {
       verse, before: verse.text.slice(0, start), after: verse.text.slice(start + answer.length),
-      answer, options: shuffle([answer, ...alternatives]),
+      answer, options: shuffle([answer, ...alternatives], random),
     }
   })
 }
@@ -113,12 +114,12 @@ export interface MemoryState {
   attempts: number
 }
 
-export function createMemoryGame(pairCount: number): MemoryState {
-  const pairs = shuffle(MEMORY_PAIRS).slice(0, Math.min(8, Math.max(4, pairCount)))
+export function createMemoryGame(pairCount: number, catalog: readonly MemoryPair[] = MEMORY_PAIRS, random = Math.random): MemoryState {
+  const pairs = shuffle(catalog, random).slice(0, Math.min(8, Math.max(4, pairCount)))
   const cards = shuffle(pairs.flatMap((pair) => [
     { id: `${pair.id}-left`, pairId: pair.id, text: pair.left },
     { id: `${pair.id}-right`, pairId: pair.id, text: pair.right },
-  ]))
+  ]), random)
   return { pairs, cards, flipped: [], matched: [], attempts: 0 }
 }
 
@@ -138,4 +139,24 @@ export function memoryScore(pairCount: number, attempts: number): number {
 
 export function wordScore(attempts: number, hints: number): number {
   return Math.max(10, 110 - attempts * 10 - hints * 15)
+}
+
+export interface OrderQuestion { verse: GameVerse; tokens: string[]; shuffled: number[] }
+export function createOrderQuestions(verses: readonly GameVerse[], count = 3, random = Math.random, focus?: Pick<GameVerse, "bookId" | "chapter" | "verse">): OrderQuestion[] {
+  const unique = [...new Map(verses.map(verse => [`${verse.bookId}:${verse.chapter}:${verse.verse}`, verse])).values()]
+    .sort((a, b) => a.bookId - b.bookId || a.chapter - b.chapter || a.verse - b.verse)
+    .filter(verse => !focus || verse.bookId === focus.bookId && verse.chapter === focus.chapter && verse.verse === focus.verse)
+    .map(verse => ({ verse, tokens: verse.text.trim().split(/\s+/u) }))
+    .filter(question => question.tokens.length >= 3 && question.tokens.length <= 40 && new Set(question.tokens).size > 1)
+  return shuffle(unique, random).slice(0, count).map(question => {
+    const shuffled = shuffle(question.tokens.map((_, index) => index), random)
+    if (isOrdered(question.tokens, shuffled)) {
+      const other = shuffled.findIndex(index => question.tokens[index] !== question.tokens[shuffled[0]])
+      ;[shuffled[0], shuffled[other]] = [shuffled[other], shuffled[0]]
+    }
+    return { ...question, shuffled }
+  })
+}
+export function isOrdered(tokens: readonly string[], selected: readonly number[]) {
+  return selected.length === tokens.length && new Set(selected).size === tokens.length && selected.every((token, position) => tokens[token] !== undefined && tokens[token] === tokens[position])
 }

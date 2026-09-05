@@ -6,11 +6,15 @@ import * as api from '@/lib/api';
 import type { BibleVersion } from '@/lib/types';
 import { normalizeAnswer, type GameVerse } from '@/lib/games/engine';
 import { useVerseGame, type OnGameComplete } from '@/lib/games/hooks';
+import type { RoundContext } from '@/lib/games/round';
+import { OrderRound } from './OrderGame';
 import { GameButton, GameCard, GameText, GameResultPanel, LiveMessage, PassageButton, styles, type OpenPassage } from './ui';
 
-type Props = { onComplete: OnGameComplete; onOpen: OpenPassage; onRestart: () => void };
+type Props = RoundContext & { onComplete: OnGameComplete; onOpen: OpenPassage; onRestart: () => void; order?: boolean };
 
 export function CompleteVerse(props: Props) {
+  const { settings, order = false } = props;
+  const count = settings?.review ? 1 : order ? 3 : 5;
   const { colors } = useAppTheme();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
   const [bibleId, setBibleId] = useState<number | null>(null);
@@ -23,30 +27,30 @@ export function CompleteVerse(props: Props) {
   useEffect(() => {
     let active = true;
     setLoading(true); setError(''); setLoaded(null);
-    Promise.all([api.listBibles(), api.listGameVerses(bibleId ?? undefined)])
+    Promise.all([api.listBibles(), api.listGameVerses(bibleId ?? undefined, settings)])
       .then(([catalog, response]) => { if (active) { setBibles(catalog.bibles); setLoaded(response); } })
       .catch(() => { if (active) setError('No pudimos cargar los versículos. Revisa tu conexión e intenta de nuevo.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [bibleId, retry]);
+  }, [bibleId, retry, settings]);
 
-  if (started && loaded) return <VerseRound verses={loaded.verses} bible={loaded.bible} difficulty={difficulty} {...props} />;
+  if (started && loaded) return order ? <OrderRound verses={loaded.verses} bible={loaded.bible} {...props} /> : <VerseRound verses={loaded.verses} bible={loaded.bible} difficulty={difficulty} {...props} />;
   return <GameCard>
     <GameText heading>Prepara tu partida</GameText><GameText>Versión bíblica</GameText>
-    {bibles.length > 0 && <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden' }}><Picker accessibilityLabel="Versión bíblica" selectedValue={bibleId ?? loaded?.bible.bibleId} onValueChange={(value) => { if (value != null) setBibleId(Number(value)); }} style={{ color: colors.text }} dropdownIconColor={colors.text} itemStyle={{ color: colors.text }}>{bibles.map((bible) => <Picker.Item key={bible.bibleId} label={`${bible.name} (${bible.abbr})`} value={bible.bibleId} />)}</Picker></View>}
-    <GameButton label="Con opciones · elige una palabra" secondary={difficulty !== 'options'} selected={difficulty === 'options'} onPress={() => setDifficulty('options')} />
-    <GameButton label="De memoria · escribe la palabra" secondary={difficulty !== 'write'} selected={difficulty === 'write'} onPress={() => setDifficulty('write')} />
-    <GameText muted>5 versículos, sin límite de tiempo. Las tildes no cuentan al escribir.</GameText>
+    {bibles.length > 0 && <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, overflow: 'hidden' }}><Picker enabled={!settings?.review} accessibilityLabel="Versión bíblica" selectedValue={bibleId ?? loaded?.bible.bibleId} onValueChange={(value) => { if (value != null) setBibleId(Number(value)); }} style={{ color: colors.text }} dropdownIconColor={colors.text} itemStyle={{ color: colors.text }}>{bibles.map((bible) => <Picker.Item key={bible.bibleId} label={`${bible.name} (${bible.abbr})`} value={bible.bibleId} />)}</Picker></View>}
+    {!order && settings?.mode !== 'daily' && <><GameButton label="Con opciones · elige una palabra" secondary={difficulty !== 'options'} selected={difficulty === 'options'} onPress={() => setDifficulty('options')} />
+    <GameButton label="De memoria · escribe la palabra" secondary={difficulty !== 'write'} selected={difficulty === 'write'} onPress={() => setDifficulty('write')} /></>}
+    <GameText muted>{count} {count === 1 ? 'versículo' : 'versículos'}, sin límite de tiempo. {order ? 'Toca las palabras en orden. Toca una palabra colocada para devolverla al grupo.' : 'Las tildes no cuentan al escribir.'}</GameText>
     {loading && <ActivityIndicator accessibilityLabel="Cargando versículos" color={colors.primary} />}
     {!!error && <><LiveMessage text={error} /><GameButton secondary label="Reintentar" onPress={() => setRetry((value) => value + 1)} /></>}
-    {loaded && loaded.verses.length < 5 && <GameText>Esta versión no tiene suficientes pasajes. Elige otra versión.</GameText>}
-    <GameButton label="Comenzar · 5 versículos" disabled={loading || !loaded || loaded.verses.length < 5 || !!error} onPress={() => setStarted(true)} />
+    {loaded && loaded.verses.length < count && <GameText>Esta versión no tiene suficientes pasajes. Elige otra versión.</GameText>}
+    <GameButton label={`Comenzar · ${count} ${count === 1 ? 'versículo' : 'versículos'}`} disabled={loading || !loaded || loaded.verses.length < count || !!error} onPress={() => setStarted(true)} />
   </GameCard>;
 }
 
-function VerseRound({ verses, bible, difficulty, onComplete, onOpen, onRestart }: Props & { verses: GameVerse[]; bible: BibleVersion; difficulty: 'options' | 'write' }) {
+function VerseRound({ verses, bible, difficulty, onComplete, onOpen, onRestart, settings, onAttempt }: Props & { verses: GameVerse[]; bible: BibleVersion; difficulty: 'options' | 'write' }) {
   const { colors } = useAppTheme();
-  const game = useVerseGame(verses, onComplete);
+  const game = useVerseGame(verses, onComplete, { settings, onAttempt, bibleId: bible.bibleId });
   const [draft, setDraft] = useState('');
   if (!game.questions.length) return <GameCard><GameText>No hay suficientes palabras para preparar la partida.</GameText><GameButton label="Elegir otra versión" onPress={onRestart} /></GameCard>;
   if (game.finished) return <GameResultPanel title={`${game.correctCount} de ${game.questions.length} respuestas correctas`} score={game.score} onRestart={onRestart}>
