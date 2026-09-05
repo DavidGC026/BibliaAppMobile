@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { OfflineStatusBadge } from '@/components/OfflineStatusBadge';
+import { ChapterStudyDownloads } from '@/components/study/ChapterStudyDownloads';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import * as api from '@/lib/api';
@@ -112,6 +113,7 @@ export default function DownloadsScreen() {
       const local = await listLocalBibles();
       setItems(
         local.map((b) => ({
+          ...b,
           bibleId: b.bibleId,
           abbr: b.abbr,
           name: b.name,
@@ -127,9 +129,12 @@ export default function DownloadsScreen() {
 
   useEffect(() => {
     hydrateOfflineDownloads().catch(() => {});
+    let completed = '';
     const unsubscribe = subscribeOfflineDownloads((next) => {
       setTasks(next);
-      if (next.some((task) => task.status === 'done')) {
+      const nextCompleted = next.filter((task) => task.status === 'done').map((task) => `${task.id}:${task.updatedAt}`).join('|');
+      if (nextCompleted !== completed) {
+        completed = nextCompleted;
         load();
         loadStudy();
       }
@@ -253,6 +258,8 @@ export default function DownloadsScreen() {
           );
         })
       )}
+
+      <ChapterStudyDownloads bibles={items} />
 
       <Text style={[typography.h2, { color: colors.text, marginTop: 16 }]}>Contenido de estudio</Text>
       <Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 8 }}>

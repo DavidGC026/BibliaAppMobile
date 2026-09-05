@@ -58,6 +58,7 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pref
         )}
         ListFooterComponent={
           <View style={{ marginTop: 16, gap: 12 }}>
+            <StudyButton label="Gestionar descargas" palette={palette} onPress={() => { onClose(); router.push('/downloads'); }} />
             <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 20 }}>Datos de STEPBible.org · Tyndale House Cambridge · CC BY 4.0.</Text>
             <StudyButton label="Fuentes y atribuciones" palette={palette} onPress={() => { onClose(); router.push('/legal'); }} />
           </View>

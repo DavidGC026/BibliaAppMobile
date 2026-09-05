@@ -69,7 +69,7 @@ export function StudyFeedback({ loading, error, offlineAvailable, palette, onRet
 
 export const studyStyles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, borderBottomWidth: 1 },
-  button: { minHeight: 48, minWidth: 48, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderRadius: 12, justifyContent: 'center' },
+  button: { minHeight: 48, minWidth: 48, maxWidth: '100%', flexShrink: 1, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderRadius: 12, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   feedback: { padding: 20, gap: 16 },
   content: { padding: 16, gap: 12 },

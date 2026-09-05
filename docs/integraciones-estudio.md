@@ -11,7 +11,7 @@ normales; no se reescribe el historial.
 | API y almacenamiento local por capítulo | Implementado |
 | Interlineal griego, hebreo y arameo; fichas Strong | Implementado; revisión visual al cierre |
 | Comentarios por capítulo y rango de versículos | Implementado; revisión visual al cierre |
-| Descargas por libro, progreso, reanudación y eliminación | En curso: motor y cola preparados |
+| Descargas por libro, progreso, reanudación y eliminación | Implementado; revisión visual al cierre |
 | Atribuciones, comprobaciones y revisión visual | Pendiente |
 
 ## Punto de partida verificado
@@ -84,3 +84,8 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
   capítulos terminados. Reintentar completa los restantes; Actualizar vuelve a
   consultar el libro, incluidos capítulos vacíos. La prueba simula una caída en
   el segundo capítulo y verifica reanudación, progreso y lectura sin red.
+- 2026-09-04: Perfil → Descargas permite elegir versión y libro, completar una
+  copia parcial, actualizar o eliminarla. Presenta los capítulos guardados y la
+  cantidad real de palabras/comentarios; los capítulos sin comentarios no se
+  cuentan como comentarios disponibles. También se ven tareas de otros libros.
+  Se evita recargar todo el catálogo en cada avance de una tarea posterior.

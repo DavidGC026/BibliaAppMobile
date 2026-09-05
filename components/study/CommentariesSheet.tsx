@@ -79,7 +79,8 @@ export function CommentariesSheet({ passage, bookName, initialVerse, palette, on
           </Text>
         )}
         ListFooterComponent={
-          <View style={{ marginTop: 16 }}>
+          <View style={{ marginTop: 16, gap: 12 }}>
+            <StudyButton label="Gestionar descargas" onPress={() => { onClose(); router.push('/downloads'); }} palette={palette} />
             <StudyButton label="Fuentes y atribuciones" onPress={() => { onClose(); router.push('/legal'); }} palette={palette} />
           </View>
         }
