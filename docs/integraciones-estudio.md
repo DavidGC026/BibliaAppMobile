@@ -68,6 +68,7 @@ las palabras de las versiones españolas conservan su selección habitual.
 | API real | Cobertura y pasajes de griego/hebreo/títulos; Génesis 1:1 volvió a responder HTTP 200 al cierre |
 | Revisión visual | 375×812 y 812×375, temas claro/oscuro, texto ampliado, ficha G3056, títulos, filtro de idioma, comentarios y ausencia de contenido |
 | Accesibilidad de la vista web de prueba | Axe: cero infracciones en interlineal claro y comentarios oscuros después de nombrar el diálogo |
+| APK Android 4.1.2 | Release firmado con el certificado de 4.1.1, código 51, cuatro arquitecturas e integridad comprobada; [detalle de entrega](apk-4.1.2.md) |
 
 La revisión visual utilizó los componentes reales con React Native Web en un
 entorno temporal: contenido extraído de la BD y almacenamiento/cola simulados
@@ -77,10 +78,11 @@ no hay desbordamiento horizontal a 375 px y que los botones visibles superan
 44 px, también con el texto ampliado al 160 % en la vista de prueba.
 
 **Límite de verificación:** el emulador disponible figuraba `offline` en ADB.
-La exportación Android valida el bundle, pero no sustituye una prueba instalada.
+La exportación Android y la verificación del APK no sustituyen una prueba instalada.
 Queda comprobar en Android/iOS los lectores de pantalla, el tamaño de fuente del
 sistema, la representación nativa de diacríticos y el reinicio real durante una
-descarga. No se generó un APK ni un IPA en esta tarea.
+descarga. Se generó y entregó el [APK 4.1.2 firmado](apk-4.1.2.md), sin prueba de
+instalación en dispositivo. No se generó un IPA.
 
 ## Referencias técnicas
 
@@ -128,3 +130,9 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
   el diálogo para accesibilidad y una respuesta vacía indica «Última consulta
   guardada», sin anunciar contenido disponible. TypeScript y exportación Android
   repetidos después de estos ajustes; ambos correctos.
+- 2026-09-05: APK 4.1.2, código 51, compilado tras el reinicio del servidor con
+  una caché de Gradle independiente bajo `android/.gradle`. Se verificaron la
+  firma dvguzman, el paquete conservado, las cuatro arquitecturas, la alineación,
+  la configuración y el bundle incorporados. APK y SHA-256 entregados en
+  `/home/david/biblia-release`; procedimiento y resultados en
+  [Android 4.1.2](apk-4.1.2.md).

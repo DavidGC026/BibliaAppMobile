@@ -1,6 +1,6 @@
 # Android 4.1.2
 
-Fecha: 2026-09-05. Preparación del APK solicitado con las
+Fecha: 2026-09-05. APK generado, firmado y entregado con las
 [integraciones de estudio](integraciones-estudio.md).
 
 ## Versión e identidad
@@ -59,5 +59,48 @@ descargadas y los resultados nativos del intento anterior.
 
 ## Verificación
 
-Pendiente de completar al terminar la compilación: firma, versión del manifiesto,
-arquitecturas incluidas, alineación y SHA-256 del archivo entregado.
+La compilación terminó con `BUILD SUCCESSFUL in 18m`: 817 tareas, 140 ejecutadas
+y 677 reutilizadas. El bundle Android contiene 2069 módulos. Antes de copiar el
+APK al destino se comprobaron su firma, manifiesto, configuración incorporada,
+arquitecturas y alineación.
+
+| Comprobación | Resultado |
+| --- | --- |
+| Versión del manifiesto y configuración Expo | `4.1.2`, código `51` |
+| Paquete Android | `com.bibliaapp.mobile`, igual al APK 4.1.1 |
+| Firma | Válida con APK Signature Scheme v2; certificado idéntico al de 4.1.1 |
+| Modo depurable | Desactivado |
+| Arquitecturas | `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64` |
+| Alineación ZIP | `zipalign -c -P 16 4` correcto |
+| Configuración incorporada | Variante `internal`, API `https://biblia2.dvguzman.com` |
+| Bundle incorporado | SHA-256 idéntico al bundle generado por esta compilación |
+| Tamaño del APK | 148 505 080 bytes, aproximadamente 148,5 MB |
+| Propietario y permisos de entrega | `david`, modo `0644` |
+
+SHA-256 del certificado de firma:
+
+```text
+6baa7a10ad01290c88b4fd18c0aba558afad7ba2edc24fbf8da1b2703cbbf528
+```
+
+SHA-256 del APK entregado:
+
+```text
+127ee9a7cd7997183f031c1fafde2763a983943ef9cc354e205a491237b180eb
+```
+
+La entrega se realizó mediante una copia temporal y un renombrado al nombre
+final. Se dejó también `BibliaAPP-4.1.2-dvg-release.apk.sha256` junto al APK y
+se comprobó la integridad del archivo ya entregado:
+
+```bash
+cd /home/david/biblia-release
+sha256sum -c BibliaAPP-4.1.2-dvg-release.apk.sha256
+# BibliaAPP-4.1.2-dvg-release.apk: OK
+```
+
+No se instaló este APK en un dispositivo durante esta entrega. La firma, el
+paquete conservado y el código de versión superior permiten su actualización,
+pero queda comprobar la instalación y el funcionamiento nativo. La comprobación
+de alineación ZIP tampoco sustituye una prueba en un dispositivo con páginas de
+memoria de 16 KB.
