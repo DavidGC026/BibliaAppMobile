@@ -8,7 +8,7 @@ normales; no se reescribe el historial.
 
 | Bloque | Estado |
 | --- | --- |
-| API y almacenamiento local por capítulo | Pendiente |
+| API y almacenamiento local por capítulo | Implementado |
 | Interlineal griego, hebreo y arameo; fichas Strong | Pendiente |
 | Comentarios por capítulo y rango de versículos | Pendiente |
 | Descargas por libro, progreso, reanudación y eliminación | Pendiente |
@@ -61,3 +61,10 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
 - 2026-09-04: revisión de API y datos reales, rama nueva y alcance registrado.
   Los cambios previos de `app.json`, `app/(tabs)/feed.tsx` y
   `components/ExternalLink.tsx` pertenecen al trabajo anterior.
+- 2026-09-04: API tipada y copia SQLite por capítulo, con títulos v.0 y datos
+  Strong incluidos. El catálogo local conserva `hasInterlinear`. El interlineal
+  comparte copia entre versiones; los comentarios mantienen su versión. Las
+  respuestas vacías se vuelven a consultar al estar en línea. Una escritura
+  fallida conserva la copia anterior y permite seguir consultando en línea.
+  Prueba `npm run check:study` sobre SQLite temporal y transportes simulados
+  (requiere Python 3; compatible con Node 20, sin instalar dependencias).

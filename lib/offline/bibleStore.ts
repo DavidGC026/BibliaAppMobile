@@ -117,6 +117,7 @@ async function upsertBibleMeta(b: BibleVersion) {
     canShare: b.canShare,
     canCreateImages: b.canCreateImages,
     canUseAudio: b.canUseAudio,
+    hasInterlinear: b.hasInterlinear,
     cacheMaxAgeDays: b.cacheMaxAgeDays,
   });
   await run(

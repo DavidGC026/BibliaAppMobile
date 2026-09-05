@@ -113,6 +113,19 @@ CREATE TABLE IF NOT EXISTS dictionary_entries (
   PRIMARY KEY (dict, code)
 );
 
+-- Una respuesta completa por capítulo: la sustitución es atómica, incluso si
+-- se cierra la app durante una descarga. El interlineal usa bible_id = 0.
+CREATE TABLE IF NOT EXISTS study_chapters (
+  kind TEXT NOT NULL,
+  bible_id INTEGER NOT NULL,
+  book_id INTEGER NOT NULL,
+  chapter INTEGER NOT NULL,
+  content_json TEXT NOT NULL,
+  item_count INTEGER NOT NULL,
+  saved_at TEXT NOT NULL,
+  PRIMARY KEY (kind, bible_id, book_id, chapter)
+);
+
 CREATE TABLE IF NOT EXISTS cross_references (
   vid_origen INTEGER NOT NULL,
   vid_destino INTEGER NOT NULL,

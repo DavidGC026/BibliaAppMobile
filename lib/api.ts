@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config';
+import type { InterlinearWord, Commentary, StudyPassage } from './study';
 import type {
   AdminSectionGroup,
   ApiError,
@@ -66,6 +67,29 @@ async function request<T>(
   }
 
   return data as T;
+}
+
+// — Estudio por capítulo —
+async function requestStudy<T>(path: string): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    return await request<T>(path, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function getInterlinear(passage: StudyPassage) {
+  return requestStudy<{ words: InterlinearWord[] }>(
+    `/api/interlinear?book=${passage.bookId}&chapter=${passage.chapter}&rev=2`,
+  );
+}
+
+export async function getCommentaries(passage: StudyPassage) {
+  return requestStudy<{ commentaries: Commentary[] }>(
+    `/api/commentaries?book=${passage.bookId}&chapter=${passage.chapter}&bible=${passage.bibleId}&lang=es`,
+  );
 }
 
 // — Auth —
@@ -864,4 +888,3 @@ export async function getDiscipleProgress(discipleId: number) {
     `/api/discipleship?discipleId=${discipleId}`,
   );
 }
-

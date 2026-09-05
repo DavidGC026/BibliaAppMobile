@@ -46,6 +46,7 @@ export interface BibleVersion {
   canShare?: boolean;
   canCreateImages?: boolean;
   canUseAudio?: boolean;
+  hasInterlinear?: boolean;
   cacheMaxAgeDays?: number | null;
 }
 
