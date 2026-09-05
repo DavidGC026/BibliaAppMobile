@@ -76,6 +76,7 @@ las palabras de las versiones españolas conservan su selección habitual.
 | Revisión visual | 375×812 y 812×375, temas claro/oscuro, texto ampliado, ficha G3056, títulos, filtro de idioma, comentarios y ausencia de contenido |
 | Accesibilidad de la vista web de prueba | Axe: cero infracciones en interlineal claro y comentarios oscuros después de nombrar el diálogo |
 | APK Android 4.1.2 | Release firmado con el certificado de 4.1.1, código 51, cuatro arquitecturas e integridad comprobada; [detalle de entrega](apk-4.1.2.md) |
+| APK Android 4.1.3 | Nuevo diseño, código 52, firma e integridad comprobadas; [detalle de entrega](apk-4.1.3.md) |
 
 La revisión visual utilizó los componentes reales con React Native Web en un
 entorno temporal: contenido extraído de la BD y almacenamiento/cola simulados
@@ -88,8 +89,8 @@ no hay desbordamiento horizontal a 375 px y que los botones visibles superan
 La exportación Android y la verificación del APK no sustituyen una prueba instalada.
 Queda comprobar en Android/iOS los lectores de pantalla, el tamaño de fuente del
 sistema, la representación nativa de diacríticos y el reinicio real durante una
-descarga. Se generó y entregó el [APK 4.1.2 firmado](apk-4.1.2.md), sin prueba de
-instalación en dispositivo. No se generó un IPA.
+descarga. Se entregaron los APK [4.1.2](apk-4.1.2.md) y [4.1.3](apk-4.1.3.md)
+firmados, sin prueba de instalación en dispositivo. No se generó un IPA.
 
 ## Referencias técnicas
 
@@ -163,6 +164,10 @@ El emulador sigue `offline` en ADB. La prueba de escalado simula fuentes y
 disposición en web; falta comprobar TalkBack/VoiceOver, tipografía y gestos en
 un dispositivo instalado. La implementación de foco usa la API documentada de
 [React Native 0.85](https://reactnative.dev/docs/0.85/accessibilityinfo#sendaccessibilityevent).
+
+El rediseño se entregó en el [APK 4.1.3, código 52](apk-4.1.3.md), firmado con
+dvguzman y copiado a `/home/david/biblia-release` junto con su SHA-256. La
+compilación nativa y las comprobaciones del archivo final terminaron correctamente.
 
 ### Implementación inicial
 
