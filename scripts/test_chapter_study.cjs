@@ -62,7 +62,8 @@ print(json.dumps(result))
     await esbuild.build({
       stdin: {
         contents: `export * from './lib/studyRepository'; export * from './lib/study';
-          export * from './lib/offline/chapterStudyStore'; export * from './lib/network';`,
+          export * from './lib/offline/chapterStudyStore'; export * from './lib/network';
+          export * from './lib/commentaryText';`,
         resolveDir: path.resolve(__dirname, '..'), loader: 'ts',
       },
       outfile, bundle: true, platform: 'node', format: 'cjs',
@@ -119,6 +120,10 @@ print(json.dumps(result))
     assert.equal(study.interlinearApplies('heb', 19), true);
     assert.equal(study.interlinearApplies('grc', 19), false);
     assert.equal(study.interlinearApplies('auto', 43), true);
+    const blocks = study.parseCommentaryBlocks('# Salmo 23\n\n> Mi pastor\n\n1. Texto **completo**.\n\n<script>alert(1)</script>');
+    assert.deepEqual(blocks.map(block => block.kind), ['heading', 'quote', 'paragraph', 'paragraph']);
+    assert.equal(blocks[3].text, '<script>alert(1)</script>', 'HTML permanece texto, nunca se ejecuta');
+    assert.equal(study.parseCommentaryInline(blocks[2].text).map(span => span.text).join(''), '1. Texto completo.');
     await study.deleteStudyBook('interlinear', 200, 19);
     assert.equal(await study.readStudyChapter('interlinear', passage), null);
     assert.equal((await study.listStudyBookCaches()).length, 1, 'borrar interlineal conserva comentarios');

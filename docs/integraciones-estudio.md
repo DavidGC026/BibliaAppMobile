@@ -10,7 +10,7 @@ normales; no se reescribe el historial.
 | --- | --- |
 | API y almacenamiento local por capítulo | Implementado |
 | Interlineal griego, hebreo y arameo; fichas Strong | Implementado; revisión visual al cierre |
-| Comentarios por capítulo y rango de versículos | Pendiente |
+| Comentarios por capítulo y rango de versículos | Implementado; revisión visual al cierre |
 | Descargas por libro, progreso, reanudación y eliminación | Pendiente |
 | Atribuciones, comprobaciones y revisión visual | Pendiente |
 
@@ -74,3 +74,8 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
   persistente y filtro para el versículo seleccionado. Controles de 48 puntos,
   colores del tema del lector y cierre con el botón Atrás de Android. Se añade
   la atribución STEPBible en Información legal. TypeScript correcto.
+- 2026-09-04: acceso Comentarios desde el lector, filtrado por autor y por rango
+  exacto del versículo seleccionado. Spurgeon se lee como un bloque por salmo,
+  sin inventar comentarios para los capítulos ausentes. El texto se presenta en
+  párrafos nativos virtualizados con títulos, citas y énfasis; no ejecuta HTML ni
+  necesita el editor de notas. Información legal identifica la obra y traducción.

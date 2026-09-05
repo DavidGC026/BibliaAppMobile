@@ -89,6 +89,20 @@ export default function LegalScreen() {
         </Pressable>
       </Card>
 
+      <Card style={styles.card}>
+        <Text style={[styles.title, { color: colors.text }]}>Comentarios de Salmos</Text>
+        <Text style={[styles.body, { color: colors.textMuted }]}>
+          Charles H. Spurgeon, The Treasury of David (El tesoro de David).
+          Traducción al español preparada para BibliaAPP a partir de la obra
+          original. Los comentarios se publican por capítulo y conservan la
+          identificación del autor.
+        </Text>
+        <Pressable accessibilityRole="link" style={styles.linkRow}
+          onPress={() => Linking.openURL('https://www.ccel.org/ccel/spurgeon/treasury')}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Consultar la obra original</Text>
+        </Pressable>
+      </Card>
+
       <Text style={[typography.h2, { color: colors.text }]}>Traducciones disponibles</Text>
       {bibles.map((bible) => (
         <Card key={bible.bibleId} style={styles.card}>

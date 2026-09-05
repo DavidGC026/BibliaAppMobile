@@ -19,6 +19,7 @@ import { SymbolView } from 'expo-symbols';
 
 import { BibleAudioPlayer } from '@/components/BibleAudioPlayer';
 import { InterlinearSheet } from '@/components/study/InterlinearSheet';
+import { CommentariesSheet } from '@/components/study/CommentariesSheet';
 import { StudyButton } from '@/components/study/StudySheet';
 import type { InterlinearPreference } from '@/lib/study';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -107,6 +108,7 @@ export function BibleReader({
   const [versionOpen, setVersionOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [interlinearOpen, setInterlinearOpen] = useState(false);
+  const [commentariesOpen, setCommentariesOpen] = useState(false);
   const [interlinearLanguage, setInterlinearLanguage] = useState<InterlinearPreference>('auto');
   const readerPrefsReadyRef = useRef(false);
   const [readerFontSize, setReaderFontSize] = useState(DEFAULT_READER_PREFERENCES.fontSize);
@@ -646,9 +648,10 @@ export function BibleReader({
           </Text>
         </View>
 
-        {currentBible?.hasInterlinear && selectedBook ? (
+        {selectedBook ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
-            <StudyButton label="Interlineal" palette={readingColors} onPress={() => setInterlinearOpen(true)} disabled={loadingChapter} />
+            {currentBible?.hasInterlinear ? <StudyButton label="Interlineal" palette={readingColors} onPress={() => setInterlinearOpen(true)} disabled={loadingChapter} /> : null}
+            <StudyButton label="Comentarios" palette={readingColors} onPress={() => setCommentariesOpen(true)} disabled={loadingChapter} />
           </View>
         ) : null}
 
@@ -811,6 +814,11 @@ export function BibleReader({
           bookName={selectedBook.bookName} verses={verses} initialVerse={primaryVerse}
           preference={interlinearLanguage} onPreferenceChange={setInterlinearLanguage}
           palette={readingColors} onClose={() => setInterlinearOpen(false)} />
+      ) : null}
+
+      {commentariesOpen && selectedBook ? (
+        <CommentariesSheet key={`${bibleId}:${bookId}:${chapter}`} passage={{ bibleId, bookId: selectedBook.bookId, chapter }}
+          bookName={selectedBook.bookName} initialVerse={primaryVerse} palette={readingColors} onClose={() => setCommentariesOpen(false)} />
       ) : null}
 
       {audioOpen && verses.length > 0 && audioAllowed ? (
