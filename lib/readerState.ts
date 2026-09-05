@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import type { InterlinearPreference } from '@/lib/study';
 
 const READER_PREFS_KEY = 'BIBLIA_READER_PREFERENCES';
 const LAST_PASSAGE_KEY = 'BIBLIA_LAST_PASSAGE';
@@ -15,6 +16,7 @@ export type ReaderPreferences = {
   align: ReaderAlign;
   theme: ReaderTheme;
   layout: ReaderLayout;
+  interlinearLanguage: InterlinearPreference;
 };
 
 export type ReaderThemePalette = {
@@ -75,6 +77,7 @@ export const DEFAULT_READER_PREFERENCES: ReaderPreferences = {
   align: 'left',
   theme: 'auto',
   layout: 'verses',
+  interlinearLanguage: 'auto',
 };
 
 function parseReaderTheme(value: unknown): ReaderTheme {
@@ -92,6 +95,7 @@ export async function getReaderPreferences(): Promise<ReaderPreferences> {
       align: parsed.align === 'justify' ? 'justify' : 'left',
       theme: parseReaderTheme(parsed.theme),
       layout: parsed.layout === 'paragraphs' ? 'paragraphs' : 'verses',
+      interlinearLanguage: parsed.interlinearLanguage === 'heb' || parsed.interlinearLanguage === 'grc' ? parsed.interlinearLanguage : 'auto',
     };
   } catch {
     return DEFAULT_READER_PREFERENCES;
@@ -107,6 +111,7 @@ export async function saveReaderPreferences(preferences: ReaderPreferences) {
       align: preferences.align,
       theme: preferences.theme,
       layout: preferences.layout,
+      interlinearLanguage: preferences.interlinearLanguage,
     }),
   );
 }

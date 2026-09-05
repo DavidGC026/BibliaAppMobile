@@ -71,6 +71,24 @@ export default function LegalScreen() {
         ))}
       </Card>
 
+      <Card style={styles.card}>
+        <Text style={[styles.title, { color: colors.text }]}>Interlineal y léxicos</Text>
+        <Text style={[styles.body, { color: colors.textMuted }]}>
+          Datos interlineales TAGNT y TAHOT de STEPBible.org, basados en el trabajo
+          de Tyndale House Cambridge, bajo Creative Commons Atribución 4.0.
+          La aplicación adapta los datos por capítulo, normaliza los códigos Strong
+          e incluye definiciones españolas del diccionario y partículas hebreas.
+        </Text>
+        <Pressable accessibilityRole="link" style={styles.linkRow}
+          onPress={() => Linking.openURL('https://github.com/STEPBible/STEPBible-Data')}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Fuente: STEPBible</Text>
+        </Pressable>
+        <Pressable accessibilityRole="link" style={styles.linkRow}
+          onPress={() => Linking.openURL('https://creativecommons.org/licenses/by/4.0/')}>
+          <Text style={{ color: colors.primary, fontWeight: '700' }}>Licencia CC BY 4.0</Text>
+        </Pressable>
+      </Card>
+
       <Text style={[typography.h2, { color: colors.text }]}>Traducciones disponibles</Text>
       {bibles.map((bible) => (
         <Card key={bible.bibleId} style={styles.card}>

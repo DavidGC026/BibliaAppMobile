@@ -9,7 +9,7 @@ normales; no se reescribe el historial.
 | Bloque | Estado |
 | --- | --- |
 | API y almacenamiento local por capítulo | Implementado |
-| Interlineal griego, hebreo y arameo; fichas Strong | Pendiente |
+| Interlineal griego, hebreo y arameo; fichas Strong | Implementado; revisión visual al cierre |
 | Comentarios por capítulo y rango de versículos | Pendiente |
 | Descargas por libro, progreso, reanudación y eliminación | Pendiente |
 | Atribuciones, comprobaciones y revisión visual | Pendiente |
@@ -68,3 +68,9 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
   fallida conserva la copia anterior y permite seguir consultando en línea.
   Prueba `npm run check:study` sobre SQLite temporal y transportes simulados
   (requiere Python 3; compatible con Node 20, sin instalar dependencias).
+- 2026-09-04: acceso Interlineal desde el lector, también en modo párrafos.
+  Vista nativa por versículo con lista virtualizada, títulos de Salmos, orden RTL,
+  transliteración, glosa, morfología y ficha Strong. Selector Auto/Hebreo/Griego
+  persistente y filtro para el versículo seleccionado. Controles de 48 puntos,
+  colores del tema del lector y cierre con el botón Atrás de Android. Se añade
+  la atribución STEPBible en Información legal. TypeScript correcto.

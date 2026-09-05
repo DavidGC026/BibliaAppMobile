@@ -18,6 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
 import { BibleAudioPlayer } from '@/components/BibleAudioPlayer';
+import { InterlinearSheet } from '@/components/study/InterlinearSheet';
+import { StudyButton } from '@/components/study/StudySheet';
+import type { InterlinearPreference } from '@/lib/study';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
 import { CrossReferencesModal } from '@/components/CrossReferencesModal';
@@ -103,6 +106,8 @@ export function BibleReader({
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [interlinearOpen, setInterlinearOpen] = useState(false);
+  const [interlinearLanguage, setInterlinearLanguage] = useState<InterlinearPreference>('auto');
   const readerPrefsReadyRef = useRef(false);
   const [readerFontSize, setReaderFontSize] = useState(DEFAULT_READER_PREFERENCES.fontSize);
   const [readerDensity, setReaderDensity] = useState<ReaderDensity>(DEFAULT_READER_PREFERENCES.density);
@@ -169,6 +174,7 @@ export function BibleReader({
         setReaderAlign(prefs.align);
         setReaderTheme(prefs.theme);
         setReaderLayout(prefs.layout);
+        setInterlinearLanguage(prefs.interlinearLanguage);
       })
       .finally(() => {
         readerPrefsReadyRef.current = true;
@@ -183,8 +189,9 @@ export function BibleReader({
       align: readerAlign,
       theme: readerTheme,
       layout: readerLayout,
+      interlinearLanguage,
     }).catch(() => {});
-  }, [readerFontSize, readerDensity, readerAlign, readerTheme, readerLayout]);
+  }, [readerFontSize, readerDensity, readerAlign, readerTheme, readerLayout, interlinearLanguage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -639,6 +646,12 @@ export function BibleReader({
           </Text>
         </View>
 
+        {currentBible?.hasInterlinear && selectedBook ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+            <StudyButton label="Interlineal" palette={readingColors} onPress={() => setInterlinearOpen(true)} disabled={loadingChapter} />
+          </View>
+        ) : null}
+
         {loadingChapter ? (
           <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
         ) : readerLayout === 'paragraphs' ? (
@@ -792,6 +805,13 @@ export function BibleReader({
           </View>
         )}
       </ScrollView>
+
+      {interlinearOpen && selectedBook ? (
+        <InterlinearSheet key={`${bibleId}:${bookId}:${chapter}`} passage={{ bibleId, bookId: selectedBook.bookId, chapter }}
+          bookName={selectedBook.bookName} verses={verses} initialVerse={primaryVerse}
+          preference={interlinearLanguage} onPreferenceChange={setInterlinearLanguage}
+          palette={readingColors} onClose={() => setInterlinearOpen(false)} />
+      ) : null}
 
       {audioOpen && verses.length > 0 && audioAllowed ? (
         <BibleAudioPlayer
