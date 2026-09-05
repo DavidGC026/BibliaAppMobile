@@ -33,7 +33,7 @@ Desde la carpeta `mobile`, con Java 21 y el SDK local:
 
 ```bash
 JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 \
-GRADLE_USER_HOME="$PWD/.build-tmp/gradle-release-4.1.2" \
+GRADLE_USER_HOME="$PWD/android/.gradle/release-home" \
 DVGUZMAN_KEYSTORE_PROPERTIES=/home/david/.dvguzman/keystore.properties \
 RELEASE_DIR=/home/david/biblia-release \
 RELEASE_SUFFIX=dvg \
@@ -44,11 +44,18 @@ El script ejecuta `check:native`, compila `assembleRelease` y copia el APK al
 destino. Las contraseñas y el almacén de firma permanecen fuera del repositorio.
 
 El primer intento encontró bloqueada `/root/.gradle/caches/journal-1` por otra
-instancia de Gradle. Se prepara una caché de trabajo independiente bajo
-`.build-tmp/`, con dos workers y vigilancia de archivos desactivada. Los
+instancia de Gradle. Se utiliza una caché de trabajo independiente bajo
+`android/.gradle/release-home`, con dos workers y vigilancia de archivos desactivada. Los
 metadatos de dependencias tienen su propia copia; los artefactos descargados,
 identificados por su contenido, se reutilizan mediante enlaces físicos. No se
 comparten los archivos de bloqueo con la compilación que causó el conflicto.
+
+La compilación se detuvo a petición del usuario para reiniciar el servidor,
+antes de generar el APK. Tras el reinicio se trasladó la caché desde
+`.build-tmp/`: las fuentes del bundle de React Native excluyen `android/`, y Expo
+excluye `android/.gradle` del mapa de archivos de Metro. Esta ubicación evita
+recorrer la caché al buscar código JavaScript. Se conservan las dependencias
+descargadas y los resultados nativos del intento anterior.
 
 ## Verificación
 
