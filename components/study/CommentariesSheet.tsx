@@ -49,7 +49,7 @@ export function CommentariesSheet({ passage, bookName, initialVerse, palette, on
                 {authors.map((name) => <StudyButton key={name} label={name} selected={author === name} onPress={() => setAuthor(name)} palette={palette} />)}
               </View>
             ) : null}
-            <StudyFeedback loading={loading} error={error} offlineAvailable={result?.offlineAvailable} palette={palette} onRetry={retry} />
+            <StudyFeedback loading={loading} error={error} offlineAvailable={result?.offlineAvailable} hasContent={Boolean(result?.content.length)} palette={palette} onRetry={retry} />
           </View>
         }
         ListEmptyComponent={!loading && !error ? (

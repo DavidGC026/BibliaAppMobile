@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react';
-import { FlatList, Pressable, Text, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { useChapterStudy } from '@/hooks/useChapterStudy';
 import { parseDictionaryDefinition } from '@/lib/dictionary';
@@ -13,6 +13,7 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pref
   palette: StudyPalette; onClose: () => void;
 }) {
   const [verseFilter, setVerseFilter] = useState(initialVerse);
+  const [activeWord, setActiveWord] = useState<InterlinearWord | null>(null);
   const applies = interlinearApplies(preference, passage.bookId);
   const { result, loading, error, retry } = useChapterStudy('interlinear', passage, applies);
   const groups = useMemo(() => [...groupInterlinearWords(result?.content ?? [])]
@@ -21,8 +22,11 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pref
   const reference = `${bookName} ${passage.chapter}`;
 
   return (
-    <StudySheet title="Interlineal" reference={reference} palette={palette} onClose={onClose}>
-      <FlatList data={applies ? groups : []} keyExtractor={([verse]) => String(verse)}
+    <StudySheet title={activeWord?.strongCode || (activeWord ? 'Forma original' : 'Interlineal')}
+      reference={activeWord ? `${reference}${activeWord.verse === 0 ? ' · Título' : `:${activeWord.verse}`} · ${activeWord.original}` : reference}
+      closeLabel={activeWord ? 'Volver' : 'Cerrar'} palette={palette} onClose={() => activeWord ? setActiveWord(null) : onClose()}>
+      {activeWord ? <StrongWordDetails word={activeWord} palette={palette} /> : null}
+      <FlatList style={{ display: activeWord ? 'none' : 'flex' }} data={applies ? groups : []} keyExtractor={([verse]) => String(verse)}
         initialNumToRender={6} windowSize={5} contentContainerStyle={studyStyles.content}
         ListHeaderComponent={
           <View style={{ gap: 12 }}>
@@ -42,7 +46,7 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pref
                 <StudyButton label="Todo el capítulo" selected={verseFilter === null} onPress={() => setVerseFilter(null)} palette={palette} />
               </View>
             ) : null}
-            {applies ? <StudyFeedback loading={loading} error={error} offlineAvailable={result?.offlineAvailable} palette={palette} onRetry={retry} /> : (
+            {applies ? <StudyFeedback loading={loading} error={error} offlineAvailable={result?.offlineAvailable} hasContent={Boolean(result?.content.length)} palette={palette} onRetry={retry} /> : (
               <Text style={{ color: palette.text, fontSize: 16, lineHeight: 24 }}>
                 Este libro tiene original {passage.bookId <= 39 ? 'hebreo / arameo' : 'griego'}. Selecciona Auto para consultarlo.
               </Text>
@@ -54,7 +58,7 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pref
         ) : null}
         renderItem={({ item: [verse, words] }) => (
           <InterlinearVerse words={words} label={verse === 0 ? 'Título' : `${reference}:${verse}`}
-            text={translation.get(verse)} palette={palette} initiallyOpen={verse === (initialVerse ?? 1)} />
+            text={translation.get(verse)} palette={palette} initiallyOpen={verse === (initialVerse ?? 1)} onWordPress={setActiveWord} />
         )}
         ListFooterComponent={
           <View style={{ marginTop: 16, gap: 12 }}>
@@ -68,14 +72,12 @@ export function InterlinearSheet({ passage, bookName, verses, initialVerse, pref
   );
 }
 
-const InterlinearVerse = memo(function InterlinearVerse({ words, label, text, palette, initiallyOpen }: {
-  words: InterlinearWord[]; label: string; text?: string; palette: StudyPalette; initiallyOpen: boolean;
+const InterlinearVerse = memo(function InterlinearVerse({ words, label, text, palette, initiallyOpen, onWordPress }: {
+  words: InterlinearWord[]; label: string; text?: string; palette: StudyPalette; initiallyOpen: boolean; onWordPress: (word: InterlinearWord) => void;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [activePosition, setActivePosition] = useState<number | null>(null);
-  const active = words.find((word) => word.position === activePosition);
   const rtl = words.some((word) => word.language !== 'grc');
-  const sections = active?.definition ? parseDictionaryDefinition(active.definition) : [];
 
   return (
     <View style={[studyStyles.card, { borderColor: palette.border, backgroundColor: palette.card }]}>
@@ -93,7 +95,7 @@ const InterlinearVerse = memo(function InterlinearVerse({ words, label, text, pa
               <Pressable key={word.position} accessibilityRole="button"
                 accessibilityLabel={`${word.original}, ${word.glossEs || word.glossEn || ''}, ${word.strongCode || 'sin código Strong'}`}
                 accessibilityState={{ selected: word.position === activePosition }}
-                onPress={() => setActivePosition(word.position === activePosition ? null : word.position)}
+                onPress={() => { setActivePosition(word.position); onWordPress(word); }}
                 style={({ pressed }) => ({ minHeight: 48, minWidth: 72, maxWidth: '100%', padding: 12, borderWidth: 1, borderRadius: 12,
                   borderColor: word.position === activePosition ? palette.accent : palette.border,
                   backgroundColor: word.position === activePosition ? palette.accentSoft : palette.background, opacity: pressed ? 0.6 : 1, gap: 4 })}>
@@ -104,19 +106,25 @@ const InterlinearVerse = memo(function InterlinearVerse({ words, label, text, pa
               </Pressable>
             ))}
           </View>
-          {active ? (
-            <View style={{ borderTopWidth: 1, borderColor: palette.border, paddingTop: 16, gap: 12 }}>
-              <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 18, fontWeight: '800' }}>{active.strongCode || 'Forma original'}{active.lemma ? ` · ${active.lemma}` : ''}</Text>
-              {active.morph ? <Text style={{ color: palette.muted, fontSize: 13 }}>Morfología: {active.morph}</Text> : null}
-              {sections.length ? sections.map((section, index) => (
-                <Text key={index} selectable style={{ color: palette.text, fontSize: 16, lineHeight: 25 }}>
-                  {section.label ? <Text style={{ fontWeight: '700' }}>{section.label}. </Text> : null}{section.text}
-                </Text>
-              )) : <Text style={{ color: palette.muted, fontSize: 16 }}>Sin definición Strong para esta forma.</Text>}
-            </View>
-          ) : null}
         </>
       ) : null}
     </View>
   );
 });
+
+function StrongWordDetails({ word, palette }: { word: InterlinearWord; palette: StudyPalette }) {
+  const sections = word.definition ? parseDictionaryDefinition(word.definition) : [];
+  return (
+    <ScrollView contentContainerStyle={studyStyles.content}>
+      <Text selectable style={{ color: palette.text, fontSize: 28, lineHeight: 44, writingDirection: word.language === 'grc' ? 'ltr' : 'rtl' }}>{word.lemma || word.original}</Text>
+      {word.transliteration ? <Text style={{ color: palette.muted, fontSize: 16 }}>{word.transliteration}</Text> : null}
+      <Text style={{ color: palette.text, fontSize: 16 }}>{word.glossEs || word.glossEn || 'Sin glosa'}</Text>
+      {word.morph ? <Text style={{ color: palette.muted, fontSize: 14 }}>Morfología: {word.morph}</Text> : null}
+      {sections.length ? sections.map((section, index) => (
+        <Text key={index} selectable style={{ color: palette.text, fontSize: 17, lineHeight: 27 }}>
+          {section.label ? <Text style={{ fontWeight: '700' }}>{section.label}. </Text> : null}{section.text}
+        </Text>
+      )) : <Text style={{ color: palette.muted, fontSize: 16 }}>Sin definición Strong para esta forma.</Text>}
+    </ScrollView>
+  );
+}

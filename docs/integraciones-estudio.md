@@ -6,18 +6,21 @@ Trabajo iniciado el 4 de septiembre de 2026 en `feat/integraciones-estudio-mobil
 Destino de los commits: remoto **gitea** (`BibliaAPP_Mobile`). Se realizan pushes
 normales; no se reescribe el historial.
 
+**Implementación terminada.** Validaciones automáticas y revisión visual realizadas;
+el alcance de la verificación nativa se detalla abajo.
+
 | Bloque | Estado |
 | --- | --- |
 | API y almacenamiento local por capítulo | Implementado |
-| Interlineal griego, hebreo y arameo; fichas Strong | Implementado; revisión visual al cierre |
-| Comentarios por capítulo y rango de versículos | Implementado; revisión visual al cierre |
-| Descargas por libro, progreso, reanudación y eliminación | Implementado; revisión visual al cierre |
-| Atribuciones, comprobaciones y revisión visual | Pendiente |
+| Interlineal griego, hebreo y arameo; fichas Strong | Implementado y revisado |
+| Comentarios por capítulo y rango de versículos | Implementado y revisado |
+| Descargas por libro, progreso, reanudación y eliminación | Implementado y revisado |
+| Atribuciones, comprobaciones y revisión visual | Realizadas |
 
 ## Punto de partida verificado
 
 El servidor responde correctamente para Génesis 1:1, Juan 1:1, el título del
-Salmo 23 y el Salmo 119. Su API informa cobertura de 66 libros, 141.746 palabras
+Salmo 23 y el Salmo 119. La API y la BD confirman cobertura de 66 libros, 141.746 palabras
 griegas, 305.638 hebreas/arameas, 49 partículas y 14.197 entradas Strong con
 definiciones españolas.
 
@@ -41,13 +44,43 @@ las palabras de las versiones españolas conservan su selección habitual.
   de él y no viaja con sus commits.
 - No incorporar léxicos aplazados ni fuentes excluidas del plan del backend.
 
-## Validación prevista
+## Cómo usarlo
 
-- TypeScript y comprobaciones existentes del móvil.
-- Pruebas de referencias, títulos v.0, separación por versión y almacenamiento
-  completo de capítulos; lectura sin red y reanudación tras fallos.
-- Respuestas reales del servidor y exportación del bundle de Android.
-- Revisión de estados de carga, errores, ausencia de datos, RTL y temas del lector.
+1. Abrir un capítulo en el lector y pulsar **Interlineal** o **Comentarios**.
+2. Si se selecciona antes un versículo, el estudio se abre filtrado a ese versículo.
+   **Todo el capítulo** amplía la consulta e incluye los títulos de Salmos.
+3. En Interlineal, tocar una palabra abre su ficha. **Volver** regresa a la lista.
+   Auto/Hebreo/Griego se conserva entre aperturas del lector.
+4. En **Perfil → Descargas → Estudio por libro**, elegir versión y libro.
+   **Completar libro** conserva capítulos ya guardados; **Actualizar** consulta
+   todo el libro de nuevo. La cola continúa mientras la app siga abierta.
+5. Si la app se cierra durante una descarga, la tarea pendiente se recupera al
+   abrirla. Ante un error de red, pulsar **Reintentar** cuando vuelva la conexión.
+
+## Validación realizada
+
+| Comprobación | Resultado |
+| --- | --- |
+| `npx tsc --noEmit` | Correcto tras los ajustes finales |
+| `npm run check` | Correcto: comprobaciones previas y nuevas de estudio |
+| `npm run check:study` | SQLite temporal: lectura offline, títulos, versiones, rangos, disco lleno, respuestas inválidas, interrupción y reanudación |
+| `npx expo export --platform android --output-dir /tmp/biblia-mobile-integraciones-android` | Correcto: 2.069 módulos, bundle Hermes de 6,5 MB |
+| API real | Cobertura y pasajes de griego/hebreo/títulos; Génesis 1:1 volvió a responder HTTP 200 al cierre |
+| Revisión visual | 375×812 y 812×375, temas claro/oscuro, texto ampliado, ficha G3056, títulos, filtro de idioma, comentarios y ausencia de contenido |
+| Accesibilidad de la vista web de prueba | Axe: cero infracciones en interlineal claro y comentarios oscuros después de nombrar el diálogo |
+
+La revisión visual utilizó los componentes reales con React Native Web en un
+entorno temporal: contenido extraído de la BD y almacenamiento/cola simulados
+para controlar los estados. Las pruebas de persistencia y reanudación usan
+por separado el código real del repositorio y SQLite temporal. Se comprobó que
+no hay desbordamiento horizontal a 375 px y que los botones visibles superan
+44 px, también con el texto ampliado al 160 % en la vista de prueba.
+
+**Límite de verificación:** el emulador disponible figuraba `offline` en ADB.
+La exportación Android valida el bundle, pero no sustituye una prueba instalada.
+Queda comprobar en Android/iOS los lectores de pantalla, el tamaño de fuente del
+sistema, la representación nativa de diacríticos y el reinicio real durante una
+descarga. No se generó un APK ni un IPA en esta tarea.
 
 ## Referencias técnicas
 
@@ -89,3 +122,9 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
   cantidad real de palabras/comentarios; los capítulos sin comentarios no se
   cuentan como comentarios disponibles. También se ven tareas de otros libros.
   Se evita recargar todo el catálogo en cada avance de una tarea posterior.
+- 2026-09-04: revisión visual y cierre. La ficha Strong pasa a ocupar la vista
+  inmediatamente al tocar una palabra: en versículos largos quedaba demasiado
+  abajo. Volver mantiene montada la lista para conservar su posición. Se nombra
+  el diálogo para accesibilidad y una respuesta vacía indica «Última consulta
+  guardada», sin anunciar contenido disponible. TypeScript y exportación Android
+  repetidos después de estos ajustes; ambos correctos.

@@ -12,19 +12,19 @@ export interface StudyPalette {
   accentSoft: string;
 }
 
-export function StudySheet({ title, reference, palette, onClose, children }: {
-  title: string; reference: string; palette: StudyPalette; onClose: () => void; children: ReactNode;
+export function StudySheet({ title, reference, palette, onClose, closeLabel = 'Cerrar', children }: {
+  title: string; reference: string; palette: StudyPalette; onClose: () => void; closeLabel?: string; children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   return (
-    <Modal visible animationType="none" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: palette.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+    <Modal visible animationType="none" accessibilityLabel={`${title} · ${reference}`} onRequestClose={onClose}>
+      <View accessibilityViewIsModal style={{ flex: 1, backgroundColor: palette.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
         <View style={[studyStyles.header, { borderColor: palette.border }]}>
           <View style={{ flex: 1, gap: 4 }}>
             <Text accessibilityRole="header" style={{ color: palette.text, fontSize: 22, fontWeight: '800' }}>{title}</Text>
             <Text style={{ color: palette.muted, fontSize: 15 }}>{reference}</Text>
           </View>
-          <StudyButton label="Cerrar" onPress={onClose} palette={palette} />
+          <StudyButton label={closeLabel} onPress={onClose} palette={palette} />
         </View>
         {children}
       </View>
@@ -47,8 +47,8 @@ export function StudyButton({ label, onPress, palette, selected, disabled }: {
   );
 }
 
-export function StudyFeedback({ loading, error, offlineAvailable, palette, onRetry }: {
-  loading: boolean; error?: string; offlineAvailable?: boolean; palette: StudyPalette; onRetry: () => void;
+export function StudyFeedback({ loading, error, offlineAvailable, hasContent = true, palette, onRetry }: {
+  loading: boolean; error?: string; offlineAvailable?: boolean; hasContent?: boolean; palette: StudyPalette; onRetry: () => void;
 }) {
   if (loading) return <View style={studyStyles.feedback}><ActivityIndicator accessibilityLabel="Cargando estudio" color={palette.accent} /></View>;
   if (error) return (
@@ -60,7 +60,7 @@ export function StudyFeedback({ loading, error, offlineAvailable, palette, onRet
   return (
     <View style={[studyStyles.row, { paddingHorizontal: 16, paddingVertical: 8 }]}>
       <Text style={{ color: palette.muted, fontSize: 13, flex: 1 }}>
-        {offlineAvailable ? 'Disponible sin conexión' : 'Consulta en línea; no se pudo guardar en este dispositivo.'}
+        {offlineAvailable ? hasContent ? 'Disponible sin conexión' : 'Última consulta guardada' : 'Consulta en línea; no se pudo guardar en este dispositivo.'}
       </Text>
       <StudyButton label="Actualizar" onPress={onRetry} palette={palette} />
     </View>
