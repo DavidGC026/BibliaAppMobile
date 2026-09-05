@@ -63,8 +63,10 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "build:editor": "node scripts/build_editor_bundle.mjs",
-    "check": "node scripts/test_editor_roundtrip.cjs && node scripts/test_editor_page.cjs && node scripts/test_note_images.cjs && node scripts/test_keyboard_inset.cjs && node scripts/test_tts_text.cjs && node scripts/test_group_invite.cjs && npm run check:study",
+    "check": "node scripts/test_editor_roundtrip.cjs && node scripts/test_editor_page.cjs && node scripts/test_note_images.cjs && node scripts/test_keyboard_inset.cjs && node scripts/test_tts_text.cjs && node scripts/test_group_invite.cjs && npm run check:study && npm run check:games",
     "check:study": "node scripts/test_chapter_study.cjs",
+    "sync:games": "node scripts/sync_games.cjs",
+    "check:games": "node scripts/test_games.cjs",
     "check:native": "node scripts/check_native_config.cjs",
     "prebuild:android": "expo prebuild --platform android",
     "build:android:release": "export ANDROID_HOME=\"${ANDROID_HOME:-/opt/android-sdk}\" && export ANDROID_SDK_ROOT=\"$ANDROID_HOME\" && npm run check:native && mkdir -p .build-tmp && export TMPDIR=\"$PWD/.build-tmp\" && cd android && APP_VARIANT=internal EXPO_PUBLIC_APP_VARIANT=internal ./gradlew assembleRelease && cp app/build/outputs/apk/release/app-release.apk \"${RELEASE_DIR:-../releases}/BibliaAPP-$(node -p \"require('../app.json').expo.version\")${RELEASE_SUFFIX:+-$RELEASE_SUFFIX}-release.apk\""

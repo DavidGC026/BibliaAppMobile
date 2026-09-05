@@ -183,6 +183,7 @@ export default function HomeScreen() {
   };
 
   const quickActionHandlers: Record<HomeActionKey, () => void> = {
+    games: () => router.push('/games'),
     read: () => goBible('reader'),
     search: () => goBible('search'),
     universalSearch: () => router.push('/search'),

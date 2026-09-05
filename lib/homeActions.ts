@@ -13,7 +13,8 @@ export type HomeActionKey =
   | 'stats'
   | 'activity'
   | 'dictionary'
-  | 'community';
+  | 'community'
+  | 'games';
 
 export type HomeActionMeta = {
   key: HomeActionKey;
@@ -25,6 +26,12 @@ export type HomeActionMeta = {
 };
 
 export const HOME_ACTION_CATALOG: HomeActionMeta[] = [
+  {
+    key: 'games',
+    title: 'Juegos bíblicos',
+    description: 'Completa versículos, encuentra parejas y adivina palabras',
+    icon: 'trophy',
+  },
   {
     key: 'read',
     title: 'Ir a lectura',
@@ -97,6 +104,7 @@ export const HOME_ACTION_CATALOG: HomeActionMeta[] = [
 
 export const DEFAULT_HOME_ACTIONS: HomeActionKey[] = [
   'read',
+  'games',
   'search',
   'universalSearch',
   'note',

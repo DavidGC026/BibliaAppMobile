@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config';
+import type { GameVerse } from './games/engine';
 import type { InterlinearWord, Commentary, StudyPassage } from './study';
 import type {
   AdminSectionGroup,
@@ -167,6 +168,12 @@ export async function getVerseOfDay(idBible?: number) {
 
 export async function listBibles() {
   return request<{ bibles: BibleVersion[]; defaultBibleId: number | null }>('/api/bibles');
+}
+
+export async function listGameVerses(bibleId?: number) {
+  return requestStudy<{ bible: BibleVersion; verses: GameVerse[] }>(
+    `/api/games/verses${bibleId ? `?bible=${bibleId}` : ''}`,
+  );
 }
 
 export async function listBooks(bibleId: number) {

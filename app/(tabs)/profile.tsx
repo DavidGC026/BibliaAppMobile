@@ -64,6 +64,9 @@ export default function ProfileScreen() {
           Inicia sesión para ver tu perfil y configuración.
         </Text>
         <Button label="Entrar" onPress={() => router.push('/login')} />
+        <Card style={styles.menuCard}>
+          <MenuRow icon="trophy" label="Juegos bíblicos" onPress={() => router.push('/games')} />
+        </Card>
         <ThemeSwitch />
         <Card style={styles.menuCard}>
           <MenuRow
@@ -111,6 +114,8 @@ export default function ProfileScreen() {
       <View style={styles.menuSection}>
         <Text style={[styles.menuHeading, { color: colors.textMuted }]}>MI BIBLIA</Text>
         <Card style={styles.menuCard}>
+          <MenuRow icon="trophy" label="Juegos bíblicos" onPress={() => router.push('/games')} />
+          <View style={[styles.menuDivider, { backgroundColor: colors.border }]} />
           <MenuRow
             icon="download"
             label="Descargas offline"
