@@ -64,7 +64,8 @@ print(json.dumps(result))
       stdin: {
         contents: `export * from './lib/studyRepository'; export * from './lib/study';
           export * from './lib/offline/chapterStudyStore'; export * from './lib/network';
-          export * from './lib/commentaryText'; export * from './lib/offline/chapterStudyDownload';`,
+          export * from './lib/commentaryText'; export * from './lib/studyPresentation';
+          export * from './lib/offline/chapterStudyDownload';`,
         resolveDir: path.resolve(__dirname, '..'), loader: 'ts',
       },
       outfile, bundle: true, platform: 'node', format: 'cjs',
@@ -90,6 +91,16 @@ print(json.dumps(result))
 
     const commentary = { id: 1, bibleId: 149, bookId: 19, chapter: 23,
       verseStart: 1, verseEnd: 6, author: 'Charles Spurgeon', languageCode: 'es', contentMd: 'El Pastor.' };
+    // La navegación conserva títulos y versículos sin palabras; no cambia el
+    // pasaje elegido para ocultar una ausencia de contenido.
+    assert.deepEqual(study.studyVerseNumbers([1, 3], [title], 2), [0, 1, 2, 3]);
+    assert.equal(study.studyVerseReference('Salmos 23', 0), 'Salmos 23 · Título');
+    assert.equal(study.readableOriginal('בְּ/רֵאשִׁ֖ית'), 'בְּרֵאשִׁ֖ית');
+    assert.equal(study.readableOriginal('ἀρχῇ'), 'ἀρχῇ');
+    assert.equal(study.commentaryRangeLabel(commentary, [1, 2, 3, 4, 5, 6]), 'Todo el capítulo');
+    assert.equal(study.commentaryRangeLabel(commentary, [1, 2, 3, 4, 5, 6, 7]), 'Versículos 1–6');
+    assert.equal(study.commentaryRangeLabel(commentary, []), 'Versículos 1–6');
+    assert.equal(study.commentaryPreview('# Título\n\nUna **explicación** del *pasaje*.'), 'Una explicación del pasaje.');
     await study.saveStudyChapter('commentaries', passage, [commentary]);
     assert.equal((await study.repoGetStudyChapter('commentaries', passage)).content.length, 1);
     await assert.rejects(study.repoGetStudyChapter('commentaries', { ...passage, bibleId: 200 }), /sin descargar/);

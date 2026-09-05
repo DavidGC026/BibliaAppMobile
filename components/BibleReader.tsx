@@ -21,7 +21,6 @@ import { BibleAudioPlayer } from '@/components/BibleAudioPlayer';
 import { InterlinearSheet } from '@/components/study/InterlinearSheet';
 import { CommentariesSheet } from '@/components/study/CommentariesSheet';
 import { StudyButton } from '@/components/study/StudySheet';
-import type { InterlinearPreference } from '@/lib/study';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BibleSelectorModal } from '@/components/BibleSelectorModal';
 import { CrossReferencesModal } from '@/components/CrossReferencesModal';
@@ -109,7 +108,6 @@ export function BibleReader({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [interlinearOpen, setInterlinearOpen] = useState(false);
   const [commentariesOpen, setCommentariesOpen] = useState(false);
-  const [interlinearLanguage, setInterlinearLanguage] = useState<InterlinearPreference>('auto');
   const readerPrefsReadyRef = useRef(false);
   const [readerFontSize, setReaderFontSize] = useState(DEFAULT_READER_PREFERENCES.fontSize);
   const [readerDensity, setReaderDensity] = useState<ReaderDensity>(DEFAULT_READER_PREFERENCES.density);
@@ -176,7 +174,6 @@ export function BibleReader({
         setReaderAlign(prefs.align);
         setReaderTheme(prefs.theme);
         setReaderLayout(prefs.layout);
-        setInterlinearLanguage(prefs.interlinearLanguage);
       })
       .finally(() => {
         readerPrefsReadyRef.current = true;
@@ -191,9 +188,9 @@ export function BibleReader({
       align: readerAlign,
       theme: readerTheme,
       layout: readerLayout,
-      interlinearLanguage,
+      interlinearLanguage: 'auto',
     }).catch(() => {});
-  }, [readerFontSize, readerDensity, readerAlign, readerTheme, readerLayout, interlinearLanguage]);
+  }, [readerFontSize, readerDensity, readerAlign, readerTheme, readerLayout]);
 
   useEffect(() => {
     let cancelled = false;
@@ -812,7 +809,7 @@ export function BibleReader({
       {interlinearOpen && selectedBook ? (
         <InterlinearSheet key={`${bibleId}:${bookId}:${chapter}`} passage={{ bibleId, bookId: selectedBook.bookId, chapter }}
           bookName={selectedBook.bookName} verses={verses} initialVerse={primaryVerse}
-          preference={interlinearLanguage} onPreferenceChange={setInterlinearLanguage}
+          bibleAbbr={currentBible?.abbr} fontSize={readerFontSize}
           palette={readingColors} onClose={() => setInterlinearOpen(false)} />
       ) : null}
 

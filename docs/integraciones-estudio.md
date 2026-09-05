@@ -93,6 +93,40 @@ Se consultó la documentación exacta exigida por `AGENTS.md` antes de escribir 
 
 ## Bitácora
 
+### Rediseño de lectura · 2026-09-05
+
+La revisión posterior al APK 4.1.2 encontró demasiada información con el mismo
+peso visual: filtros de idioma, tarjetas plegadas, códigos Strong y controles de
+descarga antes de poder leer. Se simplifica el recorrido de estudio:
+
+- **Interlineal:** un versículo a la vez, con el texto de la Biblia como contexto,
+  palabras en su orden original y controles fijos para avanzar, retroceder o
+  elegir otro versículo. El título de un salmo sigue siendo accesible y no se
+  confunde con el versículo 1. Un pasaje sin palabras conserva su estado vacío.
+- **Detalle de palabra:** el significado aparece primero; la forma base, la
+  morfología y las traducciones adicionales quedan en «Detalles lingüísticos».
+  Se explica qué identifica el código Strong. Volver conserva el lugar de la
+  lista, mientras que cerrar regresa directamente a la Biblia.
+- **Idioma:** se toma del libro consultado. Se retira el selector que permitía
+  elegir hebreo en un libro griego y terminar ante una pantalla sin contenido.
+  Se conserva el campo de preferencias antiguo con valor automático.
+- **Texto original:** las barras de segmentación de STEPBible solo se ocultan en
+  la presentación. La forma íntegra sigue disponible en el detalle y permanece
+  intacta en API/SQLite. Se mantienen diacríticos y dirección de escritura.
+  Las glosas inglesas se identifican como tales, sin inventar traducciones.
+
+El diseño usa las paletas del lector: fondo, texto, texto secundario, superficie,
+borde y acento. Por ejemplo, en claro se conservan `#FFFFFF`, `#1F2937`,
+`#6B7280`, `#F3F4F6`, `#E5E7EB` y `#92700C`. La tipografía de navegación sigue
+siendo la del sistema; los originales y citas usan la serif nativa. Citas y
+definiciones respetan el tamaño elegido en el lector. El contenido tiene un
+ancho máximo de 760 puntos y las palabras pasan a una columna con texto grande.
+
+Validación inicial: TypeScript y casos de presentación añadidos a `check:study`.
+La revisión visual y el rediseño de comentarios se registrarán al completarse.
+
+### Implementación inicial
+
 - 2026-09-04: revisión de API y datos reales, rama nueva y alcance registrado.
   Los cambios previos de `app.json`, `app/(tabs)/feed.tsx` y
   `components/ExternalLink.tsx` pertenecen al trabajo anterior.
