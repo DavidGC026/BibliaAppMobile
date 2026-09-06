@@ -2,6 +2,7 @@ import { API_BASE_URL } from './config';
 import type { GameVerse } from './games/engine';
 import type { ContentEnvelope, EditorCatalog, GameContent } from './games/catalog';
 import { verseQuery, type RoundSettings } from './games/round';
+import type { ProgressOperation, ProgressSyncReply } from './games/sync';
 import type { InterlinearWord, Commentary, StudyPassage } from './study';
 import type {
   AdminSectionGroup,
@@ -173,6 +174,7 @@ export async function listBibles() {
 }
 
 export const loadGameContent = () => requestStudy<ContentEnvelope>('/api/games/content');
+export const synchronizeGameProgress = (accountId: number, operations: ProgressOperation[]) => requestStudy<ProgressSyncReply>('/api/games/progress', { method: 'POST', body: JSON.stringify({ accountId, operations }) });
 export const loadEditorCatalog = () => requestStudy<EditorCatalog>('/api/admin/games/content');
 export const saveEditorCatalog = (catalog: GameContent, revision: number) => requestStudy<{ catalog: GameContent; revision: number }>('/api/admin/games/content', { method: 'PUT', body: JSON.stringify({ catalog, revision }) });
 

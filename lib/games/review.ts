@@ -3,7 +3,7 @@ import { normalizeAnswer } from "./engine"
 import { parseCoordinates, parseWord, passageKey } from "./catalog"
 
 export type ReviewTarget = { kind: "wordle"; puzzle: WordPuzzle } | { kind: "complete" | "order"; passage: PassageReference; bibleId: number }
-export type ReviewAttempt = { target: ReviewTarget; correct: boolean }
+export type ReviewAttempt = { target: ReviewTarget; correct: boolean; id?: string }
 export type OnReviewAttempt = (attempt: ReviewAttempt) => void
 export interface ReviewItem { key: string; target: ReviewTarget; due: string; successes: number; misses: number; lastSuccess: string | null }
 export function reviewKey(target: ReviewTarget) {

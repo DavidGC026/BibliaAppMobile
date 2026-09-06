@@ -6,9 +6,9 @@ import { useWordGame, type OnGameComplete } from '@/lib/games/hooks';
 import type { RoundContext } from '@/lib/games/round';
 import { GameButton, GameCard, GameText, GameResultPanel, LiveMessage, PassageButton, GAME_LETTER_COLORS, LETTER_SYMBOLS, styles, type OpenPassage } from './ui';
 
-export function WordGame({ onComplete, onOpen, onRestart, settings, onAttempt }: RoundContext & { onComplete: OnGameComplete; onOpen: OpenPassage; onRestart: () => void }) {
+export function WordGame({ onComplete, onOpen, onRestart, ...context }: RoundContext & { onComplete: OnGameComplete; onOpen: OpenPassage; onRestart: () => void }) {
   const { colors } = useAppTheme();
-  const game = useWordGame(onComplete, { settings, onAttempt });
+  const game = useWordGame(onComplete, context);
   const input = useRef<TextInput>(null);
   const keys = keyboardGrades(game.guesses, game.target);
   const canReveal = [...game.target].some((letter, index) => !game.hints.includes(index) && !game.guesses.some((guess) => guess[index] === letter));

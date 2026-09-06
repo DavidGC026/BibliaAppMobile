@@ -5,7 +5,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import * as api from '@/lib/api';
 import type { BibleVersion } from '@/lib/types';
 import { normalizeAnswer, type GameVerse } from '@/lib/games/engine';
-import { useVerseGame, type OnGameComplete } from '@/lib/games/hooks';
+import { useVerseGame, useRoundCheckpoint, type OnGameComplete } from '@/lib/games/hooks';
 import type { RoundContext } from '@/lib/games/round';
 import { OrderRound } from './OrderGame';
 import { GameButton, GameCard, GameText, GameResultPanel, LiveMessage, PassageButton, styles, type OpenPassage } from './ui';
@@ -17,22 +17,24 @@ export function CompleteVerse(props: Props) {
   const count = settings?.review ? 1 : order ? 3 : 5;
   const { colors } = useAppTheme();
   const [bibles, setBibles] = useState<BibleVersion[]>([]);
-  const [bibleId, setBibleId] = useState<number | null>(null);
+  const [bibleId, setBibleId] = useState<number | null>(props.checkpoint?.bibleId ?? null);
   const [loaded, setLoaded] = useState<{ bible: BibleVersion; verses: GameVerse[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
-  const [difficulty, setDifficulty] = useState<'options' | 'write'>('options');
-  const [started, setStarted] = useState(false);
+  const [difficulty, setDifficulty] = useState<'options' | 'write'>(props.checkpoint?.difficulty ?? 'options');
+  const [started, setStarted] = useState(props.checkpoint?.started ?? false);
+  const [passages] = useState(props.checkpoint?.passages);
+  useRoundCheckpoint({ bibleId: bibleId ?? undefined, difficulty, started }, props);
   useEffect(() => {
     let active = true;
     setLoading(true); setError(''); setLoaded(null);
-    Promise.all([api.listBibles(), api.listGameVerses(bibleId ?? undefined, settings)])
+    Promise.all([api.listBibles(), api.listGameVerses(bibleId ?? undefined, { ...settings, mode: settings?.mode ?? 'free', seed: settings?.seed ?? '', passages })])
       .then(([catalog, response]) => { if (active) { setBibles(catalog.bibles); setLoaded(response); } })
       .catch(() => { if (active) setError('No pudimos cargar los versículos. Revisa tu conexión e intenta de nuevo.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [bibleId, retry, settings]);
+  }, [bibleId, retry, settings, passages]);
 
   if (started && loaded) return order ? <OrderRound verses={loaded.verses} bible={loaded.bible} {...props} /> : <VerseRound verses={loaded.verses} bible={loaded.bible} difficulty={difficulty} {...props} />;
   return <GameCard>
@@ -44,14 +46,14 @@ export function CompleteVerse(props: Props) {
     {loading && <ActivityIndicator accessibilityLabel="Cargando versículos" color={colors.primary} />}
     {!!error && <><LiveMessage text={error} /><GameButton secondary label="Reintentar" onPress={() => setRetry((value) => value + 1)} /></>}
     {loaded && loaded.verses.length < count && <GameText>Esta versión no tiene suficientes pasajes. Elige otra versión.</GameText>}
-    <GameButton label={`Comenzar · ${count} ${count === 1 ? 'versículo' : 'versículos'}`} disabled={loading || !loaded || loaded.verses.length < count || !!error} onPress={() => setStarted(true)} />
+    <GameButton label={`Comenzar · ${count} ${count === 1 ? 'versículo' : 'versículos'}`} disabled={loading || !loaded || loaded.verses.length < count || !!error} onPress={() => { if (loaded) props.onCheckpoint?.({ started: true, bibleId: loaded.bible.bibleId, difficulty, passages: loaded.verses.map(({ bookId, chapter, verse }) => ({ bookId, chapter, verse })) }); setStarted(true); }} />
   </GameCard>;
 }
 
-function VerseRound({ verses, bible, difficulty, onComplete, onOpen, onRestart, settings, onAttempt }: Props & { verses: GameVerse[]; bible: BibleVersion; difficulty: 'options' | 'write' }) {
+function VerseRound({ verses, bible, difficulty, onComplete, onOpen, onRestart, ...context }: Props & { verses: GameVerse[]; bible: BibleVersion; difficulty: 'options' | 'write' }) {
   const { colors } = useAppTheme();
-  const game = useVerseGame(verses, onComplete, { settings, onAttempt, bibleId: bible.bibleId });
-  const [draft, setDraft] = useState('');
+  const game = useVerseGame(verses, onComplete, { ...context, bibleId: bible.bibleId });
+  const { draft, setDraft } = game;
   if (!game.questions.length) return <GameCard><GameText>No hay suficientes palabras para preparar la partida.</GameText><GameButton label="Elegir otra versión" onPress={onRestart} /></GameCard>;
   if (game.finished) return <GameResultPanel title={`${game.correctCount} de ${game.questions.length} respuestas correctas`} score={game.score} onRestart={onRestart}>
     <GameText muted>Repasa los pasajes · {bible.abbr}</GameText>

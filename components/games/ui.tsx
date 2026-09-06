@@ -6,9 +6,9 @@ import type { PassageReference } from '@/lib/games/content';
 
 export type OpenPassage = (passage: PassageReference, bibleId?: number) => void;
 
-export function GameButton({ label, onPress, secondary, disabled, selected }: { label: string; onPress: () => void; secondary?: boolean; disabled?: boolean; selected?: boolean }) {
+export function GameButton({ label, onPress, secondary, disabled, selected, expanded }: { label: string; onPress: () => void; secondary?: boolean; disabled?: boolean; selected?: boolean; expanded?: boolean }) {
   const { colors } = useAppTheme();
-  return <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled, ...(selected === undefined ? {} : { selected }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, { backgroundColor: secondary ? colors.card : colors.primary, borderColor: selected ? colors.primary : colors.border, opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}>
+  return <Pressable accessibilityRole="button" accessibilityState={{ disabled: !!disabled, ...(selected === undefined ? {} : { selected }), ...(expanded === undefined ? {} : { expanded }) }} disabled={disabled} onPress={onPress} style={({ pressed }) => [styles.button, { backgroundColor: secondary ? colors.card : colors.primary, borderColor: selected ? colors.primary : colors.border, opacity: disabled ? 0.5 : pressed ? 0.75 : 1 }]}>
     <Text style={{ color: secondary ? colors.text : colors.primaryForeground, fontSize: 16, fontWeight: '600', textAlign: 'center' }}>{label}</Text>
   </Pressable>;
 }

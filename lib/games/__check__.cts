@@ -183,3 +183,102 @@ assert.throws(() => editorTools.applyContentDraft(editable, 'words', { ...draft,
 assert.throws(() => editorTools.applyContentDraft(editable, 'words', { ...draft, bookId: '0' }, null))
 assert.throws(() => editorTools.applyContentDraft(editable, 'words', { ...draft, clue: '' }, null))
 console.log('Ampliación: ciclos sin repetir, retos por fecha, migración, repasos, orden y editor verificados.')
+
+// Progreso entre dispositivos, guardados, filtros y entrenamiento (v3).
+const training = require('./training') as typeof import('./training')
+const syncing = require('./sync') as typeof import('./sync')
+const saving = require('./saved-round') as typeof import('./saved-round')
+const journaling = require('./persistence') as typeof import('./persistence')
+type Operation = import('./sync').ProgressOperation
+type Account = import('./sync').AccountProgress
+type SavedRound = import('./saved-round').SavedRound
+const trainingTime = Date.parse('2026-09-06T18:00:00Z')
+const apply = (account: Account, operation: Operation) => syncing.applyOperation(account, operation, trainingTime)
+const savedWord = (id: string, puzzle = WORD_PUZZLES[0]): SavedRound => ({ id, game: 'wordle', settings: { mode: 'free', seed: id, word: puzzle }, checkpoint: {}, createdAt: trainingTime, updatedAt: trainingTime })
+const finish = (id: string, score = 100): Operation => ({ id: `result:${id}`, at: trainingTime, type: 'result', roundId: id, mode: 'free', result: { id: `result:${id}`, game: 'wordle', score, won: true } })
+let serial = 0
+for (const length of [null, 4, 5, 6, 7]) for (const category of [null, ...catalogTools.WORD_CATEGORIES]) {
+  const filters = { length, category }
+  const pool = training.filterWords(WORD_PUZZLES, filters)
+  assert.ok(pool.every(word => (!length || normalizeAnswer(word.word).length === length) && (!category || word.category === category)))
+  if (!pool.length) { assert.throws(() => training.chooseFilteredWord(pool), /No hay palabras/); continue }
+  let account = syncing.emptyAccount()
+  let previous = ''
+  for (let lap = 0; lap < 3; lap++) {
+    const picked = new Set<string>()
+    for (let index = 0; index < pool.length; index++) {
+      const next = training.chooseFilteredWord(pool, account.cycles[training.filterKey(filters)], seededRandom(`filtered-${serial}`))
+      const word = normalizeAnswer(next.puzzle.word)
+      assert.ok(!picked.has(word), 'Cada filtro recorre su banco antes de repetir')
+      if (pool.length > 1) assert.notEqual(word, previous, 'Evita repetir en el cambio de ciclo')
+      const round = savedWord(`filtered-${serial++}`, next.puzzle)
+      account = apply(account, { id: `start:${round.id}`, at: trainingTime, type: 'start', round, wordUse: { filters, count: next.count, pool: next.pool } })
+      picked.add(word); previous = word
+    }
+    assert.equal(picked.size, pool.length)
+  }
+}
+assert.deepEqual(training.parseFilters({ length: 50, category: 'desconocida' }), training.defaultFilters())
+const legacyAccount = { ...emptyProgress(), games: { ...emptyProgress().games, wordle: { played: 3, won: 2, points: 190, best: 100 } }, dailyScores: { '2026-09-05:wordle': { score: 100, won: true } }, wordCycle: WORD_PUZZLES.slice(0, 49).map(word => normalizeAnswer(word.word)) }
+const imported: Operation = { id: 'legacy-device-a', at: trainingTime, type: 'import', progress: legacyAccount }
+let account = apply(syncing.emptyAccount(), imported)
+assert.deepEqual(account.totals.games.wordle, legacyAccount.games.wordle)
+assert.equal(apply(account, imported), account, 'Una importación repetida no duplica datos')
+assert.equal(training.chooseFilteredWord(WORD_PUZZLES, account.cycles['all:all']).puzzle.word, WORD_PUZZLES[49].word, 'La migración conserva las palabras por jugar')
+const secondLegacy = { ...emptyProgress(), games: { ...emptyProgress().games, wordle: { played: 2, won: 2, points: 180, best: 100 } }, dailyScores: legacyAccount.dailyScores }
+account = apply(account, { id: 'legacy-device-b', at: trainingTime, type: 'import', progress: secondLegacy })
+assert.equal(account.totals.games.wordle.played, 4)
+assert.equal(account.totals.games.wordle.points, 270, 'Los diarios antiguos se combinan sin duplicar puntos conocidos')
+const startOperation: Operation = { id: 'start:resume-word', at: trainingTime, type: 'start', round: savedWord('resume-word') }
+account = apply(account, startOperation)
+const saveOperation: Operation = { id: 'checkpoint-word-1', at: trainingTime + 10, type: 'save', round: { ...savedWord('resume-word'), updatedAt: trainingTime + 10, checkpoint: { guesses: ['XXXX'], draft: 'AB', hints: [0] } } }
+account = apply(account, saveOperation)
+assert.deepEqual(account.rounds['resume-word'].checkpoint, saveOperation.round.checkpoint)
+account = apply(account, { ...saveOperation, id: 'checkpoint-word-old', round: { ...savedWord('resume-word'), checkpoint: { draft: 'Z' } } })
+assert.equal(account.rounds['resume-word'].checkpoint.draft, 'AB', 'Un guardado atrasado no pisa el más reciente')
+account = apply(account, finish('resume-word'))
+assert.equal(account.rounds['resume-word'], undefined)
+account = apply(account, { ...saveOperation, id: 'late-save-after-finish', at: trainingTime + 50, round: { ...saveOperation.round, updatedAt: trainingTime + 50 } })
+assert.equal(account.rounds['resume-word'], undefined, 'Un guardado pendiente no revive una partida terminada')
+assert.deepEqual(JSON.parse(JSON.stringify(syncing.parseAccount(JSON.parse(JSON.stringify(account))))), JSON.parse(JSON.stringify(account)))
+assert.throws(() => syncing.parseOperation({ ...finish('invalid'), result: { game: 'wordle', score: 1000, won: true } }))
+assert.throws(() => syncing.parseOperation({ ...finish('invalid'), mode: 'daily' }))
+assert.throws(() => syncing.parseOperation({ ...startOperation, id: '__proto__' }))
+assert.throws(() => saving.parseSavedRound({ ...savedWord('invalid'), settings: { mode: 'review', seed: 'x' } }))
+assert.equal(saving.parseCheckpoint({ selected: [-1, 3], hints: [0, 0] }).selected, undefined)
+const firstChange = finish('offline-a', 80), secondChange = finish('offline-b', 90)
+const serverAccount = apply(syncing.emptyAccount(), firstChange)
+const localJournal = { version: 3 as const, account: apply(serverAccount, secondChange), pending: [firstChange, secondChange] }
+const acknowledged = journaling.acknowledgeJournal(localJournal, { progress: serverAccount, acknowledged: [firstChange.id], serverTime: trainingTime }, trainingTime)
+assert.equal(acknowledged.pending.length, 1)
+assert.equal(acknowledged.account.totals.games.wordle.points, 170, 'La respuesta no pierde lo jugado durante la solicitud')
+assert.deepEqual(JSON.parse(JSON.stringify(journaling.parseJournal(JSON.stringify(acknowledged)))), JSON.parse(JSON.stringify(acknowledged)))
+
+const wrong: Operation = { id: 'review-wrong-original', at: trainingTime, type: 'attempt', roundId: 'review-1', mode: 'free', attempt: { target, correct: false } }
+let learning = apply(syncing.emptyAccount(), wrong)
+learning = apply(learning, { ...wrong, id: 'review-success-next', at: trainingTime + 1000, mode: 'review', attempt: { target, correct: true } })
+const scheduled = learning.totals.reviews[0]
+learning = apply(learning, { ...wrong, id: 'review-late-offline', at: trainingTime - 1000 })
+assert.deepEqual(learning.totals.reviews[0], scheduled, 'Un error atrasado no reinicia un repaso posterior')
+learning = apply(learning, { ...wrong, id: 'review-success-same-day', at: trainingTime + 2000, mode: 'review', attempt: { target, correct: true } })
+assert.equal(training.weeklySummary(learning.activity, learning.totals.reviews, '2026-09-06').reviews, 1)
+const resultActivity = Array.from({ length: 6 }, (_, index) => ({ id: `learn-${index}`, at: trainingTime + index, day: '2026-09-06', game: 'order' as const, kind: 'result' as const, score: 100, correct: true, mode: 'free' as const }))
+assert.equal(training.automaticLevel([], 'order'), 'initial')
+assert.equal(training.automaticLevel(resultActivity.slice(0, 3), 'order'), 'intermediate')
+assert.equal(training.automaticLevel(resultActivity, 'order'), 'advanced')
+assert.equal(training.automaticLevel(resultActivity.map(item => ({ ...item, score: 20 })), 'order'), 'initial')
+const gradedVerses = Array.from({ length: 12 }, (_, index) => ({ ...verses[0], id: index + 1, verse: index + 1, text: `${'Palabra '.repeat(index + 2)}final.` }))
+const initialLength = training.selectLevelVerses(gradedVerses, 'initial', 3).map(verse => verse.text.length)
+const advancedLength = training.selectLevelVerses(gradedVerses, 'advanced', 3).map(verse => verse.text.length)
+assert.ok(Math.max(...initialLength) < Math.min(...advancedLength))
+assert.deepEqual(training.selectLevelVerses(gradedVerses, undefined), gradedVerses)
+const week = training.weeklySummary([...resultActivity, { ...resultActivity[0], id: 'outside-week', day: '2026-08-30' }], [], '2026-09-06')
+assert.equal(week.played, 6)
+assert.equal(week.points, 600)
+assert.equal(week.days[0].day, '2026-08-31')
+console.log('Entrenamiento: sincronización, importación, filtros, guardados, dificultad y resumen semanal verificados.')
+
+const queued = Array.from({ length: 240 }, (_, index) => finish(`queued-${index}`))
+assert.equal(journaling.synchronizationBatch(queued).length, 100)
+const largeImport: Operation = { id: 'large-history', at: trainingTime, type: 'import', progress: { ...emptyProgress(), recentIds: Array.from({ length: 3000 }, (_, index) => `${index}:${'a'.repeat(130)}`) } }
+assert.equal(journaling.synchronizationBatch([largeImport, largeImport]).length, 1, 'Las colas grandes se envían sin superar el límite del servidor')

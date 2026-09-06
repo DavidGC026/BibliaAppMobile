@@ -15,11 +15,15 @@ y registra sus pruebas y entrega.
 - **Memoria bíblica:** tableros de 4, 6 u 8 pares. Las tarjetas incorrectas se cierran
   después de 1,5 segundos; los aciertos permanecen visibles.
 - **Wordle bíblico:** seis intentos y letras reveladas a cambio de 15 puntos.
-  Recorre todas las palabras disponibles antes de comenzar otro ciclo.
+  Filtra por 4, 5, 6 o 7 letras y por categoría. Cada combinación recorre sus
+  palabras antes de comenzar otro ciclo; si no tiene palabras, cambia los filtros.
 - **Ordena el versículo:** reconstruye tres pasajes tocando las palabras. Toca una
   palabra colocada para retirarla. Conserva las mayúsculas y los signos de puntuación.
   Las fichas con el mismo texto son intercambiables. Mostrar la respuesta registra
   ese pasaje como un error para repasar.
+
+En **Personalizar práctica** puedes elegir los filtros de Wordle y la dificultad
+de completar y ordenar. Las preferencias se conservan en cada dispositivo.
 
 Wordle incluye 50 palabras iniciales. Se registra una palabra cuando empieza la
 partida libre, aunque se abandone. Al iniciar otro ciclo se evita repetir
@@ -38,9 +42,10 @@ La selección queda guardada cuando se solicita por primera vez ese día. Si un
 administrador publica contenido después, el reto ya creado no cambia.
 
 El primer resultado de cada juego y fecha suma puntos. Se puede repetir para
-practicar sin volver a sumar puntos diarios. Los resultados siguen siendo locales
-por cuenta y dispositivo, por lo que jugar en otro dispositivo tiene su propio
-historial; no hay una clasificación competitiva compartida.
+practicar sin volver a sumar puntos diarios. Con una cuenta se conserva el primer
+resultado recibido por el servidor entre web y móvil. Sin conexión, el total local
+puede ajustarse al sincronizar si ya había un resultado para ese día. Los visitantes
+conservan sus resultados en el dispositivo. No hay una clasificación competitiva.
 
 ### Repasar mis errores
 
@@ -53,6 +58,51 @@ Se conservan hasta 200 entradas y solo referencias de los pasajes, junto con la
 versión bíblica utilizada. Si esa versión deja de estar disponible para la cuenta,
 el repaso no permite eludir sus permisos. Las palabras conservan la pista y la
 referencia que tenían cuando se registró el error.
+
+### Continuar una partida
+
+Al volver a juegos aparece **Continúa donde te quedaste**. Pulsa **Continuar**
+para recuperar las respuestas, intentos, pistas, texto escrito y fichas; también
+se conservan la versión bíblica, el nivel y el tamaño del tablero. **Descartar**
+retira ese guardado, y **Reiniciar** empieza una partida nueva.
+
+Se guardan hasta doce partidas, durante siete días desde el último cambio.
+Memoria cierra las parejas incorrectas al recuperarlas. Completar y ordenar vuelven
+a consultar los mismos pasajes con conexión y con los permisos de la cuenta.
+Las partidas finalizadas se retiran de la lista. En dos dispositivos jugando la
+misma partida, prevalece el guardado más reciente; una partida ya abierta conserva
+su pantalla hasta salir y continuar de nuevo. Un resultado se cuenta una sola vez.
+
+### Dificultad gradual
+
+Los niveles **Inicial**, **Intermedia** y **Avanzada** seleccionan pasajes cortos,
+medios y largos del banco disponible en la traducción elegida. Se trata de longitud
+y práctica, no de una clasificación teológica de los pasajes.
+
+**Automática** se ajusta por separado para completar y ordenar:
+
+- Las primeras tres partidas usan el nivel inicial.
+- Con al menos tres partidas y un promedio de 60/100 en las tres últimas,
+  se pasa al nivel intermedio.
+- Con al menos seis partidas y un promedio de 80/100 en las tres últimas,
+  se pasa al avanzado.
+- Si el promedio baja, la siguiente partida puede usar un nivel más sencillo.
+
+Puedes escoger un nivel manual. El reto diario mantiene sus reglas comunes y los
+repasos se centran en el pasaje fallado, sin aplicar los filtros de partidas libres.
+
+### Mi semana
+
+Muestra los últimos siete días según la fecha de Ciudad de México: partidas,
+puntos, respuestas correctas, repasos completados, palabras o referencias que
+recordaste y temas pendientes de refuerzo. Cada día cuenta partidas y avances
+de repaso como actividades. Un repaso terminado puede aportar ambas actividades.
+
+El detalle empieza con la versión 4.4.0; los puntos antiguos permanecen en los
+totales, sin asignarles fechas inventadas. Se conservan hasta 6000 registros de los
+últimos 56 días. La dificultad automática usa los resultados disponibles en ese
+historial. Un nuevo error reinicia un repaso; un error antiguo que llega tarde
+desde otro dispositivo no deshace un avance más reciente.
 
 ## Administrar contenido desde la app
 
@@ -110,7 +160,9 @@ la persona al jugar. Un pasaje que no exista en esa traducción no participa.
 Las cuatro opciones para completar un versículo se generan automáticamente con
 el vocabulario de los pasajes cargados: una respuesta correcta y tres alternativas.
 No necesitas mantener una lista de respuestas incorrectas. Ordenar usa pasajes de
-3 a 40 palabras para que el tablero resulte manejable en el teléfono.
+3 a 40 palabras para que el tablero resulte manejable en el teléfono. Incluye
+pasajes de distinta longitud: los niveles los agrupan automáticamente. Al ampliar
+Wordle, la longitud y la categoría de cada palabra determinan en qué filtros aparece.
 
 ## Datos, conexión e historial
 
@@ -124,10 +176,29 @@ Completar y ordenar necesitan conexión para consultar el texto bíblico. El ret
 actual puede usar una selección previamente guardada; un reto de otra fecha
 requiere actualizar el contenido. Un fallo de conexión no borra el catálogo guardado.
 
-Los puntos, palabras vistas y repasos se guardan en `localStorage` en web y SQLite
-en móvil, por cuenta y dispositivo. El formato v2 importa automáticamente los
-puntos del formato v1 cuando aún no existe un historial v2. La clave anterior
-permanece intacta. No se sincroniza el progreso entre dispositivos.
+El formato v3 conserva los puntos, ciclos de Wordle, repasos, partidas y actividad
+por cuenta, con una copia en `localStorage` en web y SQLite en móvil. Importa una
+vez el historial local v2, o v1 si no existe v2; mantiene intactas las claves antiguas.
+Cada instalación aporta sus totales anteriores, combinando los resultados diarios
+conocidos sin volver a sumarlos. Los datos de visitante no pasan a otra cuenta.
+
+`POST /api/games/progress` requiere una sesión válida y la cuenta esperada. MySQL
+guarda el estado en `bible_game_progress` y recibos de operaciones en
+`bible_game_operations`; una transacción por usuario combina los avances.
+Los recibos evitan duplicados aunque se pierda una respuesta y el cliente reintente.
+Las tablas se crean al primer acceso; deben incluirse en la copia de seguridad.
+
+El cliente guarda primero los cambios pendientes y los envía al terminar de editar,
+al volver a la app y periódicamente. **Sincronizar ahora** permite solicitarlo.
+Los cambios hechos mientras llega una respuesta se conservan y vuelven a aplicarse.
+Si falla la red, puedes continuar y enviar lo pendiente más tarde. Si falla el
+almacenamiento, aparece un aviso; no se reemplaza un historial ilegible ni se envía
+una importación que todavía no tenga identidad guardada. Evita borrar los datos
+de la app mientras haya cambios pendientes.
+
+Los ciclos se comparten cuando hay conexión. Dos dispositivos jugando sin haber
+sincronizado pueden elegir la misma palabra; al reconectar se combinan sus avances.
+No se almacenan traducciones completas en el progreso, solo referencias y respuestas.
 
 ## Archivos para desarrolladores
 
@@ -139,14 +210,18 @@ La fuente de las reglas compartidas está en el repositorio web, en `lib/games/`
 | `catalog.ts` | Validación, selección sin repeticiones, fecha de Ciudad de México y semillas. |
 | `engine.ts` | Generación de preguntas, corrección de letras, memoria, orden y puntuaciones. |
 | `hooks.ts` | Estado de las partidas, registro de errores y cierre automático de tarjetas. |
-| `session.ts` | Carga, caché, migración del historial y coordinación de las partidas. |
+| `session.ts` | Catálogo, opciones, ciclos y coordinación de partidas y resúmenes. |
+| `persistence.ts` | Diario local v3, importación y cola de sincronización. |
+| `sync.ts` | Validación y combinación de operaciones por cuenta. |
+| `saved-round.ts` | Guardados, límites y validación de las partidas recuperables. |
+| `training.ts` | Filtros, ciclos, niveles y cálculo de la semana. |
 | `progress.ts` | Puntuaciones y resultados diarios. |
 | `review.ts` | Entradas e intervalos de repaso. |
 | `round.ts` | Opciones comunes y consulta de pasajes por modalidad. |
 | `editor.ts` | Formularios, vista previa y publicación. |
 | `__check__.ts` | Pruebas de las reglas y del contenido. |
 
-`lib/game-content-store.ts` y `app/api/games/` implementan la persistencia y las
+`lib/game-content-store.ts`, `lib/game-progress-store.ts` y `app/api/games/` implementan la persistencia y las
 consultas del servidor. `app/api/admin/games/content/route.ts` protege la edición.
 
 Las pantallas web están en `components/games/`; las nativas, en
@@ -163,7 +238,10 @@ publica con el editor. Una edición del archivo no reemplaza los datos publicado
 | Cierre automático de memoria | `MEMORY_MISMATCH_DELAY_MS` en `hooks.ts` (1500 ms). | Bloqueo de la tercera tarjeta, aciertos y cancelación al reiniciar. |
 | Tableros de memoria | Selectores en las dos pantallas y límites de `createMemoryGame`. | Catálogo suficiente, columnas y reto diario. |
 | Intentos y pistas de Wordle | `useWordGame`, `wordScore` y ambas pantallas. | Fin de partida, costo mostrado y puntuación. |
-| Longitud de palabras | `parseWord`, las pruebas y los dos tableros. | Legibilidad con teléfonos pequeños. |
+| Longitud y categorías | `parseWord`, `WORD_CATEGORIES`, `parseFilters` y las dos pantallas. | Catálogo, filtros vacíos y legibilidad con teléfonos pequeños. |
+| Dificultad gradual | `automaticLevel` y `selectLevelVerses` en `training.ts`. | Umbrales, banco pequeño y reglas del reto diario. |
+| Guardados | `ROUND_LIFETIME_MS`, `parseCheckpoint` y límites en `sync.ts`. | Recuperación, descartes y cambios de catálogo. |
+| Resumen semanal | `weeklySummary` y retención de actividad en `sync.ts`. | Fechas de México, repasos y datos antiguos sin fecha. |
 | Preguntas y alternativas | `createVerseQuestions`, `SKIP_WORDS` y los textos de preparación. | Una única opción correcta, vocabulario suficiente y modalidad diaria. |
 | Longitud de pasajes para ordenar | `createOrderQuestions` (3 a 40 palabras). | Puntuación, palabras repetidas y disposición de las fichas. |
 | Intervalos de repaso | `updateReview` en `review.ts`. | Cambio de fecha, repetición en el mismo día y migración si cambia el formato. |
@@ -198,6 +276,11 @@ lo tiene. No pongas contraseñas en el código ni en los comandos versionados.
 ```bash
 npm run check:games-api
 ```
+
+La opción `--keep` conserva la base y escribe un archivo privado en `/tmp` para
+revisar la interfaz con usuarios ficticios; añade esquemas auxiliares vacíos,
+sin copiar datos personales. Al terminar esa revisión, detén la vista previa,
+revoca el permiso de la base temporal, elimínala y borra su archivo de credenciales.
 
 Antes de publicar reglas nuevas ejecuta también `npm run check`, la comprobación
 TypeScript de ambos clientes y una prueba de las pantallas. Reconstruye la web y

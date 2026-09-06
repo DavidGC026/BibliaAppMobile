@@ -2,15 +2,16 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { AppIcon } from '@/components/ui/AppIcon';
-import { useMemoryGame, type OnGameComplete } from '@/lib/games/hooks';
+import { useMemoryGame, useRoundCheckpoint, type OnGameComplete } from '@/lib/games/hooks';
 import type { RoundContext } from '@/lib/games/round';
 import { GameButton, GameCard, GameResultPanel, GameText, LiveMessage, PassageButton, styles, type OpenPassage } from './ui';
 
 type Props = RoundContext & { onComplete: OnGameComplete; onOpen: OpenPassage; onRestart: () => void };
 
 export function MemoryGame(props: Props) {
-  const [pairCount, setPairCount] = useState(6);
-  const [started, setStarted] = useState(false);
+  const [pairCount, setPairCount] = useState(props.checkpoint?.pairCount ?? 6);
+  const [started, setStarted] = useState(props.checkpoint?.started ?? false);
+  useRoundCheckpoint({ pairCount, started: started || props.settings?.mode === "daily" }, props)
   if (started || props.settings?.mode === 'daily') return <MemoryRound pairCount={pairCount} {...props} />;
   return <GameCard>
     <GameText heading>Elige el tamaño del tablero</GameText>
@@ -20,9 +21,9 @@ export function MemoryGame(props: Props) {
   </GameCard>;
 }
 
-function MemoryRound({ pairCount, onComplete, onOpen, onRestart, settings, onAttempt }: Props & { pairCount: number }) {
+function MemoryRound({ pairCount, onComplete, onOpen, onRestart, ...context }: Props & { pairCount: number }) {
   const { colors } = useAppTheme();
-  const game = useMemoryGame(pairCount, onComplete, { settings, onAttempt });
+  const game = useMemoryGame(pairCount, onComplete, context);
   if (game.finished) return <GameResultPanel title="¡Encontraste todas las parejas!" score={game.score} onRestart={onRestart}>
     <GameText>{game.pairs.length} pares en {game.attempts} intentos.</GameText>
     {game.pairs.map((pair) => <View key={pair.id} style={styles.column}><GameText>{pair.left} · {pair.right}</GameText><PassageButton passage={pair} onOpen={onOpen} /></View>)}
