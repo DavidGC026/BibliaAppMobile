@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { LegalAcceptanceGate } from '@/components/LegalAcceptanceGate';
 import { useColorScheme } from '@/components/useColorScheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { NetworkProvider } from '@/context/NetworkContext';
@@ -75,7 +76,7 @@ function AdminThemeGuard({ children }: { children: React.ReactNode }) {
   const { mode, setMode } = useThemeMode();
 
   useEffect(() => {
-    if (!isLoading && mode === 'dvg' && user?.role !== 'admin') {
+    if (!isLoading && (mode === 'dvg' || mode === 'ubg') && user?.role !== 'admin') {
       setMode('system');
     }
   }, [isLoading, mode, setMode, user?.role]);
@@ -174,10 +175,15 @@ function RootLayoutNav() {
         <Stack.Screen name="highlights" options={{ title: 'Subrayados' }} />
         <Stack.Screen name="favorites" options={{ title: 'Favoritos' }} />
         <Stack.Screen name="downloads" options={{ title: 'Descargas' }} />
+        <Stack.Screen name="legal" options={{ title: 'Información legal' }} />
+        <Stack.Screen name="legal-doc/[slug]" options={{ title: 'Documento legal' }} />
+        <Stack.Screen name="admin/index" options={{ title: 'Administración' }} />
+        <Stack.Screen name="admin/[id]" options={{ title: 'Usuario' }} />
         <Stack.Screen name="customize-home" options={{ title: 'Accesos rápidos' }} />
         <Stack.Screen name="search" options={{ title: 'Búsqueda' }} />
         <Stack.Screen name="rainbow" options={{ title: 'Mapa de referencias' }} />
       </Stack>
+      <LegalAcceptanceGate />
     </ThemeProvider>
   );
 }

@@ -1,0 +1,55 @@
+{
+  "cli": {
+    "version": ">= 21.0.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "internal",
+        "EXPO_PUBLIC_APP_VARIANT": "internal",
+        "EXPO_PUBLIC_COMMUNITY_ENABLED": "true"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "APP_VARIANT": "internal",
+        "EXPO_PUBLIC_APP_VARIANT": "internal",
+        "EXPO_PUBLIC_COMMUNITY_ENABLED": "true"
+      }
+    },
+    "internal": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "internal",
+        "EXPO_PUBLIC_APP_VARIANT": "internal",
+        "EXPO_PUBLIC_COMMUNITY_ENABLED": "true"
+      }
+    },
+    "ios-simulator": {
+      "extends": "preview",
+      "ios": {
+        "simulator": true
+      }
+    },
+    "ios-device": {
+      "extends": "internal"
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "APP_VARIANT": "public",
+        "EXPO_PUBLIC_APP_VARIANT": "public",
+        "EXPO_PUBLIC_COMMUNITY_ENABLED": "false"
+      }
+    }
+  },
+  "submit": {
+    "production": {},
+    "internal": {}
+  }
+}

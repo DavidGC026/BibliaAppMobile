@@ -1,7 +1,9 @@
 import { API_BASE_URL } from './config';
 import type {
+  AdminSectionGroup,
   ApiError,
   AppNotification,
+  ManagedUser,
   BibleVersion,
   Book,
   FeedPost,
@@ -18,6 +20,7 @@ import type {
   UserReadingPlan,
   Verse,
   VerseHighlight,
+  VerseNoteEntry,
   VerseNoteLink,
   VerseOfDay,
 } from './types';
@@ -81,6 +84,50 @@ export async function getMe() {
   return request<{ user: User | null }>('/api/auth/me');
 }
 
+export async function acceptLegalTerms() {
+  return request<{ success: boolean; legalAcceptedAt: string | null }>('/api/legal/accept', {
+    method: 'POST',
+    body: JSON.stringify({ accept: true }),
+  });
+}
+
+// — Administración (solo usuarios con rol admin) —
+export async function adminListUsers() {
+  return request<{ users: ManagedUser[] }>('/api/admin/users');
+}
+
+export async function adminListSections() {
+  return request<{ groups: AdminSectionGroup[]; defaults: string[] }>('/api/admin/sections');
+}
+
+export interface AdminUserPayload {
+  name: string;
+  email: string;
+  password?: string;
+  role: string;
+  allowedSections: string[] | null;
+}
+
+export async function adminCreateUser(payload: AdminUserPayload) {
+  return request<{ success: boolean; user: ManagedUser }>('/api/admin/users', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminUpdateUser(id: number, payload: AdminUserPayload) {
+  return request<{ success: boolean }>(`/api/admin/users/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function adminDeleteUser(id: number) {
+  return request<{ success: boolean }>(`/api/admin/users/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function forgotPassword(email: string) {
   return request<{ success: boolean; message: string }>('/api/auth/forgot-password', {
     method: 'POST',
@@ -95,7 +142,7 @@ export async function getVerseOfDay(idBible?: number) {
 }
 
 export async function listBibles() {
-  return request<{ bibles: BibleVersion[] }>('/api/bibles');
+  return request<{ bibles: BibleVersion[]; defaultBibleId: number | null }>('/api/bibles');
 }
 
 export async function listBooks(bibleId: number) {
@@ -168,6 +215,17 @@ export async function getChapterNotes(bookId: number, chapter: number) {
   return request<{ links: VerseNoteLink[] }>(
     `/api/links?book=${bookId}&chapter=${chapter}`,
   );
+}
+
+/**
+ * Todas las notas de versículo del usuario, para la sección «Versículos».
+ *
+ * `bibleId` solo decide con qué traducción viene el texto del versículo: la
+ * nota es del versículo, no de la versión.
+ */
+export async function getAllVerseNotes(bibleId?: number) {
+  const query = bibleId ? `?bible=${bibleId}` : '';
+  return request<{ links: VerseNoteEntry[] }>(`/api/links/all${query}`);
 }
 
 export async function saveVerseNote(

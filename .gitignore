@@ -42,3 +42,9 @@ yarn-error.*
 
 # release APKs (GitHub releases / local builds)
 releases/
+
+# temporales de compilacion: cache de Metro con TMPDIR propio
+.build-tmp/
+
+# firma de release: la llave y su configuracion viven fuera del repo
+keystore.properties

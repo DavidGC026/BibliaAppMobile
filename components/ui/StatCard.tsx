@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
 interface StatCardProps {
-  icon: SymbolViewProps['name'];
+  icon: AppIconName;
   value: string;
   label: string;
   onPress?: () => void;
@@ -17,7 +17,7 @@ export function StatCard({ icon, value, label, onPress }: StatCardProps) {
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={[styles.iconWrap, { backgroundColor: colors.primarySoft }]}>
-        <SymbolView name={icon} tintColor={colors.primary} size={24} />
+        <AppIcon name={icon} color={colors.primary} size={24} />
       </View>
       <View style={styles.body}>
         <Text style={[styles.value, { color: colors.text }]}>{value}</Text>

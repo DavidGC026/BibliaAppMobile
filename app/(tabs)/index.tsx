@@ -1,5 +1,4 @@
 import { router, useFocusEffect } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,6 +15,7 @@ import { OnboardingCard } from '@/components/OnboardingCard';
 import { StatisticsPanel } from '@/components/StatisticsPanel';
 import { QuickActionCard } from '@/components/ui/QuickActionCard';
 import { StatCard } from '@/components/ui/StatCard';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { VerseOfDayCard } from '@/components/VerseOfDayCard';
@@ -227,7 +227,7 @@ export default function HomeScreen() {
         <Card style={[styles.guestBanner, { backgroundColor: colors.primarySoft, borderColor: colors.primaryBorder }]}>
           <View style={styles.guestRow}>
             <View style={[styles.guestIcon, { backgroundColor: `${colors.primary}18` }]}>
-              <SymbolView name={{ ios: 'lock.fill', android: 'lock', web: 'lock' }} tintColor={colors.primary} size={20} />
+              <AppIcon name="lock" color={colors.primary} size={20} />
             </View>
             <View style={styles.guestText}>
               <Text style={[styles.guestTitle, { color: colors.text }]}>Modo exploración</Text>
@@ -250,7 +250,7 @@ export default function HomeScreen() {
           style={[styles.continueCard, { backgroundColor: colors.card, borderColor: colors.primaryBorder }]}
         >
           <View style={[styles.continueIcon, { backgroundColor: colors.primarySoft }]}>
-            <SymbolView name={{ ios: 'book.fill', android: 'menu_book', web: 'menu_book' }} tintColor={colors.primary} size={22} />
+            <AppIcon name="bible" color={colors.primary} size={22} />
           </View>
           <View style={{ flex: 1, gap: 3 }}>
             <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' }}>
@@ -279,7 +279,7 @@ export default function HomeScreen() {
             {recentNotes.map((note) => (
               <Card key={note.id} onPress={() => openRecentNote(note)} style={styles.recentNoteCard}>
                 <View style={[styles.recentNoteIcon, { backgroundColor: colors.primarySoft }]}>
-                  <SymbolView name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }} tintColor={colors.primary} size={18} />
+                  <AppIcon name="notes" color={colors.primary} size={18} />
                 </View>
                 <View style={{ flex: 1, gap: 3 }}>
                   <Text style={{ color: colors.text, fontSize: 15, fontWeight: '800' }} numberOfLines={1}>
@@ -317,7 +317,7 @@ export default function HomeScreen() {
                   <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }} numberOfLines={1}>
                     {favorite.book_name} {favorite.chapter}:{favorite.verse}
                   </Text>
-                  <SymbolView name={{ ios: 'star.fill', android: 'star', web: 'star' }} tintColor="#F59E0B" size={15} />
+                  <AppIcon name="star" color="#F59E0B" size={15} />
                 </View>
                 <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }} numberOfLines={4}>
                   {favorite.verse_text || 'Abrir pasaje guardado'}
@@ -430,36 +430,36 @@ export default function HomeScreen() {
         <>
           <View style={styles.statsGrid}>
             <StatCard
-              icon={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }}
+              icon="notes"
               value={String(notebookCount)}
               label="Libretas creadas"
               onPress={() => router.push('/(tabs)/notes')}
             />
             <StatCard
-              icon={{ ios: 'highlighter', android: 'border_color', web: 'border_color' }}
+              icon="highlighter"
               value={String(highlightCount)}
               label="Subrayados"
               onPress={() => router.push('/highlights')}
             />
             <StatCard
-              icon={{ ios: 'star.fill', android: 'star', web: 'star' }}
+              icon="star"
               value={String(favoriteCount)}
               label="Favoritos"
               onPress={() => router.push('/favorites')}
             />
             <StatCard
-              icon={{ ios: 'heart.fill', android: 'favorite', web: 'favorite' }}
+              icon="heart"
               value={String(devotionalCount)}
               label="Devocionales"
               onPress={() => router.push('/(tabs)/notes')}
             />
             <StatCard
-              icon={{ ios: 'chart.line.uptrend.xyaxis', android: 'trending_up', web: 'trending_up' }}
+              icon="chart"
               value={spiritualProgress}
               label="Progreso espiritual"
             />
             <StatCard
-              icon={{ ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' }}
+              icon="flame"
               value={`${user?.streakCount ?? 0}`}
               label="Días de racha"
             />

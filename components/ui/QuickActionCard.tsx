@@ -1,11 +1,11 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
 import { Card } from '@/components/ui/Card';
 import { useAppTheme } from '@/hooks/useAppTheme';
 
 interface QuickActionCardProps {
-  icon: SymbolViewProps['name'];
+  icon: AppIconName;
   title: string;
   description: string;
   onPress: () => void;
@@ -19,7 +19,7 @@ export function QuickActionCard({ icon, title, description, onPress, locked }: Q
     <Card onPress={onPress}>
       <View style={styles.row}>
         <View style={[styles.iconWrap, { backgroundColor: colors.primarySoft }]}>
-          <SymbolView name={icon} tintColor={colors.primary} size={22} />
+          <AppIcon name={icon} color={colors.primary} size={22} />
         </View>
         <View style={styles.body}>
           <Text style={[styles.title, { color: colors.text }]}>

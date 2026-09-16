@@ -1,8 +1,8 @@
-import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 
 import { Card } from '@/components/ui/Card';
+import { AppIcon } from '@/components/ui/AppIcon';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useContentPadding } from '@/hooks/useContentPadding';
 import {
@@ -58,7 +58,7 @@ export default function CustomizeHomeScreen() {
             {index > 0 ? <View style={[styles.divider, { backgroundColor: colors.border }]} /> : null}
             <View style={styles.row}>
               <View style={[styles.iconWrap, { backgroundColor: colors.primarySoft }]}>
-                <SymbolView name={action.icon} tintColor={colors.primary} size={18} />
+                <AppIcon name={action.icon} color={colors.primary} size={18} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text style={[styles.title, { color: colors.text }]}>{action.title}</Text>

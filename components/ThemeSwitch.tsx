@@ -38,6 +38,13 @@ const OPTIONS: ThemeOption[] = [
     scheme: 'dvg',
     adminOnly: true,
   },
+  {
+    key: 'ubg',
+    label: 'UBG',
+    description: 'Edición verde y azul',
+    scheme: 'ubg',
+    adminOnly: true,
+  },
 ];
 
 export function ThemeSwitch({ isAdmin = false }: { isAdmin?: boolean }) {

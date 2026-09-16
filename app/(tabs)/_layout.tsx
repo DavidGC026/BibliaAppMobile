@@ -1,4 +1,3 @@
-import { SymbolView, type SymbolViewProps } from 'expo-symbols';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
 import { Platform } from 'react-native';
@@ -7,20 +6,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/Colors';
 import { shadow } from '@/constants/theme';
 import { useColorScheme } from '@/components/useColorScheme';
+import { AppIcon, type AppIconName } from '@/components/ui/AppIcon';
+import { COMMUNITY_ENABLED } from '@/lib/config';
 
 function TabIcon({
   name,
   color,
 }: {
-  name: SymbolViewProps['name'];
+  name: AppIconName;
   color: ColorValue;
 }) {
   return (
-    <SymbolView
-      name={name}
-      tintColor={color}
-      size={22}
-    />
+    <AppIcon name={name} color={color} size={22} />
   );
 }
 
@@ -68,7 +65,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              name={{ ios: 'house.fill', android: 'home', web: 'home' }}
+              name="home"
             />
           ),
         }}
@@ -81,7 +78,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              name={{ ios: 'book.fill', android: 'menu_book', web: 'menu_book' }}
+              name="bible"
             />
           ),
         }}
@@ -90,10 +87,11 @@ export default function TabLayout() {
         name="feed"
         options={{
           title: 'Comunidad',
+          href: COMMUNITY_ENABLED ? undefined : null,
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              name={{ ios: 'person.2.fill', android: 'groups', web: 'groups' }}
+              name="community"
             />
           ),
         }}
@@ -105,7 +103,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              name={{ ios: 'note.text', android: 'edit_note', web: 'edit_note' }}
+              name="notes"
             />
           ),
         }}
@@ -114,10 +112,11 @@ export default function TabLayout() {
         name="groups"
         options={{
           title: 'Grupos',
+          href: COMMUNITY_ENABLED ? undefined : null,
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              name={{ ios: 'person.3.fill', android: 'group', web: 'group' }}
+              name="groups"
             />
           ),
         }}
@@ -129,7 +128,7 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => (
             <TabIcon
               color={color}
-              name={{ ios: 'person.circle.fill', android: 'person', web: 'person' }}
+              name="profile"
             />
           ),
         }}

@@ -41,7 +41,12 @@ export function InsertVerseModal({ visible, onClose, onInsert }: InsertVerseModa
 
   useEffect(() => {
     if (!visible) return;
-    api.listBibles().then(({ bibles: list }) => setBibles(list)).catch(() => {});
+    api.listBibles().then(({ bibles: list, defaultBibleId }) => {
+      setBibles(list);
+      if (!list.some((bible) => bible.bibleId === bibleId)) {
+        setBibleId(defaultBibleId ?? list[0]?.bibleId ?? 0);
+      }
+    }).catch(() => {});
   }, [visible]);
 
   useEffect(() => {

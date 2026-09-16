@@ -3,6 +3,7 @@ import { useState } from 'react';
 import {
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useAuth } from '@/context/AuthContext';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { IS_INTERNAL_APP, LEGAL_URLS } from '@/lib/config';
 
 const logo = require('@/assets/images/icon.png');
 
@@ -34,6 +36,7 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const busy = loading || googleLoading;
+  const showGoogleLogin = Platform.OS !== 'ios' || IS_INTERNAL_APP;
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -120,31 +123,57 @@ export default function LoginScreen() {
 
           <Button label="Entrar" onPress={handleLogin} loading={loading} disabled={busy} fullWidth />
 
-          <View style={styles.dividerRow}>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-            <Text style={[styles.dividerText, { color: colors.textMuted }]}>o</Text>
-            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          </View>
+          {showGoogleLogin ? (
+            <>
+              <View style={styles.dividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                <Text style={[styles.dividerText, { color: colors.textMuted }]}>o</Text>
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              </View>
 
-          <Pressable
-            onPress={handleGoogleLogin}
-            disabled={busy}
-            style={[
-              styles.googleButton,
-              {
-                borderColor: colors.border,
-                backgroundColor: colors.card,
-                borderRadius: radius.lg,
-                opacity: busy ? 0.6 : 1,
-              },
-            ]}
-          >
-            <Text style={styles.googleIcon}>G</Text>
-            <Text style={[styles.googleLabel, { color: colors.text }]}>
-              {googleLoading ? 'Conectando…' : 'Continuar con Google'}
-            </Text>
-          </Pressable>
+              <Pressable
+                onPress={handleGoogleLogin}
+                disabled={busy}
+                style={[
+                  styles.googleButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: colors.card,
+                    borderRadius: radius.lg,
+                    opacity: busy ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={[styles.googleLabel, { color: colors.text }]}>
+                  {googleLoading ? 'Conectando…' : 'Continuar con Google'}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
         </Card>
+
+        <Text style={[styles.legalText, { color: colors.textMuted }]}>
+          Al iniciar sesión o crear una cuenta aceptas los{' '}
+          <Text
+            style={[styles.legalLink, { color: colors.primary }]}
+            onPress={() =>
+              LEGAL_URLS.terms ? Linking.openURL(LEGAL_URLS.terms) : router.push('/legal')
+            }
+          >
+            términos y condiciones
+          </Text>{' '}
+          y el{' '}
+          <Text
+            style={[styles.legalLink, { color: colors.primary }]}
+            onPress={() =>
+              LEGAL_URLS.privacy ? Linking.openURL(LEGAL_URLS.privacy) : router.push('/legal')
+            }
+          >
+            aviso de privacidad
+          </Text>
+          .
+        </Text>
 
         <Pressable onPress={() => router.back()} style={styles.back}>
           <Text style={{ color: colors.textMuted, fontSize: 15 }}>Volver</Text>
@@ -219,5 +248,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
+  legalText: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  legalLink: { fontWeight: '700' },
   back: { alignItems: 'center', paddingVertical: 12 },
 });

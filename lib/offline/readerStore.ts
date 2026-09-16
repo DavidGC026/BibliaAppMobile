@@ -1,5 +1,5 @@
 import { getAll, getFirst, nowIso, run, tempId } from '@/lib/db';
-import type { Favorite, VerseHighlight, VerseNoteLink } from '@/lib/types';
+import type { Favorite, VerseHighlight, VerseNoteEntry, VerseNoteLink } from '@/lib/types';
 
 export async function getLocalHighlights(
   bookId: number,
@@ -117,6 +117,48 @@ export async function getLocalChapterNotes(bookId: number, chapter: number): Pro
   }));
 }
 
+/**
+ * Todas las notas de versículo guardadas en el teléfono, con el nombre del
+ * libro y el texto del versículo si esa Biblia está descargada.
+ *
+ * Los `LEFT JOIN` son a propósito: sin la Biblia descargada la nota se sigue
+ * viendo, solo que sin el texto del versículo al lado. Lo que uno escribió no
+ * puede depender de lo que se haya descargado.
+ */
+export async function getLocalVerseNotes(bibleId: number): Promise<VerseNoteEntry[]> {
+  const rows = await getAll<{
+    id: number;
+    server_id: number | null;
+    book_id: number;
+    book_name: string | null;
+    chapter: number;
+    verse: number;
+    note_content: string | null;
+    verse_text: string | null;
+    created_at: string | null;
+  }>(
+    `SELECT n.id, n.server_id, n.book_id, b.book_name, n.chapter, n.verse,
+            n.note_content, v.text AS verse_text, n.created_at
+     FROM verse_notes n
+     LEFT JOIN books b ON b.bible_id = ? AND b.book_id = n.book_id
+     LEFT JOIN verses v ON v.bible_id = ? AND v.book_id = n.book_id
+                       AND v.chapter = n.chapter AND v.verse = n.verse
+     WHERE n.deleted = 0 AND n.note_content IS NOT NULL AND n.note_content <> ''
+     ORDER BY n.created_at DESC, n.id DESC`,
+    [bibleId, bibleId],
+  );
+  return rows.map((r) => ({
+    id: r.server_id ?? r.id,
+    bookId: r.book_id,
+    bookName: r.book_name ?? `Libro ${r.book_id}`,
+    chapter: r.chapter,
+    verse: r.verse,
+    noteContent: r.note_content ?? undefined,
+    verseText: r.verse_text ?? undefined,
+    createdAt: r.created_at ?? undefined,
+  }));
+}
+
 export async function saveLocalVerseNote(
   bookId: number,
   chapter: number,
@@ -199,7 +241,11 @@ export async function upsertFavoritesFromServer(favorites: Favorite[]) {
   }
 }
 
-export async function upsertVerseNotesFromServer(bookId: number, chapter: number, links: VerseNoteLink[]) {
+/**
+ * Vuelca notas de versículo del servidor, vengan del capítulo que vengan: cada
+ * una trae su libro y su capítulo. Nunca pisa una nota con cambios sin subir.
+ */
+export async function upsertVerseNotesFromServer(links: VerseNoteLink[]) {
   for (const l of links) {
     const existing = await getFirst<{ id: number; dirty: number }>(
       'SELECT id, dirty FROM verse_notes WHERE server_id = ? OR id = ?',

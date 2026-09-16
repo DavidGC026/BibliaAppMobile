@@ -40,7 +40,12 @@ export function VerseOfDayCard() {
   const hasBg = Boolean(data?.backgroundImage);
 
   useEffect(() => {
-    api.listBibles().then(({ bibles: list }) => setBibles(list)).catch(() => {});
+    api.listBibles().then(({ bibles: list, defaultBibleId }) => {
+      setBibles(list);
+      if (!list.some((bible) => bible.bibleId === bibleId)) {
+        setBibleId(defaultBibleId ?? list[0]?.bibleId ?? 0);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -86,6 +91,7 @@ export function VerseOfDayCard() {
   }
 
   const share = async () => {
+    if (currentBible?.canShare === false) return;
     await shareVerse({ text: data.text, reference: data.reference, abbr });
   };
 
@@ -134,18 +140,22 @@ export function VerseOfDayCard() {
           textColor={hasBg ? '#FFFFFF' : colors.text}
           style={[styles.actionBtn, { borderRadius: radius.full }, hasBg && styles.btnOnImage]}
         />
-        <Button
-          label="Crear imagen"
-          variant="outline"
-          onPress={() => setImageModalOpen(true)}
-          textColor={hasBg ? '#FFFFFF' : colors.text}
-          style={[styles.actionBtn, { borderRadius: radius.full }, hasBg && styles.btnOnImage]}
-        />
-        <Button
-          label="Compartir"
-          onPress={share}
-          style={[styles.actionBtn, { borderRadius: radius.full }]}
-        />
+        {currentBible?.canCreateImages !== false ? (
+          <Button
+            label="Crear imagen"
+            variant="outline"
+            onPress={() => setImageModalOpen(true)}
+            textColor={hasBg ? '#FFFFFF' : colors.text}
+            style={[styles.actionBtn, { borderRadius: radius.full }, hasBg && styles.btnOnImage]}
+          />
+        ) : null}
+        {currentBible?.canShare !== false ? (
+          <Button
+            label="Compartir"
+            onPress={share}
+            style={[styles.actionBtn, { borderRadius: radius.full }]}
+          />
+        ) : null}
       </View>
     </View>
   );

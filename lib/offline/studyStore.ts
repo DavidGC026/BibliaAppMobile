@@ -1,6 +1,15 @@
 import * as api from '@/lib/api';
 import { getAll, getFirst, getMeta, nowIso, run, setMeta } from '@/lib/db';
+import {
+  CHAPTER_CONNECTIONS_SQL,
+  chapterConnectionsParams,
+  toChapterConnection,
+  type ChapterConnection,
+  type ChapterConnectionRow,
+} from '@/lib/offline/chapterConnectionsQuery';
 import type { CrossReference, StrongEntry } from '@/lib/types';
+
+export type { ChapterConnection };
 
 export type StudyDownloadProgress = { phase: string; current: number; total: number };
 
@@ -230,6 +239,18 @@ export async function getChapterArcs(): Promise<{ keys: number[]; arcs: number[]
     arcs.push(idx.get(r.a)!, idx.get(r.b)!, r.n);
   }
   return { keys, arcs };
+}
+
+/** Capítulos conectados con `key`, de más citados a menos. */
+export async function getChapterConnections(
+  key: number,
+  limit = 80,
+): Promise<ChapterConnection[]> {
+  const rows = await getAll<ChapterConnectionRow>(
+    CHAPTER_CONNECTIONS_SQL,
+    chapterConnectionsParams(key, limit),
+  );
+  return rows.map(toChapterConnection);
 }
 
 export async function getLocalCrossReferences(
