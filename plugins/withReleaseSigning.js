@@ -56,9 +56,26 @@ const RELEASE_CONFIG = `        if (dvguzmanSigning != null) {
     }
 `
 
+// Se aplica también a carpetas nativas generadas con versiones anteriores del plugin.
+function enforceReleaseSigning(contents) {
+  let next = contents.replace('signingConfig dvguzmanSigning != null ? signingConfigs.release : signingConfigs.debug',
+    'signingConfig dvguzmanSigning != null ? signingConfigs.release : null')
+  if (!next.includes('dvguzmanReleaseRequired')) {
+    next += `
+// dvguzmanReleaseRequired: jamás entregar un release con la llave de debug.
+gradle.taskGraph.whenReady { graph ->
+    if (dvguzmanSigning == null && graph.allTasks.any { it.name.toLowerCase().contains('release') }) {
+        throw new GradleException('Falta la llave de release. Define DVGUZMAN_KEYSTORE_PROPERTIES.')
+    }
+}
+`
+  }
+  return next
+}
+
 /** Deja el gradle de Expo firmando el release con la llave real. */
 function applyReleaseSigning(contents) {
-  if (contents.includes(MARKER)) return contents
+  if (contents.includes(MARKER)) return enforceReleaseSigning(contents)
 
   let next = contents.replace(/\nandroid \{\n/, LOOKUP)
   if (next === contents) {
@@ -76,16 +93,14 @@ function applyReleaseSigning(contents) {
   const before = next
   next = next.replace(
     /(buildTypes \{[\s\S]*?release \{[\s\S]*?)signingConfig signingConfigs\.debug/,
-    '$1// Sin la llave a mano se firma con la de debug, para poder compilar\n' +
-      '            // igualmente; `npm run check:native` avisa de que ese APK no sirve\n' +
-      '            // como actualizacion de la app publicada.\n' +
+    '$1// La llave es obligatoria para cualquier tarea de release.\n' +
       '            signingConfig dvguzmanSigning != null ? signingConfigs.release : signingConfigs.debug',
   )
   if (next === before) {
     throw new Error('withReleaseSigning: el buildType release no firmaba con signingConfigs.debug')
   }
 
-  return next
+  return enforceReleaseSigning(next)
 }
 
 module.exports = function withReleaseSigning(config) {

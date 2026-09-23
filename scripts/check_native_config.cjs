@@ -180,8 +180,8 @@ if (!signingWired) {
       'o el APK no se podrá instalar encima de la app publicada',
   )
 } else if (!keystore) {
-  warn(
-    'no se encontró la llave de firma: el APK saldrá firmado con la de debug',
+  fail(
+    'no se encontró la llave de firma: no se permite compilar release',
     'copia keystore.properties y el .jks a ~/.dvguzman/ (ver docs-mobile/40-firma-de-release.md)',
   )
 }
