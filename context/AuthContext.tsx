@@ -6,6 +6,7 @@ import * as api from '@/lib/api';
 import { signInWithGoogle } from '@/lib/googleAuth';
 import { setOpenMediaTokenGetter } from '@/lib/openMedia';
 import { createSessionController } from '@/lib/sessionController';
+import { revokeServerSession } from '@/lib/sessionLogout';
 import type { User } from '@/lib/types';
 import { clearPushTokenFromServer, syncPushTokenWithServer } from '@/hooks/usePushNotifications';
 import { syncAll } from '@/lib/sync';
@@ -74,8 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const sessionToken = controller.getSnapshot().token;
     // Capturar la credencial saliente: una petición lenta no debe usar el siguiente login.
     if (sessionToken) {
-      clearPushTokenFromServer(sessionToken).catch(() => {});
-      api.logout(sessionToken).catch(() => {});
+      revokeServerSession(sessionToken, clearPushTokenFromServer, api.logout).catch(() => {});
     }
     await controller.clear();
   }, [controller]);

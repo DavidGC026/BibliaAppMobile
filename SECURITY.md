@@ -2,6 +2,7 @@
 
 - El controlador de sesión conserva credenciales ante desconexiones, timeouts, 403, 429 y errores del servidor. Revalida al volver a primer plano y guarda renovaciones antes de usarlas. Solo un 401 o un perfil explícitamente nulo confirma el cierre.
 - Las descargas y las imágenes adjuntan el Bearer únicamente al origen exacto de la API y a sus rutas protegidas.
+- Logout desvincula push antes de revocar la sesión para evitar que la revocación impida esa limpieza. Tras cinco segundos revoca igualmente; el borrado local es inmediato.
 - El servidor debe tener activados los tokens GCM, la renovación y las sesiones persistentes revocables. La primera activación exige iniciar sesión otra vez.
 - Tiptap 3.31.3 se incluye en el editor regenerado. Expo 56 y sus módulos nativos están alineados mediante `expo install --check`.
 - Los overrides de Metro 0.84.5 y UUID 11.1.1 para Xcode corrigen avisos de dependencias; Xcode solo usa `uuid.v4()`. Revisarlos cuando Expo/React Native actualicen sus dependencias.

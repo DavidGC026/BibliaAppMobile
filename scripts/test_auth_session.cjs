@@ -21,13 +21,14 @@ compiled.require = id => {
 };
 compiled._compile(buildSync({
   stdin: {
-    contents: "export * from './lib/sessionController'; export * as api from './lib/api'; export * from './lib/media'; export * from './lib/openMedia';",
+    contents: "export * from './lib/sessionController'; export * from './lib/sessionLogout'; export * as api from './lib/api'; export * from './lib/media'; export * from './lib/openMedia';",
     resolveDir: path.resolve(__dirname, '..'), loader: 'ts',
   },
   bundle: true, write: false, platform: 'node', format: 'cjs',
   external: ['expo-file-system/legacy', 'expo-sharing'],
 }).outputFiles[0].text, entry);
 const { createSessionController, api, needsAuthHeaders, openAuthedFile, setOpenMediaTokenGetter } = compiled.exports;
+const { revokeServerSession } = compiled.exports;
 const TOKEN_KEY = 'bibliaapp_session';
 const USER_KEY = 'bibliaapp_user';
 const user = { id: 2, name: 'Test', email: 'test@example.test', role: 'user' };
@@ -38,6 +39,20 @@ function deferred() {
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 }
+
+test('logout unlinks push before revoking the captured session and still revokes after timeout or failure', async () => {
+  const unlink = deferred(), calls = [];
+  const pending = revokeServerSession('outgoing', async token => { calls.push(`unlink:${token}`); await unlink.promise; }, async token => { calls.push(`revoke:${token}`); });
+  await Promise.resolve();
+  assert.deepEqual(calls, ['unlink:outgoing']);
+  unlink.resolve(); await pending;
+  assert.deepEqual(calls, ['unlink:outgoing', 'revoke:outgoing']);
+  for (const cleanup of [() => new Promise(() => {}), async () => { throw new Error('offline'); }]) {
+    let revoked = false;
+    await revokeServerSession('outgoing', cleanup, async token => { assert.equal(token, 'outgoing'); revoked = true; }, 5);
+    assert.equal(revoked, true);
+  }
+});
 
 function setup(profile = async () => ({ user }), token = 'v2:original') {
   const entries = new Map([
