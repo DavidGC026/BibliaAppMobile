@@ -1,7 +1,7 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
-import { API_BASE_URL } from './config';
+import { needsAuthHeaders, resolveMediaUrl } from './media';
 
 type TokenGetter = () => string | null;
 let getToken: TokenGetter = () => null;
@@ -36,13 +36,12 @@ function hasExtension(name: string): boolean {
 
 /** Descarga archivo protegido y lo abre/comparte (PDF, etc.) con extensión correcta. */
 export async function openAuthedFile(relativeOrAbsoluteUrl: string, label?: string): Promise<void> {
-  const url = relativeOrAbsoluteUrl.startsWith('http')
-    ? relativeOrAbsoluteUrl
-    : `${API_BASE_URL}${relativeOrAbsoluteUrl.startsWith('/') ? '' : '/'}${relativeOrAbsoluteUrl}`;
+  const url = resolveMediaUrl(relativeOrAbsoluteUrl);
+  if (!url || !/^https?:\/\//i.test(url)) throw new Error('URL de archivo inválida.');
 
   const token = getToken();
   const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && needsAuthHeaders(url)) headers.Authorization = `Bearer ${token}`;
 
   // Nombre base limpio a partir de la etiqueta o la URL.
   let base = sanitizeName(label ?? '') || sanitizeName(url.split('/').pop() ?? '') || 'archivo';

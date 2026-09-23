@@ -12,7 +12,14 @@ export function resolveMediaUrl(url: string | null | undefined): string | null {
 }
 
 export function needsAuthHeaders(url: string): boolean {
-  return url.includes('/api/media/') || url.includes('/api/uploads/');
+  try {
+    const base = new URL(API_BASE_URL);
+    const target = new URL(url, `${base.origin}/`);
+    return target.origin === base.origin && !target.username && !target.password &&
+      /^\/(?:api\/(?:media|uploads)|uploads)\//.test(target.pathname);
+  } catch {
+    return false;
+  }
 }
 
 export type FeedBlock =

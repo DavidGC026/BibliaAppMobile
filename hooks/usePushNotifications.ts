@@ -41,9 +41,11 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 export async function syncPushTokenWithServer(): Promise<void> {
+  const sessionToken = api.getApiToken();
+  if (!sessionToken) return;
   try {
     const token = await registerForPushNotifications();
-    if (token) {
+    if (token && api.getApiToken() === sessionToken) {
       await api.registerPushToken(token, Platform.OS);
     }
   } catch {
@@ -51,11 +53,11 @@ export async function syncPushTokenWithServer(): Promise<void> {
   }
 }
 
-export async function clearPushTokenFromServer(): Promise<void> {
+export async function clearPushTokenFromServer(sessionToken?: string): Promise<void> {
   try {
     const token = await Notifications.getExpoPushTokenAsync();
     if (token?.data) {
-      await api.unregisterPushToken(token.data);
+      await api.unregisterPushToken(token.data, sessionToken);
     }
   } catch {
     // Ignorar si no hay token

@@ -5,5 +5,5 @@
  */
 export function isAuthError(err: unknown): boolean {
   const status = (err as { status?: number } | null)?.status;
-  return status === 401 || status === 403;
+  return status === 401;
 }

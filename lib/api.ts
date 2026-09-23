@@ -52,11 +52,12 @@ async function request<T>(
   }
 
   const token = getToken();
-  if (token) {
+  if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
+    credentials: 'omit',
     ...options,
     headers,
   });
@@ -104,12 +105,31 @@ export async function login(email: string, password: string) {
   );
 }
 
-export async function logout() {
-  return request<{ success: boolean }>('/api/auth/logout', { method: 'POST' });
+export async function logout(sessionToken?: string) {
+  return request<{ success: boolean }>('/api/auth/logout', {
+    method: 'POST',
+    ...(sessionToken ? { headers: { Authorization: `Bearer ${sessionToken}` } } : {}),
+  });
 }
 
 export async function getMe() {
-  return request<{ user: User | null }>('/api/auth/me');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const result = await request<{ user: User | null; token?: string }>('/api/auth/me', {
+      signal: controller.signal,
+      cache: 'no-store',
+    });
+    // Un proxy puede responder 200 con HTML o JSON incompleto: no equivale a logout.
+    if (!result || !Object.prototype.hasOwnProperty.call(result, 'user') ||
+        (result.user !== null && (!result.user || !Number.isSafeInteger(result.user.id) || result.user.id <= 0)) ||
+        (result.token !== undefined && (typeof result.token !== 'string' || !result.token))) {
+      throw new Error('Respuesta de sesión incompleta. Inténtalo de nuevo.');
+    }
+    return result;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function acceptLegalTerms() {
@@ -367,10 +387,11 @@ export async function registerPushToken(token: string, platform: string) {
   });
 }
 
-export async function unregisterPushToken(token: string) {
+export async function unregisterPushToken(token: string, sessionToken?: string) {
   return request<{ success: boolean }>('/api/notifications/push-token', {
     method: 'DELETE',
     body: JSON.stringify({ token }),
+    ...(sessionToken ? { headers: { Authorization: `Bearer ${sessionToken}` } } : {}),
   });
 }
 
